@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import com.jarvis.assistant.ai.AIClient
-import com.jarvis.assistant.ai.GeminiDirectClient
+import com.jarvis.assistant.ai.UniversalAIClient
 import com.jarvis.assistant.core.constants.AppConstants
 import com.jarvis.assistant.core.dispatcher.CoroutineDispatchers
 import com.jarvis.assistant.core.dispatcher.DefaultCoroutineDispatchers
@@ -59,7 +59,7 @@ abstract class SecurityAndNetworkBindingModule {
 
     @Binds
     @Singleton
-    abstract fun bindAIClient(impl: GeminiDirectClient): AIClient
+    abstract fun bindAIClient(impl: UniversalAIClient): AIClient
 
     @Binds
     @Singleton
