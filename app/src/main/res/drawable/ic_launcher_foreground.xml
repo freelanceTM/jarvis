@@ -1,0 +1,28 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer Arc Reactor Ring -->
+    <path
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="3"
+        android:fillColor="#00000000"
+        android:pathData="M54,54m-28,0a28,28 0,1 1,56 0a28,28 0,1 1,-56 0" />
+
+    <!-- Inner Glowing Core -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M54,54m-14,0a14,14 0,1 1,28 0a14,14 0,1 1,-28 0" />
+
+    <!-- Center Energy Point -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,54m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0" />
+
+    <!-- Ray Accents -->
+    <path
+        android:strokeColor="#00B0FF"
+        android:strokeWidth="2"
+        android:pathData="M54,20 L54,14 M54,88 L54,94 M20,54 L14,54 M88,54 L94,54" />
+</vector>
