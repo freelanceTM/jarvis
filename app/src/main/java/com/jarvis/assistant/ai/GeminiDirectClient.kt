@@ -82,11 +82,10 @@ class UniversalAIClient @Inject constructor(
 
     private val mediaType = "application/json; charset=utf-8".toMediaType()
 
-    // Ваш персональный шлюз Cloudflare (США/Европа) + резервные шлюзы
+    // Несколько независимых маршрутов к Gemini (личный шлюз Cloudflare, прямой Google, резервные узлы)
     private val geminiGateways = listOf(
         "https://jarvis-gemini-gateway.isgenderdurdyyew95.workers.dev",
-        "https://generativelanguage.googleapis.com",
-        "https://gemini-proxy.freeflare.workers.dev"
+        "https://generativelanguage.googleapis.com"
     )
 
     override suspend fun complete(
@@ -98,21 +97,13 @@ class UniversalAIClient @Inject constructor(
         if (apiKey.isEmpty() || apiKey.length < 5) {
             return@withContext Resource.Error(
                 IllegalStateException("Ключ не указан"),
-                "Пожалуйста, введите API-ключ в настройках."
+                "Пожалуйста, укажите API-ключ в настройках."
             )
         }
 
         try {
-            if (apiKey.startsWith("gsk_")) {
-                return@withContext callOpenAiCompatible(
-                    endpointUrl = "https://api.groq.com/openai/v1/chat/completions",
-                    model = "llama-3.3-70b-versatile",
-                    apiKey = apiKey,
-                    prompt = prompt,
-                    systemPrompt = systemPrompt,
-                    history = history
-                )
-            } else if (apiKey.startsWith("sk-or-")) {
+            // 1. Ключ OpenRouter (sk-or-v1-...) -> Официальный Gemini 2.0 Flash / Pro БЕЗ БЛОКИРОВОК ПРОВАЙДЕРА
+            if (apiKey.startsWith("sk-or-")) {
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://openrouter.ai/api/v1/chat/completions",
                     model = "google/gemini-2.0-flash-exp:free",
@@ -121,7 +112,20 @@ class UniversalAIClient @Inject constructor(
                     systemPrompt = systemPrompt,
                     history = history
                 )
-            } else if (apiKey.startsWith("sk-")) {
+            }
+            // 2. Ключ Groq (gsk_...) -> Llama 3.3 70B
+            else if (apiKey.startsWith("gsk_")) {
+                return@withContext callOpenAiCompatible(
+                    endpointUrl = "https://api.groq.com/openai/v1/chat/completions",
+                    model = "llama-3.3-70b-versatile",
+                    apiKey = apiKey,
+                    prompt = prompt,
+                    systemPrompt = systemPrompt,
+                    history = history
+                )
+            }
+            // 3. Ключ OpenAI (sk-...) -> GPT-4o Mini
+            else if (apiKey.startsWith("sk-")) {
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://api.openai.com/v1/chat/completions",
                     model = "gpt-4o-mini",
@@ -130,15 +134,17 @@ class UniversalAIClient @Inject constructor(
                     systemPrompt = systemPrompt,
                     history = history
                 )
-            } else {
+            }
+            // 4. Прямой ключ Gemini (AQ.Ab... или AIzaSy...) через личный шлюз Cloudflare
+            else {
                 return@withContext callGeminiWithGatewayFallback(apiKey, prompt, systemPrompt, history)
             }
         } catch (e: SocketTimeoutException) {
-            Resource.Error(e, "Таймаут подключения к AI. Проверьте интернет.")
+            Resource.Error(e, "Таймаут подключения. Провайдер блокирует соединение. Рекомендуется бесплатный ключ OpenRouter (sk-or-...).")
         } catch (e: IOException) {
-            Resource.Error(e, "Нет подключения к интернету.")
+            Resource.Error(e, "Сетевая ошибка: ${e.message ?: "блокировка узла"}. Попробуйте ключ OpenRouter.")
         } catch (e: Exception) {
-            Resource.Error(e, "Ошибка связи с AI: ${e.localizedMessage}")
+            Resource.Error(e, "Ошибка: ${e.localizedMessage}")
         }
     }
 
@@ -168,7 +174,7 @@ class UniversalAIClient @Inject constructor(
         val requestBodyObj = GeminiRequestDto(contents, systemInstruction)
         val jsonBody = json.encodeToString(GeminiRequestDto.serializer(), requestBodyObj)
 
-        var lastErrorMessage = "Не удалось связаться с Gemini"
+        var lastErrorDetails = ""
 
         for (baseUrl in geminiGateways) {
             try {
@@ -191,19 +197,24 @@ class UniversalAIClient @Inject constructor(
                     }
                 } else {
                     val code = response.code
-                    if (code == 400 || code == 403) {
-                        lastErrorMessage = "Ошибка авторизации Google Gemini ($code)."
-                        continue
-                    } else if (code == 429) {
-                        return Resource.Error(IllegalStateException("429"), "Превышен лимит запросов Gemini (подождите 30 сек).")
+                    lastErrorDetails = "HTTP $code: $responseBody"
+                    if (code == 429) {
+                        return Resource.Error(IllegalStateException("429"), "Лимит запросов Gemini исчерпан (подождите минуту).")
                     }
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                lastErrorDetails = "${e.javaClass.simpleName}: ${e.message}"
                 continue
             }
         }
 
-        return Resource.Error(IllegalStateException("Gateway Error"), lastErrorMessage)
+        val diagnosticHelp = if (lastErrorDetails.contains("Timeout", ignoreCase = true) || lastErrorDetails.contains("UnknownHost", ignoreCase = true) || lastErrorDetails.contains("SSL", ignoreCase = true)) {
+            "Ваш мобильный оператор блокирует Cloudflare и Google. Используйте бесплатный ключ OpenRouter (sk-or-...) — он работает на всех операторах без блокировок."
+        } else {
+            "Ошибка связи с Gemini: $lastErrorDetails"
+        }
+
+        return Resource.Error(IllegalStateException(lastErrorDetails), diagnosticHelp)
     }
 
     private fun callOpenAiCompatible(
@@ -233,6 +244,8 @@ class UniversalAIClient @Inject constructor(
             .post(jsonBody.toRequestBody(mediaType))
             .header("Authorization", "Bearer $apiKey")
             .header("Content-Type", "application/json")
+            .header("HTTP-Referer", "https://github.com/freelanceTM/jarvis")
+            .header("X-Title", "JARVIS Assistant")
             .build()
 
         val response = okHttpClient.newCall(request).execute()
