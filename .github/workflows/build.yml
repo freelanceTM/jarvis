@@ -1,0 +1,53 @@
+name: Build JARVIS APK
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Auto-Unpack ZIP if uploaded as archive
+        run: |
+          ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
+          if [ -n "$ZIP_FILE" ]; then
+            echo "Found ZIP archive: $ZIP_FILE. Unpacking..."
+            unzip -o "$ZIP_FILE"
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Find Project and Build APK
+        run: |
+          PROJECT_DIR=$(find . -type f \( -name "settings.gradle.kts" -o -name "settings.gradle" \) -exec dirname {} \; | head -n 1)
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: Could not find settings.gradle.kts"
+            ls -la
+            exit 1
+          fi
+          echo "Building in: $PROJECT_DIR"
+          cd "$PROJECT_DIR"
+          gradle assembleDebug --stacktrace
+
+      - name: Upload JARVIS APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JARVIS-v0.2.apk
+          path: |
+            **/build/outputs/apk/debug/*.apk
+            **/*.apk
+          if-no-files-found: error
