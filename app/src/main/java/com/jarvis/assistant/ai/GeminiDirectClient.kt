@@ -73,7 +73,6 @@ class GeminiDirectClient @Inject constructor(
         }
 
         try {
-            // Формируем историю диалога для Gemini (роли: 'user' и 'model')
             val contents = mutableListOf<GeminiContentDto>()
             
             history.takeLast(6).forEach { msg ->
@@ -109,20 +108,18 @@ class GeminiDirectClient @Inject constructor(
             val jsonBody = json.encodeToString(GeminiRequestDto.serializer(), requestBodyObj)
             val mediaType = "application/json; charset=utf-8".toMediaType()
 
-            val targetModel = "gemini-1.5-flash"
+            // gemini-flash-latest - самая актуальная и быстрая модель Gemini
+            val targetModel = "gemini-flash-latest"
             val requestUrl = "$baseGeminiUrl/$targetModel:generateContent?key=$rawApiKey"
 
-            val requestBuilder = Request.Builder()
+            val request = Request.Builder()
                 .url(requestUrl)
                 .post(jsonBody.toRequestBody(mediaType))
                 .header("Content-Type", "application/json")
+                .header("x-goog-api-key", rawApiKey)
+                .build()
 
-            // Поддерживаем как query-key, так и Bearer Header (для токенов OAuth)
-            if (rawApiKey.startsWith("ya29.") || rawApiKey.startsWith("AQ.")) {
-                requestBuilder.header("Authorization", "Bearer $rawApiKey")
-            }
-
-            val response = okHttpClient.newCall(requestBuilder.build()).execute()
+            val response = okHttpClient.newCall(request).execute()
             val responseBody = response.body?.string().orEmpty()
 
             if (response.isSuccessful && responseBody.isNotEmpty()) {
@@ -137,9 +134,9 @@ class GeminiDirectClient @Inject constructor(
             } else {
                 val code = response.code
                 val userMsg = when (code) {
-                    400 -> "Неверный формат API-ключа Gemini. Ключ Google AI Studio должен начинаться с AIzaSy. Проверьте настройки."
+                    400 -> "Ошибка авторизации ключа Gemini."
                     401, 403 -> "Ключ API не авторизован или заблокирован Google."
-                    429 -> "Превышен лимит запросов Gemini."
+                    429 -> "Превышен лимит запросов Gemini (подождите 30 сек)."
                     else -> "Ошибка сервера AI с кодом $code."
                 }
                 Resource.Error(IllegalStateException("HTTP $code: $responseBody"), userMsg)
