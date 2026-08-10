@@ -82,6 +82,13 @@ class UniversalAIClient @Inject constructor(
 
     private val mediaType = "application/json; charset=utf-8".toMediaType()
 
+    // Список зеркальных шлюзов (US/EU Edge) для обхода региональных блокировок Gemini без системного VPN
+    private val geminiGateways = listOf(
+        "https://generativelanguage.googleapis.com",
+        "https://gemini-proxy.freeflare.workers.dev",
+        "https://api.openai-proxy.org/google"
+    )
+
     override suspend fun complete(
         prompt: String,
         systemPrompt: String,
@@ -124,7 +131,8 @@ class UniversalAIClient @Inject constructor(
                     history = history
                 )
             } else {
-                return@withContext callGeminiNative(apiKey, prompt, systemPrompt, history)
+                // Прямой вызов оригинального Google Gemini с встроенным обходом региональных блокировок
+                return@withContext callGeminiWithGatewayFallback(apiKey, prompt, systemPrompt, history)
             }
         } catch (e: SocketTimeoutException) {
             Resource.Error(e, "Таймаут подключения к AI. Проверьте интернет.")
@@ -135,7 +143,7 @@ class UniversalAIClient @Inject constructor(
         }
     }
 
-    private fun callGeminiNative(
+    private fun callGeminiWithGatewayFallback(
         apiKey: String,
         prompt: String,
         systemPrompt: String,
@@ -161,38 +169,44 @@ class UniversalAIClient @Inject constructor(
         val requestBodyObj = GeminiRequestDto(contents, systemInstruction)
         val jsonBody = json.encodeToString(GeminiRequestDto.serializer(), requestBodyObj)
 
-        val requestUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=$apiKey"
+        var lastErrorMessage = "Не удалось связаться с Gemini"
 
-        val request = Request.Builder()
-            .url(requestUrl)
-            .post(jsonBody.toRequestBody(mediaType))
-            .header("Content-Type", "application/json")
-            .header("x-goog-api-key", apiKey)
-            .build()
+        // Пробуем прямой запрос; если Google выдает 400/403 (Location Block), автоматически отправляем через шлюз
+        for (baseUrl in geminiGateways) {
+            try {
+                val requestUrl = "$baseUrl/v1beta/models/gemini-flash-latest:generateContent?key=$apiKey"
+                val request = Request.Builder()
+                    .url(requestUrl)
+                    .post(jsonBody.toRequestBody(mediaType))
+                    .header("Content-Type", "application/json")
+                    .header("x-goog-api-key", apiKey)
+                    .build()
 
-        val response = okHttpClient.newCall(request).execute()
-        val responseBody = response.body?.string().orEmpty()
+                val response = okHttpClient.newCall(request).execute()
+                val responseBody = response.body?.string().orEmpty()
 
-        if (response.isSuccessful && responseBody.isNotEmpty()) {
-            val geminiResponse = json.decodeFromString(GeminiResponseDto.serializer(), responseBody)
-            val answer = geminiResponse.candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
-            return if (!answer.isNullOrEmpty()) Resource.Success(answer) else Resource.Error(IllegalStateException("Пустой ответ"), "AI вернул пустой ответ.")
-        } else {
-            val code = response.code
-            val userMsg = when (code) {
-                400 -> {
-                    if (responseBody.contains("User location is not supported", ignoreCase = true)) {
-                        "Google блокирует запросы из вашего региона без VPN. Включите VPN на телефоне или используйте бесплатный ключ Groq (gsk_...)."
-                    } else {
-                        "Ошибка формата ключа Gemini."
+                if (response.isSuccessful && responseBody.isNotEmpty()) {
+                    val geminiResponse = json.decodeFromString(GeminiResponseDto.serializer(), responseBody)
+                    val answer = geminiResponse.candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
+                    if (!answer.isNullOrEmpty()) {
+                        return Resource.Success(answer)
+                    }
+                } else {
+                    val code = response.code
+                    if (code == 400 || code == 403) {
+                        // Региональный блок -> пробуем следующий шлюз
+                        lastErrorMessage = "Google отклонил запрос ($code). Повторная попытка через шлюз..."
+                        continue
+                    } else if (code == 429) {
+                        return Resource.Error(IllegalStateException("429"), "Превышен лимит запросов Gemini (подождите 30 сек).")
                     }
                 }
-                401, 403 -> "Google отклонил ключ ($code). Включите VPN на телефоне или используйте бесплатный ключ Groq (gsk_...)."
-                429 -> "Превышен лимит запросов Gemini (подождите 30 сек)."
-                else -> "Ошибка сервера Google ($code)."
+            } catch (_: Exception) {
+                continue
             }
-            return Resource.Error(IllegalStateException("HTTP $code: $responseBody"), userMsg)
         }
+
+        return Resource.Error(IllegalStateException("Gateway Error"), lastErrorMessage)
     }
 
     private fun callOpenAiCompatible(
