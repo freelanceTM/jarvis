@@ -64,11 +64,11 @@ class GeminiDirectClient @Inject constructor(
         systemPrompt: String,
         history: List<Message>
     ): Resource<String> = withContext(Dispatchers.IO) {
-        val apiKey = securityManager.getApiKey()
-        if (!securityManager.hasValidApiKey()) {
+        val rawApiKey = securityManager.getApiKey().trim()
+        if (rawApiKey.isEmpty() || rawApiKey.length < 5) {
             return@withContext Resource.Error(
-                IllegalStateException("Gemini API-ключ не настроен"),
-                "Укажите ключ Gemini API в настройках"
+                IllegalStateException("Ключ API не указан"),
+                "API-ключ отсутствует. Пожалуйста, укажите ваш ключ в настройках."
             )
         }
 
@@ -109,16 +109,20 @@ class GeminiDirectClient @Inject constructor(
             val jsonBody = json.encodeToString(GeminiRequestDto.serializer(), requestBodyObj)
             val mediaType = "application/json; charset=utf-8".toMediaType()
 
-            // Модель gemini-1.5-flash или gemini-2.0-flash
             val targetModel = "gemini-1.5-flash"
-            val requestUrl = "$baseGeminiUrl/$targetModel:generateContent?key=$apiKey"
+            val requestUrl = "$baseGeminiUrl/$targetModel:generateContent?key=$rawApiKey"
 
-            val httpRequest = Request.Builder()
+            val requestBuilder = Request.Builder()
                 .url(requestUrl)
                 .post(jsonBody.toRequestBody(mediaType))
-                .build()
+                .header("Content-Type", "application/json")
 
-            val response = okHttpClient.newCall(httpRequest).execute()
+            // Поддерживаем как query-key, так и Bearer Header (для токенов OAuth)
+            if (rawApiKey.startsWith("ya29.") || rawApiKey.startsWith("AQ.")) {
+                requestBuilder.header("Authorization", "Bearer $rawApiKey")
+            }
+
+            val response = okHttpClient.newCall(requestBuilder.build()).execute()
             val responseBody = response.body?.string().orEmpty()
 
             if (response.isSuccessful && responseBody.isNotEmpty()) {
@@ -128,24 +132,24 @@ class GeminiDirectClient @Inject constructor(
                 if (!answer.isNullOrEmpty()) {
                     Resource.Success(answer)
                 } else {
-                    Resource.Error(IllegalStateException("Пустой ответ от Gemini"), "Пустой ответ")
+                    Resource.Error(IllegalStateException("Пустой ответ"), "AI вернул пустой ответ.")
                 }
             } else {
                 val code = response.code
                 val userMsg = when (code) {
-                    400 -> "Неверный запрос или ключ Gemini API."
-                    403 -> "Ключ Gemini заблокирован или нет доступа."
-                    429 -> "Превышен лимит запросов Gemini (Rate Limit)."
-                    else -> "Ошибка сервера Gemini ($code)."
+                    400 -> "Неверный формат API-ключа Gemini. Ключ Google AI Studio должен начинаться с AIzaSy. Проверьте настройки."
+                    401, 403 -> "Ключ API не авторизован или заблокирован Google."
+                    429 -> "Превышен лимит запросов Gemini."
+                    else -> "Ошибка сервера AI с кодом $code."
                 }
                 Resource.Error(IllegalStateException("HTTP $code: $responseBody"), userMsg)
             }
         } catch (e: SocketTimeoutException) {
-            Resource.Error(e, "Таймаут подключения к Gemini. Проверьте интернет.")
+            Resource.Error(e, "Таймаут подключения к AI. Проверьте интернет.")
         } catch (e: IOException) {
             Resource.Error(e, "Нет подключения к интернету.")
         } catch (e: Exception) {
-            Resource.Error(e, "Ошибка связи с Gemini API.")
+            Resource.Error(e, "Ошибка связи с AI: ${e.localizedMessage}")
         }
     }
 }

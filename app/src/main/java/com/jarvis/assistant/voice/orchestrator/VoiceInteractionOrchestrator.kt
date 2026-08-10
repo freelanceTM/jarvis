@@ -110,7 +110,6 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         }
                     }
                     is WakeWordEvent.InterruptDetected -> {
-                        // Обработка прерывания: «Джарвис, стоп» во время ответа
                         if (_currentMode.value == OrchestratorMode.TTS_SPEAKING ||
                             _currentMode.value == OrchestratorMode.AI_THINKING) {
                             handleBargeInInterrupt()
@@ -133,7 +132,6 @@ class VoiceInteractionOrchestrator @Inject constructor(
     }
 
     private fun handleBargeInInterrupt() {
-        // Мгновенная остановка речи и генерации при фразе "Стоп"
         aiJob?.cancel()
         aiJob = null
         textToSpeechManager.stop()
@@ -156,7 +154,6 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         _lastQuery.value = event.recognizedText
                         val text = event.recognizedText.lowercase()
 
-                        // Проверка на команду быстрой отмены
                         if (text.contains("стоп") || text.contains("отмена") || text.contains("хватит")) {
                             handleBargeInInterrupt()
                             return@collectLatest
@@ -167,7 +164,8 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     is SpeechRecognitionEvent.RecognitionError -> {
                         if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY) {
                             _assistantState.value = VoiceAssistantState.Error(event.errorMessage)
-                            delay(1500)
+                            textToSpeechManager.speak(event.errorMessage, speechRate, speechPitch)
+                            delay(2500)
                             startWakeWordListening()
                         }
                     }
@@ -181,7 +179,6 @@ class VoiceInteractionOrchestrator @Inject constructor(
         _currentMode.value = OrchestratorMode.AI_THINKING
         _assistantState.value = VoiceAssistantState.Thinking
 
-        // Включаем детектор прерываний в фоне во время запроса
         wakeWordDetector.startListening(isInterruptModeOnly = true)
 
         aiJob = scope.launch {
@@ -193,14 +190,17 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     _currentMode.value = OrchestratorMode.TTS_SPEAKING
                     _assistantState.value = VoiceAssistantState.Speaking(answer)
 
-                    // Озвучиваем ответ через Bluetooth наушник
+                    // Озвучиваем сгенерированный ответ
                     textToSpeechManager.speak(answer, speechRate, speechPitch)
                 }
                 is Resource.Error -> {
-                    _assistantState.value = VoiceAssistantState.Error(
-                        result.message ?: "AI временно недоступен"
-                    )
-                    delay(2000)
+                    val errorMsg = result.message ?: "Не удалось связаться с сервером AI."
+                    _lastAnswer.value = "Ошибка: $errorMsg"
+                    _assistantState.value = VoiceAssistantState.Error(errorMsg)
+                    
+                    // Голосовое оповещение об ошибке через наушник
+                    textToSpeechManager.speak(errorMsg, speechRate, speechPitch)
+                    delay(3000)
                     startWakeWordListening()
                 }
                 is Resource.Loading -> Unit
@@ -249,7 +249,6 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private fun resetInactivityTimer() {
         inactivityTimerJob?.cancel()
         inactivityTimerJob = scope.launch {
-            // 10 минут тишины -> переход в энергосбережение
             delay(10 * 60 * 1000L)
             if (_currentMode.value == OrchestratorMode.STANDBY_WAKE_WORD) {
                 wakeWordDetector.stopListening()
