@@ -82,11 +82,11 @@ class UniversalAIClient @Inject constructor(
 
     private val mediaType = "application/json; charset=utf-8".toMediaType()
 
-    // Список зеркальных шлюзов (US/EU Edge) для обхода региональных блокировок Gemini без системного VPN
+    // Ваш персональный шлюз Cloudflare (США/Европа) + резервные шлюзы
     private val geminiGateways = listOf(
+        "https://jarvis-gemini-gateway.isgenderdurdyyew95.workers.dev",
         "https://generativelanguage.googleapis.com",
-        "https://gemini-proxy.freeflare.workers.dev",
-        "https://api.openai-proxy.org/google"
+        "https://gemini-proxy.freeflare.workers.dev"
     )
 
     override suspend fun complete(
@@ -131,7 +131,6 @@ class UniversalAIClient @Inject constructor(
                     history = history
                 )
             } else {
-                // Прямой вызов оригинального Google Gemini с встроенным обходом региональных блокировок
                 return@withContext callGeminiWithGatewayFallback(apiKey, prompt, systemPrompt, history)
             }
         } catch (e: SocketTimeoutException) {
@@ -171,7 +170,6 @@ class UniversalAIClient @Inject constructor(
 
         var lastErrorMessage = "Не удалось связаться с Gemini"
 
-        // Пробуем прямой запрос; если Google выдает 400/403 (Location Block), автоматически отправляем через шлюз
         for (baseUrl in geminiGateways) {
             try {
                 val requestUrl = "$baseUrl/v1beta/models/gemini-flash-latest:generateContent?key=$apiKey"
@@ -194,8 +192,7 @@ class UniversalAIClient @Inject constructor(
                 } else {
                     val code = response.code
                     if (code == 400 || code == 403) {
-                        // Региональный блок -> пробуем следующий шлюз
-                        lastErrorMessage = "Google отклонил запрос ($code). Повторная попытка через шлюз..."
+                        lastErrorMessage = "Ошибка авторизации Google Gemini ($code)."
                         continue
                     } else if (code == 429) {
                         return Resource.Error(IllegalStateException("429"), "Превышен лимит запросов Gemini (подождите 30 сек).")
