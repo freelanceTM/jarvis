@@ -82,12 +82,6 @@ class UniversalAIClient @Inject constructor(
 
     private val mediaType = "application/json; charset=utf-8".toMediaType()
 
-    // Несколько независимых маршрутов к Gemini (личный шлюз Cloudflare, прямой Google, резервные узлы)
-    private val geminiGateways = listOf(
-        "https://jarvis-gemini-gateway.isgenderdurdyyew95.workers.dev",
-        "https://generativelanguage.googleapis.com"
-    )
-
     override suspend fun complete(
         prompt: String,
         systemPrompt: String,
@@ -97,12 +91,12 @@ class UniversalAIClient @Inject constructor(
         if (apiKey.isEmpty() || apiKey.length < 5) {
             return@withContext Resource.Error(
                 IllegalStateException("Ключ не указан"),
-                "Пожалуйста, укажите API-ключ в настройках."
+                "Пожалуйста, введите API-ключ в настройках."
             )
         }
 
         try {
-            // 1. Ключ OpenRouter (sk-or-v1-...) -> Официальный Gemini 2.0 Flash / Pro БЕЗ БЛОКИРОВОК ПРОВАЙДЕРА
+            // 1. Прямой запрос к OpenRouter (Официальный Google Gemini без VPN)
             if (apiKey.startsWith("sk-or-")) {
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://openrouter.ai/api/v1/chat/completions",
@@ -113,7 +107,7 @@ class UniversalAIClient @Inject constructor(
                     history = history
                 )
             }
-            // 2. Ключ Groq (gsk_...) -> Llama 3.3 70B
+            // 2. Прямой запрос к Groq (Llama 3.3 70B)
             else if (apiKey.startsWith("gsk_")) {
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://api.groq.com/openai/v1/chat/completions",
@@ -124,7 +118,7 @@ class UniversalAIClient @Inject constructor(
                     history = history
                 )
             }
-            // 3. Ключ OpenAI (sk-...) -> GPT-4o Mini
+            // 3. Прямой запрос к OpenAI (GPT-4o Mini)
             else if (apiKey.startsWith("sk-")) {
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://api.openai.com/v1/chat/completions",
@@ -135,20 +129,20 @@ class UniversalAIClient @Inject constructor(
                     history = history
                 )
             }
-            // 4. Прямой ключ Gemini (AQ.Ab... или AIzaSy...) через личный шлюз Cloudflare
+            // 4. Прямой официальный запрос к Google Gemini
             else {
-                return@withContext callGeminiWithGatewayFallback(apiKey, prompt, systemPrompt, history)
+                return@withContext callDirectGemini(apiKey, prompt, systemPrompt, history)
             }
         } catch (e: SocketTimeoutException) {
-            Resource.Error(e, "Таймаут подключения. Провайдер блокирует соединение. Рекомендуется бесплатный ключ OpenRouter (sk-or-...).")
+            Resource.Error(e, "Таймаут подключения. Проверьте интернет-соединение.")
         } catch (e: IOException) {
-            Resource.Error(e, "Сетевая ошибка: ${e.message ?: "блокировка узла"}. Попробуйте ключ OpenRouter.")
+            Resource.Error(e, "Ошибка сети: ${e.localizedMessage ?: "Нет интернета"}")
         } catch (e: Exception) {
             Resource.Error(e, "Ошибка: ${e.localizedMessage}")
         }
     }
 
-    private fun callGeminiWithGatewayFallback(
+    private fun callDirectGemini(
         apiKey: String,
         prompt: String,
         systemPrompt: String,
@@ -174,47 +168,43 @@ class UniversalAIClient @Inject constructor(
         val requestBodyObj = GeminiRequestDto(contents, systemInstruction)
         val jsonBody = json.encodeToString(GeminiRequestDto.serializer(), requestBodyObj)
 
-        var lastErrorDetails = ""
+        // Прямой официальный URL Google Gemini без шлюзов
+        val requestUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=$apiKey"
 
-        for (baseUrl in geminiGateways) {
-            try {
-                val requestUrl = "$baseUrl/v1beta/models/gemini-flash-latest:generateContent?key=$apiKey"
-                val request = Request.Builder()
-                    .url(requestUrl)
-                    .post(jsonBody.toRequestBody(mediaType))
-                    .header("Content-Type", "application/json")
-                    .header("x-goog-api-key", apiKey)
-                    .build()
+        val request = Request.Builder()
+            .url(requestUrl)
+            .post(jsonBody.toRequestBody(mediaType))
+            .header("Content-Type", "application/json")
+            .header("x-goog-api-key", apiKey)
+            .build()
 
-                val response = okHttpClient.newCall(request).execute()
-                val responseBody = response.body?.string().orEmpty()
+        val response = okHttpClient.newCall(request).execute()
+        val responseBody = response.body?.string().orEmpty()
 
-                if (response.isSuccessful && responseBody.isNotEmpty()) {
-                    val geminiResponse = json.decodeFromString(GeminiResponseDto.serializer(), responseBody)
-                    val answer = geminiResponse.candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
-                    if (!answer.isNullOrEmpty()) {
-                        return Resource.Success(answer)
-                    }
-                } else {
-                    val code = response.code
-                    lastErrorDetails = "HTTP $code: $responseBody"
-                    if (code == 429) {
-                        return Resource.Error(IllegalStateException("429"), "Лимит запросов Gemini исчерпан (подождите минуту).")
+        if (response.isSuccessful && responseBody.isNotEmpty()) {
+            val geminiResponse = json.decodeFromString(GeminiResponseDto.serializer(), responseBody)
+            val answer = geminiResponse.candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
+            return if (!answer.isNullOrEmpty()) {
+                Resource.Success(answer)
+            } else {
+                Resource.Error(IllegalStateException("Пустой ответ"), "AI вернул пустой ответ.")
+            }
+        } else {
+            val code = response.code
+            val userMsg = when (code) {
+                400 -> {
+                    if (responseBody.contains("User location is not supported", ignoreCase = true)) {
+                        "Google блокирует запросы из вашего региона. Включите VPN или используйте ключ OpenRouter."
+                    } else {
+                        "Неверный формат запроса или ключа Gemini ($code)."
                     }
                 }
-            } catch (e: Exception) {
-                lastErrorDetails = "${e.javaClass.simpleName}: ${e.message}"
-                continue
+                401, 403 -> "Google отклонил ключ (403). Включите VPN на телефоне или используйте ключ OpenRouter (sk-or-...)."
+                429 -> "Лимит запросов Gemini исчерпан. Пожалуйста, подождите 30 секунд."
+                else -> "Ошибка сервера Google ($code)."
             }
+            return Resource.Error(IllegalStateException("HTTP $code: $responseBody"), userMsg)
         }
-
-        val diagnosticHelp = if (lastErrorDetails.contains("Timeout", ignoreCase = true) || lastErrorDetails.contains("UnknownHost", ignoreCase = true) || lastErrorDetails.contains("SSL", ignoreCase = true)) {
-            "Ваш мобильный оператор блокирует Cloudflare и Google. Используйте бесплатный ключ OpenRouter (sk-or-...) — он работает на всех операторах без блокировок."
-        } else {
-            "Ошибка связи с Gemini: $lastErrorDetails"
-        }
-
-        return Resource.Error(IllegalStateException(lastErrorDetails), diagnosticHelp)
     }
 
     private fun callOpenAiCompatible(
@@ -245,7 +235,7 @@ class UniversalAIClient @Inject constructor(
             .header("Authorization", "Bearer $apiKey")
             .header("Content-Type", "application/json")
             .header("HTTP-Referer", "https://github.com/freelanceTM/jarvis")
-            .header("X-Title", "JARVIS Assistant")
+            .header("X-Title", "JARVIS Voice Assistant")
             .build()
 
         val response = okHttpClient.newCall(request).execute()
@@ -254,7 +244,11 @@ class UniversalAIClient @Inject constructor(
         if (response.isSuccessful && responseBody.isNotEmpty()) {
             val openAiResponse = json.decodeFromString(OpenAiChatResponse.serializer(), responseBody)
             val answer = openAiResponse.choices.firstOrNull()?.message?.content?.trim()
-            return if (!answer.isNullOrEmpty()) Resource.Success(answer) else Resource.Error(IllegalStateException("Пустой ответ"), "AI вернул пустой ответ.")
+            return if (!answer.isNullOrEmpty()) {
+                Resource.Success(answer)
+            } else {
+                Resource.Error(IllegalStateException("Пустой ответ"), "AI вернул пустой ответ.")
+            }
         } else {
             return Resource.Error(IllegalStateException("HTTP ${response.code}: $responseBody"), "Ошибка AI сервиса (${response.code})")
         }
