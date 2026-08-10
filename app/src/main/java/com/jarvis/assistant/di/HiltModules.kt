@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import com.jarvis.assistant.ai.AIClient
-import com.jarvis.assistant.ai.OpenAiDirectClient
+import com.jarvis.assistant.ai.GeminiDirectClient
 import com.jarvis.assistant.core.constants.AppConstants
 import com.jarvis.assistant.core.dispatcher.CoroutineDispatchers
 import com.jarvis.assistant.core.dispatcher.DefaultCoroutineDispatchers
@@ -22,6 +22,8 @@ import com.jarvis.assistant.data.repository.SettingsRepositoryImpl
 import com.jarvis.assistant.domain.repository.AIRepository
 import com.jarvis.assistant.domain.repository.MessageRepository
 import com.jarvis.assistant.domain.repository.SettingsRepository
+import com.jarvis.assistant.voice.wakeword.NativeWakeWordDetector
+import com.jarvis.assistant.voice.wakeword.WakeWordDetector
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -57,7 +59,11 @@ abstract class SecurityAndNetworkBindingModule {
 
     @Binds
     @Singleton
-    abstract fun bindAIClient(impl: OpenAiDirectClient): AIClient
+    abstract fun bindAIClient(impl: GeminiDirectClient): AIClient
+
+    @Binds
+    @Singleton
+    abstract fun bindWakeWordDetector(impl: NativeWakeWordDetector): WakeWordDetector
 }
 
 @Module
@@ -100,7 +106,7 @@ object NetworkModule {
     @Singleton
     fun provideLoggingInterceptor(): HttpLoggingInterceptor {
         return HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC // Sensitive data not logged
+            level = HttpLoggingInterceptor.Level.BASIC
         }
     }
 

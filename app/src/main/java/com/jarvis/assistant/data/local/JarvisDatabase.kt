@@ -8,7 +8,7 @@ import com.jarvis.assistant.data.local.entity.MessageEntity
 @Database(
     entities = [MessageEntity::class],
     version = 1,
-    exportSchema = true
+    exportSchema = false
 )
 abstract class JarvisDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
