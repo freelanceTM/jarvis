@@ -41,6 +41,38 @@ data class OpenAiChoiceDto(
     @SerialName("message") val message: OpenAiMessageDto
 )
 
+@Serializable
+data class GeminiContentDto(
+    @SerialName("role") val role: String,
+    @SerialName("parts") val parts: List<GeminiPartDto>
+)
+
+@Serializable
+data class GeminiPartDto(
+    @SerialName("text") val text: String
+)
+
+@Serializable
+data class GeminiSystemInstructionDto(
+    @SerialName("parts") val parts: List<GeminiPartDto>
+)
+
+@Serializable
+data class GeminiRequestDto(
+    @SerialName("contents") val contents: List<GeminiContentDto>,
+    @SerialName("systemInstruction") val systemInstruction: GeminiSystemInstructionDto? = null
+)
+
+@Serializable
+data class GeminiResponseDto(
+    @SerialName("candidates") val candidates: List<GeminiCandidateDto> = emptyList()
+)
+
+@Serializable
+data class GeminiCandidateDto(
+    @SerialName("content") val content: GeminiContentDto? = null
+)
+
 @Singleton
 class UniversalAIClient @Inject constructor(
     private val okHttpClient: OkHttpClient,
@@ -64,9 +96,7 @@ class UniversalAIClient @Inject constructor(
         }
 
         try {
-            // Авто-определение типа провайдера по формату ключа:
             if (apiKey.startsWith("gsk_")) {
-                // 1. GROQ API (Сверхбыстрый, бесплатный, без геоблокировок)
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://api.groq.com/openai/v1/chat/completions",
                     model = "llama-3.3-70b-versatile",
@@ -76,7 +106,6 @@ class UniversalAIClient @Inject constructor(
                     history = history
                 )
             } else if (apiKey.startsWith("sk-or-")) {
-                // 2. OpenRouter API
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://openrouter.ai/api/v1/chat/completions",
                     model = "google/gemini-2.0-flash-exp:free",
@@ -86,7 +115,6 @@ class UniversalAIClient @Inject constructor(
                     history = history
                 )
             } else if (apiKey.startsWith("sk-")) {
-                // 3. OpenAI API
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://api.openai.com/v1/chat/completions",
                     model = "gpt-4o-mini",
@@ -96,7 +124,6 @@ class UniversalAIClient @Inject constructor(
                     history = history
                 )
             } else {
-                // 4. Google Gemini API (Прямой REST)
                 return@withContext callGeminiNative(apiKey, prompt, systemPrompt, history)
             }
         } catch (e: SocketTimeoutException) {
@@ -134,7 +161,7 @@ class UniversalAIClient @Inject constructor(
         val requestBodyObj = GeminiRequestDto(contents, systemInstruction)
         val jsonBody = json.encodeToString(GeminiRequestDto.serializer(), requestBodyObj)
 
-        val requestUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+        val requestUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=$apiKey"
 
         val request = Request.Builder()
             .url(requestUrl)
@@ -155,12 +182,12 @@ class UniversalAIClient @Inject constructor(
             val userMsg = when (code) {
                 400 -> {
                     if (responseBody.contains("User location is not supported", ignoreCase = true)) {
-                        "Google блокирует запросы из вашего региона без VPN. Включите VPN на телефоне или используйте бесплатный ключ Groq."
+                        "Google блокирует запросы из вашего региона без VPN. Включите VPN на телефоне или используйте бесплатный ключ Groq (gsk_...)."
                     } else {
                         "Ошибка формата ключа Gemini."
                     }
                 }
-                401, 403 -> "Google отклонил ключ (403). Включите VPN на телефоне или используйте бесплатный ключ Groq (gsk_...)."
+                401, 403 -> "Google отклонил ключ ($code). Включите VPN на телефоне или используйте бесплатный ключ Groq (gsk_...)."
                 429 -> "Превышен лимит запросов Gemini (подождите 30 сек)."
                 else -> "Ошибка сервера Google ($code)."
             }
