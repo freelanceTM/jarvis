@@ -1,8 +1,10 @@
-apply(plugin = "com.android.application")
-apply(plugin = "org.jetbrains.kotlin.android")
-apply(plugin = "org.jetbrains.kotlin.plugin.serialization")
-apply(plugin = "com.google.dagger.hilt.android")
-apply(plugin = "com.google.devtools.ksp")
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.serialization")
+    id("com.google.dagger.hilt.android")
+    id("com.google.devtools.ksp")
+}
 
 android {
     namespace = "com.jarvis.assistant"
