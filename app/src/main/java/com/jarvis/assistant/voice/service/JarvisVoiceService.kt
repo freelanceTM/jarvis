@@ -151,6 +151,7 @@ class JarvisVoiceService : Service() {
                     OrchestratorMode.CONTINUOUS_CONVERSATION -> "Слушаю продолжение диалога..."
                     OrchestratorMode.AI_THINKING -> "Выполнение команды..."
                     OrchestratorMode.TTS_SPEAKING -> "Озвучивание ответа..."
+                    OrchestratorMode.AWAITING_CONFIRMATION -> "Ожидание подтверждения (Да/Нет)..."
                     OrchestratorMode.PAUSED_CALL_OR_SLEEP -> "Наушники отключены / Пауза"
                 }
                 updateNotification(statusText)

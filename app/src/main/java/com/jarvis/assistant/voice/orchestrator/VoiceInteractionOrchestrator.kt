@@ -3,6 +3,8 @@ package com.jarvis.assistant.voice.orchestrator
 import android.content.Context
 import android.media.ToneGenerator
 import android.media.AudioManager
+import com.jarvis.assistant.agent.executor.ToolExecutor
+import com.jarvis.assistant.agent.model.ToolCall
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.core.security.SecurityManager
 import com.jarvis.assistant.domain.models.VoiceAssistantState
@@ -22,6 +24,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -32,6 +35,7 @@ enum class OrchestratorMode {
     CONTINUOUS_CONVERSATION,  // Диалоговое окно (без повтора «Джарвис»)
     AI_THINKING,              // Запрос AI / Fast Router
     TTS_SPEAKING,             // Озвучивание ответа
+    AWAITING_CONFIRMATION,    // Ожидание голосового подтверждения (Да/Нет)
     PAUSED_CALL_OR_SLEEP      // Пауза
 }
 
@@ -44,7 +48,8 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private val bluetoothAudioRouter: BluetoothAudioRouter,
     private val sendPromptUseCase: SendPromptUseCase,
     private val getSettingsUseCase: GetSettingsUseCase,
-    private val securityManager: SecurityManager
+    private val securityManager: SecurityManager,
+    private val toolExecutor: ToolExecutor
 ) {
     private val scope = CoroutineScope(Dispatchers.Main + Job())
 
@@ -64,7 +69,11 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private var aiJob: Job? = null
     private var silenceJob: Job? = null
     private var followUpWindowJob: Job? = null
+    private var confirmationTimeoutJob: Job? = null
     private var isServiceActive = false
+
+    private var pendingToolCall: ToolCall? = null
+    private var pendingConfirmationPrompt: String = ""
 
     private var speechRate = 1.05f
     private var speechPitch = 0.90f
@@ -153,6 +162,11 @@ class VoiceInteractionOrchestrator @Inject constructor(
         }
 
         followUpWindowJob?.cancel()
+        confirmationTimeoutJob?.cancel()
+        confirmationTimeoutJob = null
+        pendingToolCall = null
+        toolExecutor.clearPendingConfirmation()
+
         _currentMode.value = OrchestratorMode.STANDBY_WAKE_WORD
         _assistantState.value = VoiceAssistantState.Idle
         speechRecognizerManager.stopListening()
@@ -197,6 +211,12 @@ class VoiceInteractionOrchestrator @Inject constructor(
                             return@collectLatest
                         }
 
+                        // Если находимся в режиме ожидания голосового подтверждения (Да/Нет)
+                        if (_currentMode.value == OrchestratorMode.AWAITING_CONFIRMATION) {
+                            handleConfirmationResponse(text)
+                            return@collectLatest
+                        }
+
                         val clean = cleanWakeWord(text)
                         if (clean.isNotBlank()) {
                             processUserQuery(clean)
@@ -234,6 +254,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
         playWakeChime()
         followUpWindowJob?.cancel()
+        confirmationTimeoutJob?.cancel()
         _currentMode.value = OrchestratorMode.AI_THINKING
         _assistantState.value = VoiceAssistantState.Thinking
         _lastQuery.value = query
@@ -244,12 +265,50 @@ class VoiceInteractionOrchestrator @Inject constructor(
             when (result) {
                 is Resource.Success -> {
                     val answer = result.data.trim()
-                    _lastAnswer.value = answer
-                    _currentMode.value = OrchestratorMode.TTS_SPEAKING
-                    _assistantState.value = VoiceAssistantState.Speaking(answer)
 
-                    // Озвучиваем ответ живым нейро-голосом
-                    textToSpeechManager.speak(answer, speechRate, speechPitch)
+                    // Проверка: требуется ли голосовое подтверждение опасного действия
+                    if (answer.contains("CONFIRM:")) {
+                        val parts = answer.split(":")
+                        val toolId = parts.getOrNull(1)?.trim().orEmpty()
+                        pendingConfirmationPrompt = if (parts.size >= 3) {
+                            parts.subList(2, parts.size).joinToString(":")
+                        } else {
+                            parts.getOrNull(1) ?: "Подтвердите действие, сэр."
+                        }
+
+                        pendingToolCall = toolExecutor.pendingConfirmationCall ?: run {
+                            if (toolId.isNotBlank()) ToolCall(toolId, JsonObject(emptyMap())) else null
+                        }
+
+                        _lastAnswer.value = pendingConfirmationPrompt
+                        _currentMode.value = OrchestratorMode.AWAITING_CONFIRMATION
+                        _assistantState.value = VoiceAssistantState.Speaking(pendingConfirmationPrompt)
+
+                        // Озвучиваем вопрос подтверждения пользователю
+                        textToSpeechManager.speak(pendingConfirmationPrompt, speechRate, speechPitch)
+
+                        // 10-секундный таймаут ожидания голосового ответа
+                        confirmationTimeoutJob?.cancel()
+                        confirmationTimeoutJob = scope.launch {
+                            delay(10_000)
+                            if (_currentMode.value == OrchestratorMode.AWAITING_CONFIRMATION) {
+                                val timeoutMsg = "Время ожидания истекло. Операция отменена, сэр."
+                                _lastAnswer.value = timeoutMsg
+                                _assistantState.value = VoiceAssistantState.Speaking(timeoutMsg)
+                                textToSpeechManager.speak(timeoutMsg, speechRate, speechPitch)
+                                pendingToolCall = null
+                                toolExecutor.clearPendingConfirmation()
+                                delay(2000)
+                                startStandbyMode()
+                            }
+                        }
+                    } else {
+                        // Обычный ответ — озвучиваем
+                        _lastAnswer.value = answer
+                        _currentMode.value = OrchestratorMode.TTS_SPEAKING
+                        _assistantState.value = VoiceAssistantState.Speaking(answer)
+                        textToSpeechManager.speak(answer, speechRate, speechPitch)
+                    }
                 }
                 is Resource.Error -> {
                     val errorMsg = result.message ?: "Ошибка связи с AI"
@@ -264,14 +323,100 @@ class VoiceInteractionOrchestrator @Inject constructor(
         }
     }
 
+    private fun handleConfirmationResponse(response: String) {
+        confirmationTimeoutJob?.cancel()
+        val text = response.lowercase().trim()
+
+        val isYes = text.contains("да") ||
+                text.contains("подтверждаю") ||
+                text.contains("давай") ||
+                text.contains("окей") ||
+                text.contains("ок") ||
+                text.contains("выполняй") ||
+                text.contains("разрешаю") ||
+                text.contains("звони") ||
+                text.contains("отправляй") ||
+                text.contains("согласен")
+
+        val isNo = text.contains("нет") ||
+                text.contains("отмена") ||
+                text.contains("стоп") ||
+                text.contains("отменить") ||
+                text.contains("не надо") ||
+                text.contains("не нужно") ||
+                text.contains("отбой")
+
+        when {
+            isYes && pendingToolCall != null -> {
+                val callToExecute = pendingToolCall!!
+                pendingToolCall = null
+                toolExecutor.clearPendingConfirmation()
+
+                _currentMode.value = OrchestratorMode.AI_THINKING
+                _assistantState.value = VoiceAssistantState.Thinking
+
+                scope.launch {
+                    val result = toolExecutor.executeWithBypass(callToExecute)
+                    val voiceResponse = if (result.isSuccess) {
+                        "${result.summary}, сэр."
+                    } else {
+                        "Не удалось выполнить: ${result.error ?: result.summary}"
+                    }
+                    _lastAnswer.value = voiceResponse
+                    _currentMode.value = OrchestratorMode.TTS_SPEAKING
+                    _assistantState.value = VoiceAssistantState.Speaking(voiceResponse)
+                    textToSpeechManager.speak(voiceResponse, speechRate, speechPitch)
+                }
+            }
+            isNo -> {
+                pendingToolCall = null
+                toolExecutor.clearPendingConfirmation()
+                val cancelMsg = "Операция отменена, сэр."
+                _lastAnswer.value = cancelMsg
+                _currentMode.value = OrchestratorMode.TTS_SPEAKING
+                _assistantState.value = VoiceAssistantState.Speaking(cancelMsg)
+                textToSpeechManager.speak(cancelMsg, speechRate, speechPitch)
+            }
+            else -> {
+                // Переспросить
+                val retryMsg = "Не понял. Скажите да или нет."
+                _assistantState.value = VoiceAssistantState.Speaking(retryMsg)
+                textToSpeechManager.speak(retryMsg, speechRate, speechPitch)
+
+                // Перезапуск 10-секундного таймаута
+                confirmationTimeoutJob?.cancel()
+                confirmationTimeoutJob = scope.launch {
+                    delay(10_000)
+                    if (_currentMode.value == OrchestratorMode.AWAITING_CONFIRMATION) {
+                        val timeoutMsg = "Время ожидания истекло. Операция отменена, сэр."
+                        _lastAnswer.value = timeoutMsg
+                        _assistantState.value = VoiceAssistantState.Speaking(timeoutMsg)
+                        textToSpeechManager.speak(timeoutMsg, speechRate, speechPitch)
+                        pendingToolCall = null
+                        toolExecutor.clearPendingConfirmation()
+                        delay(2000)
+                        startStandbyMode()
+                    }
+                }
+            }
+        }
+    }
+
     private fun observeTtsEngine() {
         scope.launch {
             textToSpeechManager.ttsState.collectLatest { ttsState ->
                 when (ttsState) {
                     is TtsState.Finished -> {
-                        if (_currentMode.value == OrchestratorMode.TTS_SPEAKING) {
-                            // v0.2.3 Continuous Conversation: Открываем 4-секундное окно для следующего вопроса без повтора «Джарвис»
-                            openContinuousConversationWindow()
+                        when (_currentMode.value) {
+                            OrchestratorMode.TTS_SPEAKING -> {
+                                openContinuousConversationWindow()
+                            }
+                            OrchestratorMode.AWAITING_CONFIRMATION -> {
+                                // Начинаем слушать ответ пользователя (Да/Нет)
+                                wakeWordDetector.stopListening()
+                                speechRecognizerManager.startListening()
+                            }
+                            else -> Unit
                         }
                     }
                     is TtsState.Error -> {
@@ -302,6 +447,10 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private fun handleCancel() {
         silenceJob?.cancel()
         followUpWindowJob?.cancel()
+        confirmationTimeoutJob?.cancel()
+        confirmationTimeoutJob = null
+        pendingToolCall = null
+        toolExecutor.clearPendingConfirmation()
         aiJob?.cancel()
         aiJob = null
         textToSpeechManager.stop()
@@ -335,6 +484,10 @@ class VoiceInteractionOrchestrator @Inject constructor(
     fun stopAll() {
         silenceJob?.cancel()
         followUpWindowJob?.cancel()
+        confirmationTimeoutJob?.cancel()
+        confirmationTimeoutJob = null
+        pendingToolCall = null
+        toolExecutor.clearPendingConfirmation()
         aiJob?.cancel()
         aiJob = null
         wakeWordDetector.stopListening()

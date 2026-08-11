@@ -37,7 +37,8 @@ data class ToolExecutionResult(
     val rollbackData: JsonObject? = null,
     val executionTimeMs: Long = 0L,
     val error: String? = null,
-    val actionRequiresUser: Boolean = false
+    val actionRequiresUser: Boolean = false,
+    val pendingCall: ToolCall? = null
 ) {
     val isSuccess: Boolean get() = status == ToolExecutionStatus.SUCCESS
 
@@ -82,7 +83,8 @@ data class ToolExecutionResult(
             pendingCall: ToolCall
         ) = ToolExecutionResult(
             status = ToolExecutionStatus.REQUIRES_USER_CONFIRMATION,
-            summary = message
+            summary = message,
+            pendingCall = pendingCall
         )
     }
 }

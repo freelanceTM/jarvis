@@ -1,6 +1,7 @@
 package com.jarvis.assistant.agent.engine
 
 import com.jarvis.assistant.agent.executor.ToolExecutor
+import com.jarvis.assistant.agent.model.ToolExecutionStatus
 import com.jarvis.assistant.agent.observation.AgentObservationEngine
 import com.jarvis.assistant.agent.planner.*
 import com.jarvis.assistant.agent.safety.ToolPermissionManager
@@ -35,7 +36,17 @@ class AgentCognitiveLoop @Inject constructor(
             // 2. Исполнение инструмента (Execute Step)
             val result = toolExecutor.execute(step.toolCall)
 
-            // 3. Анализ результата (Observation Post-Check & State Recording)
+            // 3. Если требуется голосовое подтверждение пользователя
+            if (result.status == ToolExecutionStatus.REQUIRES_USER_CONFIRMATION) {
+                return@withContext PlanExecutionSummary(
+                    plan = plan,
+                    observations = observations,
+                    finalVoiceSummary = "CONFIRM:${step.toolCall.toolId}:${result.summary}",
+                    isAllSuccessful = false
+                )
+            }
+
+            // 4. Анализ результата (Observation Post-Check & State Recording)
             val observation = observationEngine.observeStepResult(step, result)
             observations.add(observation)
 

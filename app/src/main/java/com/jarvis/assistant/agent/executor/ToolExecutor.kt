@@ -16,6 +16,12 @@ class ToolExecutor @Inject constructor(
     private val permissionManager: ToolPermissionManager
 ) {
     /**
+     * Сохранённый вызов инструмента, ожидающий подтверждения пользователем
+     */
+    var pendingConfirmationCall: ToolCall? = null
+        private set
+
+    /**
      * Выполняет одиночный вызов инструмента с проверкой безопасности и таймаутом
      */
     suspend fun execute(call: ToolCall): ToolExecutionResult = withContext(Dispatchers.IO) {
@@ -26,6 +32,7 @@ class ToolExecutor @Inject constructor(
             )
 
         if (!permissionManager.isExecutionAllowed(tool, call)) {
+            pendingConfirmationCall = call
             val confirmationPrompt = permissionManager.buildConfirmationPrompt(tool, call)
             return@withContext ToolExecutionResult.requiresConfirmation(
                 message = confirmationPrompt,
@@ -50,6 +57,43 @@ class ToolExecutor @Inject constructor(
                 executionTimeMs = duration
             )
         }
+    }
+
+    /**
+     * Выполняет инструмент БЕЗ повторной проверки PermissionManager (после голосового подтверждения пользователя)
+     */
+    suspend fun executeWithBypass(call: ToolCall): ToolExecutionResult = withContext(Dispatchers.IO) {
+        pendingConfirmationCall = null
+        val tool = registry.getTool(call.toolId)
+            ?: return@withContext ToolExecutionResult.failure(
+                summary = "Инструмент '${call.toolId}' не найден",
+                error = "TOOL_NOT_FOUND"
+            )
+
+        val startTime = System.currentTimeMillis()
+        try {
+            withTimeout(tool.executionTimeoutMs) {
+                val result = tool.execute(call.arguments)
+                val duration = System.currentTimeMillis() - startTime
+                result.copy(executionTimeMs = duration)
+            }
+        } catch (e: TimeoutCancellationException) {
+            ToolExecutionResult.timeout(tool.name, tool.executionTimeoutMs)
+        } catch (e: Exception) {
+            val duration = System.currentTimeMillis() - startTime
+            ToolExecutionResult.failure(
+                summary = e.localizedMessage ?: "Ошибка выполнения ${tool.name}",
+                error = e.javaClass.simpleName,
+                executionTimeMs = duration
+            )
+        }
+    }
+
+    /**
+     * Очищает сохранённый отложенный вызов
+     */
+    fun clearPendingConfirmation() {
+        pendingConfirmationCall = null
     }
 
     /**

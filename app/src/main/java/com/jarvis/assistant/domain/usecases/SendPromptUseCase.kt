@@ -7,6 +7,7 @@ import com.jarvis.assistant.agent.fast.FastRouteResult
 import com.jarvis.assistant.agent.memory.manager.JarvisMemoryManager
 import com.jarvis.assistant.agent.memory.procedural.WorkflowExecutor
 import com.jarvis.assistant.agent.model.ToolExecutionResult
+import com.jarvis.assistant.agent.model.ToolExecutionStatus
 import com.jarvis.assistant.agent.parser.ToolCallParser
 import com.jarvis.assistant.agent.planner.CognitivePlanner
 import com.jarvis.assistant.agent.registry.ToolRegistry
@@ -62,6 +63,11 @@ class SendPromptUseCase @Inject constructor(
 
             if (fastResult.toolCall != null) {
                 val executionResult = toolExecutor.execute(fastResult.toolCall)
+                if (executionResult.status == ToolExecutionStatus.REQUIRES_USER_CONFIRMATION) {
+                    val confirmMsg = "CONFIRM:${fastResult.toolCall.toolId}:${executionResult.summary}"
+                    saveAssistantMessage(executionResult.summary)
+                    return Resource.Success(confirmMsg)
+                }
                 if (executionResult.isSuccess) {
                     voiceAnswer = "${executionResult.summary}, сэр."
                 }
@@ -78,7 +84,12 @@ class SendPromptUseCase @Inject constructor(
         val dynamicPlan = cognitivePlanner.planForGoal(trimmedPrompt)
         if (dynamicPlan != null) {
             val planSummary = agentCognitiveLoop.runPlan(dynamicPlan)
-            saveAssistantMessage(planSummary.finalVoiceSummary)
+            val textToSave = if (planSummary.finalVoiceSummary.startsWith("CONFIRM:")) {
+                planSummary.finalVoiceSummary.substringAfter("CONFIRM:").substringAfter(":")
+            } else {
+                planSummary.finalVoiceSummary
+            }
+            saveAssistantMessage(textToSave)
             return Resource.Success(planSummary.finalVoiceSummary)
         }
 
@@ -145,7 +156,12 @@ class SendPromptUseCase @Inject constructor(
                 rawOutput
             }
 
-            saveAssistantMessage(finalVoiceAnswer)
+            val textToSave = if (finalVoiceAnswer.startsWith("CONFIRM:")) {
+                finalVoiceAnswer.substringAfter("CONFIRM:").substringAfter(":")
+            } else {
+                finalVoiceAnswer
+            }
+            saveAssistantMessage(textToSave)
             return Resource.Success(finalVoiceAnswer)
         } else if (aiResult is Resource.Error) {
             val errorMsg = aiResult.message ?: "Не удалось связаться с сервером AI. Проверьте ключ в настройках."

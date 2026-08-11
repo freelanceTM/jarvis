@@ -5,6 +5,8 @@ import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.model.ToolCall
 import com.jarvis.assistant.agent.model.ToolRisk
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,6 +28,16 @@ class ToolPermissionManager @Inject constructor(
      * Формирует понятный текст запроса подтверждения для пользователя
      */
     fun buildConfirmationPrompt(tool: JarvisTool, call: ToolCall): String {
-        return "Внимание: действие '${tool.description}' требует подтверждения. Подтвердить выполнение, сэр?"
+        return when (tool.toolId) {
+            "communication.call" -> {
+                val recipient = call.arguments["recipient"]?.jsonPrimitive?.contentOrNull ?: "контакту"
+                "Вы подтверждаете звонок для $recipient, сэр?"
+            }
+            "communication.sms" -> {
+                val recipient = call.arguments["recipient"]?.jsonPrimitive?.contentOrNull ?: "контакту"
+                "Вы подтверждаете отправку SMS для $recipient, сэр?"
+            }
+            else -> "Действие '${tool.description}' требует подтверждения. Подтвердить выполнение, сэр?"
+        }
     }
 }
