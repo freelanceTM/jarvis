@@ -3,9 +3,11 @@ package com.jarvis.assistant.domain.usecases
 import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.fast.FastCommandRouter
 import com.jarvis.assistant.agent.fast.FastRouteResult
+import com.jarvis.assistant.agent.memory.JarvisMemoryManager
 import com.jarvis.assistant.agent.model.ToolResult
 import com.jarvis.assistant.agent.parser.ToolCallParser
 import com.jarvis.assistant.agent.registry.ToolRegistry
+import com.jarvis.assistant.agent.router.TaskRouter
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.domain.models.Message
 import com.jarvis.assistant.domain.models.MessageRole
@@ -22,7 +24,9 @@ class SendPromptUseCase @Inject constructor(
     private val toolRegistry: ToolRegistry,
     private val toolCallParser: ToolCallParser,
     private val toolExecutor: ToolExecutor,
-    private val fastCommandRouter: FastCommandRouter
+    private val fastCommandRouter: FastCommandRouter,
+    private val memoryManager: JarvisMemoryManager,
+    private val taskRouter: TaskRouter
 ) {
     suspend operator fun invoke(userPrompt: String): Resource<String> {
         val trimmedPrompt = userPrompt.trim()
@@ -30,7 +34,7 @@ class SendPromptUseCase @Inject constructor(
             return Resource.Error(IllegalArgumentException("Пустой запрос"))
         }
 
-        // Сохраняем запрос пользователя в Room
+        // 1. Слой 2: Сохраняем входящее событие в Episodic Memory (Room)
         val userMessage = Message(
             role = MessageRole.USER,
             text = trimmedPrompt,
@@ -39,7 +43,7 @@ class SendPromptUseCase @Inject constructor(
         messageRepository.insertMessage(userMessage)
 
         // =========================================================================
-        // ⚡ ЭТАП 1: FAST BRAIN (Локальный роутер - 0ms задержки, без сети и без LLM)
+        // ⚡ TIER 0: FAST BRAIN (Мгновенное локальное действие без сети и без LLM)
         // =========================================================================
         val fastResult = fastCommandRouter.route(trimmedPrompt)
         if (fastResult is FastRouteResult.HandledLocally) {
@@ -52,7 +56,9 @@ class SendPromptUseCase @Inject constructor(
                 is ToolResult.Error -> "Не удалось: ${executionResult.message}"
             }
 
-            // Сохраняем ответ ассистента в Room
+            // Фиксация в памяти
+            memoryManager.workingMemory.setLastAction(fastResult.toolCall.name)
+
             val assistantMessage = Message(
                 role = MessageRole.ASSISTANT,
                 text = voiceAnswer,
@@ -64,14 +70,27 @@ class SendPromptUseCase @Inject constructor(
         }
 
         // =========================================================================
-        // 🧠 ЭТАП 2: DEEP AI BRAIN (Большой интеллект для сложных задач и диалогов)
+        // 🧠 TIER 1–3: MULTI-MODEL ROUTER + 4-СЛОЙНАЯ ПАМЯТЬ JARVIS
         // =========================================================================
+        val routingDecision = taskRouter.routeTask(trimmedPrompt)
+
         val baseSystemPrompt = settingsRepository.systemPromptFlow.first()
         val toolsSystemPrompt = toolRegistry.buildSystemPrompt()
-        val fullSystemPrompt = "$baseSystemPrompt\n\n$toolsSystemPrompt"
+        val memoryContextPrompt = memoryManager.buildMemoryContextPrompt(trimmedPrompt)
+
+        val fullSystemPrompt = buildString {
+            append(baseSystemPrompt)
+            append("\n\n")
+            if (memoryContextPrompt.isNotBlank()) {
+                append(memoryContextPrompt)
+                append("\n\n")
+            }
+            append(toolsSystemPrompt)
+        }
 
         val history = messageRepository.getRecentMessages(limit = 4)
 
+        // Запрос к соответствующей модели через роутер
         val aiResult = aiRepository.generateResponse(
             prompt = trimmedPrompt,
             systemPrompt = fullSystemPrompt,
@@ -107,12 +126,16 @@ class SendPromptUseCase @Inject constructor(
 
         for (res in executionResults) {
             when (res) {
-                is ToolResult.Success -> summaries.add(res.message)
+                is ToolResult.Success -> {
+                    summaries.add(res.message)
+                }
                 is ToolResult.RequiresConfirmation -> {
                     requiresConfirmation = true
                     summaries.add(res.message)
                 }
-                is ToolResult.Error -> summaries.add("Не удалось: ${res.message}")
+                is ToolResult.Error -> {
+                    summaries.add("Не удалось: ${res.message}")
+                }
             }
         }
 

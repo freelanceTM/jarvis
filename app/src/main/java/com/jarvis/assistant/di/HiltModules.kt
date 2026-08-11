@@ -4,7 +4,12 @@ import android.content.Context
 import androidx.room.Room
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import com.jarvis.assistant.agent.core.JarvisTool
+import com.jarvis.assistant.agent.memory.dao.ProceduralMemoryDao
+import com.jarvis.assistant.agent.memory.dao.SemanticMemoryDao
 import com.jarvis.assistant.agent.tools.device.*
+import com.jarvis.assistant.agent.tools.intelligence.RecallMemoryTool
+import com.jarvis.assistant.agent.tools.intelligence.RememberFactTool
+import com.jarvis.assistant.agent.tools.intelligence.WebSearchTool
 import com.jarvis.assistant.agent.tools.system.*
 import com.jarvis.assistant.ai.AIClient
 import com.jarvis.assistant.ai.UniversalAIClient
@@ -73,46 +78,24 @@ abstract class SecurityAndNetworkBindingModule {
     @Multibinds
     abstract fun bindToolsSet(): Set<JarvisTool>
 
-    // 10 Базовых инструментов системы Android
-    @Binds
-    @IntoSet
-    abstract fun bindGetDeviceInfoTool(tool: GetDeviceInfoTool): JarvisTool
+    // 1. Системные инструменты
+    @Binds @IntoSet abstract fun bindGetDeviceInfoTool(tool: GetDeviceInfoTool): JarvisTool
+    @Binds @IntoSet abstract fun bindGetBatteryTool(tool: GetBatteryTool): JarvisTool
+    @Binds @IntoSet abstract fun bindGetTimeTool(tool: GetTimeTool): JarvisTool
+    @Binds @IntoSet abstract fun bindGetNetworkStatusTool(tool: GetNetworkStatusTool): JarvisTool
 
-    @Binds
-    @IntoSet
-    abstract fun bindGetBatteryTool(tool: GetBatteryTool): JarvisTool
+    // 2. Инструменты устройства
+    @Binds @IntoSet abstract fun bindOpenAppTool(tool: OpenAppTool): JarvisTool
+    @Binds @IntoSet abstract fun bindSetVolumeTool(tool: SetVolumeTool): JarvisTool
+    @Binds @IntoSet abstract fun bindSetBrightnessTool(tool: SetBrightnessTool): JarvisTool
+    @Binds @IntoSet abstract fun bindFlashlightTool(tool: FlashlightTool): JarvisTool
+    @Binds @IntoSet abstract fun bindBluetoothTool(tool: BluetoothTool): JarvisTool
+    @Binds @IntoSet abstract fun bindWifiTool(tool: WifiTool): JarvisTool
 
-    @Binds
-    @IntoSet
-    abstract fun bindGetTimeTool(tool: GetTimeTool): JarvisTool
-
-    @Binds
-    @IntoSet
-    abstract fun bindGetNetworkStatusTool(tool: GetNetworkStatusTool): JarvisTool
-
-    @Binds
-    @IntoSet
-    abstract fun bindOpenAppTool(tool: OpenAppTool): JarvisTool
-
-    @Binds
-    @IntoSet
-    abstract fun bindSetVolumeTool(tool: SetVolumeTool): JarvisTool
-
-    @Binds
-    @IntoSet
-    abstract fun bindSetBrightnessTool(tool: SetBrightnessTool): JarvisTool
-
-    @Binds
-    @IntoSet
-    abstract fun bindFlashlightTool(tool: FlashlightTool): JarvisTool
-
-    @Binds
-    @IntoSet
-    abstract fun bindBluetoothTool(tool: BluetoothTool): JarvisTool
-
-    @Binds
-    @IntoSet
-    abstract fun bindWifiTool(tool: WifiTool): JarvisTool
+    // 3. Инструменты интеллекта и памяти
+    @Binds @IntoSet abstract fun bindRememberFactTool(tool: RememberFactTool): JarvisTool
+    @Binds @IntoSet abstract fun bindRecallMemoryTool(tool: RecallMemoryTool): JarvisTool
+    @Binds @IntoSet abstract fun bindWebSearchTool(tool: WebSearchTool): JarvisTool
 }
 
 @Module
@@ -133,9 +116,15 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideMessageDao(database: JarvisDatabase): MessageDao {
-        return database.messageDao()
-    }
+    fun provideMessageDao(database: JarvisDatabase): MessageDao = database.messageDao()
+
+    @Provides
+    @Singleton
+    fun provideSemanticMemoryDao(database: JarvisDatabase): SemanticMemoryDao = database.semanticMemoryDao()
+
+    @Provides
+    @Singleton
+    fun provideProceduralMemoryDao(database: JarvisDatabase): ProceduralMemoryDao = database.proceduralMemoryDao()
 }
 
 @Module
