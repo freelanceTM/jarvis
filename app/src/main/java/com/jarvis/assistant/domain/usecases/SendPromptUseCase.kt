@@ -1,5 +1,6 @@
 package com.jarvis.assistant.domain.usecases
 
+import com.jarvis.assistant.agent.engine.AgentCognitiveLoop
 import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.fast.FastCommandRouter
 import com.jarvis.assistant.agent.fast.FastRouteResult
@@ -7,6 +8,7 @@ import com.jarvis.assistant.agent.memory.manager.JarvisMemoryManager
 import com.jarvis.assistant.agent.memory.procedural.WorkflowExecutor
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.parser.ToolCallParser
+import com.jarvis.assistant.agent.planner.CognitivePlanner
 import com.jarvis.assistant.agent.registry.ToolRegistry
 import com.jarvis.assistant.agent.router.TaskRouter
 import com.jarvis.assistant.core.network.NetworkMonitor
@@ -30,7 +32,9 @@ class SendPromptUseCase @Inject constructor(
     private val workflowExecutor: WorkflowExecutor,
     private val memoryManager: JarvisMemoryManager,
     private val taskRouter: TaskRouter,
-    private val networkMonitor: NetworkMonitor
+    private val networkMonitor: NetworkMonitor,
+    private val cognitivePlanner: CognitivePlanner,
+    private val agentCognitiveLoop: AgentCognitiveLoop
 ) {
     suspend operator fun invoke(userPrompt: String): Resource<String> {
         val trimmedPrompt = userPrompt.trim()
@@ -38,7 +42,7 @@ class SendPromptUseCase @Inject constructor(
             return Resource.Error(IllegalArgumentException("Пустой запрос"))
         }
 
-        // 1. Слой 2 (Episodic Memory): Сохранение входящего вопроса в Room
+        // 1. Слой 2 (Episodic Memory): Сохранение входящего запроса в Room
         val userMessage = Message(
             role = MessageRole.USER,
             text = trimmedPrompt,
@@ -46,21 +50,11 @@ class SendPromptUseCase @Inject constructor(
         )
         messageRepository.insertMessage(userMessage)
 
-        // =========================================================================
-        // ⚡ ЭТАП 1: PROCEDURAL MEMORY (Проверка сохраненных макросов / сценариев)
-        // =========================================================================
-        val workflowResult = workflowExecutor.tryExecuteWorkflow(trimmedPrompt)
-        if (workflowResult != null) {
-            val voiceResponse = when {
-                workflowResult.isSuccess -> "${workflowResult.summary}, сэр."
-                else -> workflowResult.summary
-            }
-            saveAssistantMessage(voiceResponse)
-            return Resource.Success(voiceResponse)
-        }
+        // 2. Автономное извлечение фактов в фоне
+        memoryManager.extractAndRememberInBackground(trimmedPrompt)
 
         // =========================================================================
-        // ⚡ ЭТАП 2: TIER 0 FAST BRAIN (Локальный NLU - < 10мс, 100% ОФЛАЙН)
+        // ⚡ ЭТАП 1: TIER 0 FAST BRAIN (Локальный NLU - < 10мс, 100% ОФЛАЙН)
         // =========================================================================
         val fastResult = fastCommandRouter.route(trimmedPrompt)
         if (fastResult is FastRouteResult.HandledLocally) {
@@ -79,19 +73,41 @@ class SendPromptUseCase @Inject constructor(
         }
 
         // =========================================================================
+        // 🧠 ЭТАП 2: ДИНАМИЧЕСКИЙ ПЛАНИРОВЩИК (Intent ──► Plan ──► Execute ──► Observe)
+        // Пример: «Джарвис, я ухожу», «Я дома», «Подготовь ко сну»
+        // =========================================================================
+        val dynamicPlan = cognitivePlanner.planForGoal(trimmedPrompt)
+        if (dynamicPlan != null) {
+            val planSummary = agentCognitiveLoop.runPlan(dynamicPlan)
+            saveAssistantMessage(planSummary.finalVoiceSummary)
+            return Resource.Success(planSummary.finalVoiceSummary)
+        }
+
+        // =========================================================================
+        // ⚡ ЭТАП 3: PROCEDURAL MEMORY (Проверка сохраненных пользовательских макросов)
+        // =========================================================================
+        val workflowResult = workflowExecutor.tryExecuteWorkflow(trimmedPrompt)
+        if (workflowResult != null) {
+            val voiceResponse = when {
+                workflowResult.isSuccess -> "${workflowResult.summary}, сэр."
+                else -> workflowResult.summary
+            }
+            saveAssistantMessage(voiceResponse)
+            return Resource.Success(voiceResponse)
+        }
+
+        // =========================================================================
         // 🛡️ ПРОВЕРКА СЕТИ ДЛЯ СЛОЖНЫХ ЗАДАЧ
         // =========================================================================
         if (!networkMonitor.isCurrentlyOnline()) {
-            val offlineMsg = "Нет подключения к интернету. Локальные команды (фонарик, звук, батарея, приложения) работают офлайн."
+            val offlineMsg = "Нет подключения к интернету. Локальные команды и сценарии (фонарик, звук, батарея, приложения) работают офлайн."
             saveAssistantMessage(offlineMsg)
             return Resource.Success(offlineMsg)
         }
 
         // =========================================================================
-        // 🧠 ЭТАП 3: TIER 1-3 MULTI-MODEL ROUTER + СЕМАНТИЧЕСКАЯ ПАМЯТЬ
+        // 🧠 ЭТАП 4: TIER 1-3 AI PLANNING & REASONING С СЕМАНТИЧЕСКОЙ ПАМЯТЬЮ
         // =========================================================================
-        memoryManager.extractAndRememberInBackground(trimmedPrompt)
-
         val routingDecision = taskRouter.routeTask(trimmedPrompt)
         val baseSystemPrompt = settingsRepository.systemPromptFlow.first()
         val toolsSystemPrompt = toolRegistry.buildSystemPrompt()
@@ -119,7 +135,16 @@ class SendPromptUseCase @Inject constructor(
 
         if (aiResult is Resource.Success) {
             val rawOutput = aiResult.data.trim()
-            val finalVoiceAnswer = processLlmActionPipeline(rawOutput, trimmedPrompt)
+
+            // Проверяем, вернул ли AI план выполнения действий
+            val llmPlan = cognitivePlanner.planForGoal(trimmedPrompt, rawOutput)
+            val finalVoiceAnswer = if (llmPlan != null && llmPlan.steps.isNotEmpty()) {
+                val loopSummary = agentCognitiveLoop.runPlan(llmPlan)
+                loopSummary.finalVoiceSummary
+            } else {
+                rawOutput
+            }
+
             saveAssistantMessage(finalVoiceAnswer)
             return Resource.Success(finalVoiceAnswer)
         } else if (aiResult is Resource.Error) {
@@ -138,22 +163,5 @@ class SendPromptUseCase @Inject constructor(
             timestamp = System.currentTimeMillis()
         )
         messageRepository.insertMessage(assistantMessage)
-    }
-
-    private suspend fun processLlmActionPipeline(rawLlmOutput: String, userPrompt: String): String {
-        val toolCalls = toolCallParser.parse(rawLlmOutput, userPrompt)
-        if (toolCalls.isEmpty()) {
-            return rawLlmOutput
-        }
-
-        val executionResults = toolExecutor.executeAll(toolCalls)
-        val summaries = mutableListOf<String>()
-
-        for (res in executionResults) {
-            summaries.add(res.summary)
-        }
-
-        val combinedSummary = summaries.joinToString(". ")
-        return "$combinedSummary, сэр."
     }
 }
