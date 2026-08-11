@@ -22,12 +22,12 @@ class OpenAppTool @Inject constructor(
 
     override val parametersSchema: JsonObject = buildJsonObject {
         put("type", "object")
-        put("properties", buildJsonObject {
-            put("app_name", buildJsonObject {
+        putJsonObject("properties") {
+            putJsonObject("app_name") {
                 put("type", "string")
                 put("description", "Название: telegram, youtube, whatsapp, camera, chrome, spotify, settings, calculator, gallery, maps")
-            })
-        })
+            }
+        }
         put("required", buildJsonArray { add("app_name") })
     }
 
@@ -35,10 +35,14 @@ class OpenAppTool @Inject constructor(
         "telegram" to "org.telegram.messenger",
         "телеграм" to "org.telegram.messenger",
         "телегу" to "org.telegram.messenger",
+        "тг" to "org.telegram.messenger",
+        "tg" to "org.telegram.messenger",
         "youtube" to "com.google.android.youtube",
         "ютуб" to "com.google.android.youtube",
+        "ют" to "com.google.android.youtube",
         "whatsapp" to "com.whatsapp",
         "ватсап" to "com.whatsapp",
+        "вацап" to "com.whatsapp",
         "chrome" to "com.android.chrome",
         "хром" to "com.android.chrome",
         "браузер" to "com.android.chrome",

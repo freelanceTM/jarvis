@@ -38,7 +38,7 @@ class SendPromptUseCase @Inject constructor(
             return Resource.Error(IllegalArgumentException("Пустой запрос"))
         }
 
-        // 1. Слой 2 (Episodic Memory): Фиксация входящего события в Room
+        // 1. Слой 2 (Episodic Memory): Сохранение входящего вопроса в Room
         val userMessage = Message(
             role = MessageRole.USER,
             text = trimmedPrompt,
@@ -61,23 +61,21 @@ class SendPromptUseCase @Inject constructor(
         }
 
         // =========================================================================
-        // ⚡ ЭТАП 2: TIER 0 FAST BRAIN (Локальный NLU - < 15мс, 100% ОФЛАЙН)
+        // ⚡ ЭТАП 2: TIER 0 FAST BRAIN (Локальный NLU - < 10мс, 100% ОФЛАЙН)
         // =========================================================================
         val fastResult = fastCommandRouter.route(trimmedPrompt)
         if (fastResult is FastRouteResult.HandledLocally) {
-            val executionResult = toolExecutor.execute(fastResult.toolCall)
-            val voiceAnswer = when (executionResult) {
-                is ToolResult.Success -> {
-                    fastResult.immediateVoiceResponse ?: "${executionResult.message}, сэр."
+            var voiceAnswer = fastResult.immediateVoiceResponse
+
+            if (fastResult.toolCall != null) {
+                val executionResult = toolExecutor.execute(fastResult.toolCall)
+                if (executionResult is ToolResult.Success) {
+                    voiceAnswer = "${executionResult.message}, сэр."
                 }
-                is ToolResult.RequiresConfirmation -> executionResult.message
-                is ToolResult.Error -> "Не удалось: ${executionResult.message}"
+                memoryManager.workingMemory.setLastAction(fastResult.toolCall.name)
             }
 
-            // Фиксация в оперативной памяти Working Memory
-            memoryManager.workingMemory.setLastAction(fastResult.toolCall.name)
             saveAssistantMessage(voiceAnswer)
-
             return Resource.Success(voiceAnswer)
         }
 
@@ -85,7 +83,7 @@ class SendPromptUseCase @Inject constructor(
         // 🛡️ ПРОВЕРКА СЕТИ ДЛЯ СЛОЖНЫХ ЗАДАЧ
         // =========================================================================
         if (!networkMonitor.isCurrentlyOnline()) {
-            val offlineMsg = "Нет подключения к интернету для сложных запросов. Локальные команды (фонарик, звук, батарея) работают офлайн."
+            val offlineMsg = "Нет подключения к интернету. Локальные команды (фонарик, звук, батарея, приложения) работают офлайн."
             saveAssistantMessage(offlineMsg)
             return Resource.Success(offlineMsg)
         }
@@ -93,14 +91,13 @@ class SendPromptUseCase @Inject constructor(
         // =========================================================================
         // 🧠 ЭТАП 3: TIER 1-3 MULTI-MODEL ROUTER + СЕМАНТИЧЕСКАЯ ПАМЯТЬ
         // =========================================================================
-        // Автономное извлечение полезных фактов в фоне
         memoryManager.extractAndRememberInBackground(trimmedPrompt)
 
         val routingDecision = taskRouter.routeTask(trimmedPrompt)
         val baseSystemPrompt = settingsRepository.systemPromptFlow.first()
         val toolsSystemPrompt = toolRegistry.buildSystemPrompt()
         
-        // Извлекаем только 3-4 релевантных факта по векторному сходству
+        // 3-4 релевантных факта по векторному сходству
         val memoryContextPrompt = memoryManager.buildPromptMemoryContext(trimmedPrompt)
 
         val fullSystemPrompt = buildString {
@@ -126,6 +123,10 @@ class SendPromptUseCase @Inject constructor(
             val finalVoiceAnswer = processLlmActionPipeline(rawOutput, trimmedPrompt)
             saveAssistantMessage(finalVoiceAnswer)
             return Resource.Success(finalVoiceAnswer)
+        } else if (aiResult is Resource.Error) {
+            val errorMsg = aiResult.message ?: "Не удалось связаться с сервером AI. Проверьте ключ в настройках."
+            saveAssistantMessage(errorMsg)
+            return Resource.Success(errorMsg)
         }
 
         return aiResult
