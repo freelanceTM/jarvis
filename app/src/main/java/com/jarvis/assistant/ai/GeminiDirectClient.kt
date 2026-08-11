@@ -22,7 +22,8 @@ import javax.inject.Singleton
 data class OpenAiChatRequest(
     @SerialName("model") val model: String,
     @SerialName("messages") val messages: List<OpenAiMessageDto>,
-    @SerialName("temperature") val temperature: Double = 0.7
+    @SerialName("temperature") val temperature: Double = 0.7,
+    @SerialName("max_tokens") val maxTokens: Int = 150
 )
 
 @Serializable
@@ -96,7 +97,6 @@ class UniversalAIClient @Inject constructor(
         }
 
         try {
-            // 1. OpenRouter (Использует универсальную бесплатную модель openrouter/free)
             if (apiKey.startsWith("sk-or-")) {
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://openrouter.ai/api/v1/chat/completions",
@@ -106,9 +106,7 @@ class UniversalAIClient @Inject constructor(
                     systemPrompt = systemPrompt,
                     history = history
                 )
-            }
-            // 2. Groq (Llama 3.3 70B)
-            else if (apiKey.startsWith("gsk_")) {
+            } else if (apiKey.startsWith("gsk_")) {
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://api.groq.com/openai/v1/chat/completions",
                     model = "llama-3.3-70b-versatile",
@@ -117,9 +115,7 @@ class UniversalAIClient @Inject constructor(
                     systemPrompt = systemPrompt,
                     history = history
                 )
-            }
-            // 3. OpenAI (GPT-4o Mini)
-            else if (apiKey.startsWith("sk-")) {
+            } else if (apiKey.startsWith("sk-")) {
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://api.openai.com/v1/chat/completions",
                     model = "gpt-4o-mini",
@@ -128,15 +124,13 @@ class UniversalAIClient @Inject constructor(
                     systemPrompt = systemPrompt,
                     history = history
                 )
-            }
-            // 4. Google Gemini API
-            else {
+            } else {
                 return@withContext callDirectGemini(apiKey, prompt, systemPrompt, history)
             }
         } catch (e: SocketTimeoutException) {
             Resource.Error(e, "Таймаут подключения к AI. Проверьте интернет.")
         } catch (e: IOException) {
-            Resource.Error(e, "Ошибка сети при запросе к AI.")
+            Resource.Error(e, "Ошибка сети при связи с AI.")
         } catch (e: Exception) {
             Resource.Error(e, "Ошибка AI: ${e.localizedMessage}")
         }
@@ -149,7 +143,7 @@ class UniversalAIClient @Inject constructor(
         history: List<Message>
     ): Resource<String> {
         val contents = mutableListOf<GeminiContentDto>()
-        history.takeLast(6).forEach { msg ->
+        history.takeLast(4).forEach { msg ->
             contents.add(
                 GeminiContentDto(
                     role = if (msg.role == MessageRole.ASSISTANT) "model" else "user",
@@ -161,9 +155,13 @@ class UniversalAIClient @Inject constructor(
             contents.add(GeminiContentDto(role = "user", parts = listOf(GeminiPartDto(text = prompt))))
         }
 
-        val systemInstruction = if (systemPrompt.isNotBlank()) {
-            GeminiSystemInstructionDto(parts = listOf(GeminiPartDto(text = systemPrompt)))
-        } else null
+        val effectiveSystem = if (systemPrompt.isNotBlank()) {
+            "$systemPrompt\nОтвечай кратко, 1-2 предложениями, для голосового ответа."
+        } else {
+            "Отвечай кратко, 1-2 предложениями, понятным разговорным языком."
+        }
+
+        val systemInstruction = GeminiSystemInstructionDto(parts = listOf(GeminiPartDto(text = effectiveSystem)))
 
         val requestBodyObj = GeminiRequestDto(contents, systemInstruction)
         val jsonBody = json.encodeToString(GeminiRequestDto.serializer(), requestBodyObj)
@@ -191,8 +189,8 @@ class UniversalAIClient @Inject constructor(
         } else {
             val code = response.code
             val userMsg = when (code) {
-                400, 403 -> "Google блокирует запросы из вашего региона без VPN. Включите VPN или используйте ключ OpenRouter (sk-or-...)."
-                429 -> "Лимит запросов Gemini исчерпан. Пожалуйста, подождите 30 секунд."
+                400, 403 -> "Google заблокировал запрос (403). Включите VPN или используйте ключ OpenRouter (sk-or-...)."
+                429 -> "Лимит запросов Gemini исчерпан. Подождите 30 сек."
                 else -> "Ошибка сервера AI ($code)."
             }
             return Resource.Error(IllegalStateException("HTTP $code: $responseBody"), userMsg)
@@ -208,17 +206,19 @@ class UniversalAIClient @Inject constructor(
         history: List<Message>
     ): Resource<String> {
         val messages = mutableListOf<OpenAiMessageDto>()
-        if (systemPrompt.isNotBlank()) {
-            messages.add(OpenAiMessageDto("system", systemPrompt))
-        }
-        history.takeLast(6).forEach { msg ->
+        val voiceConstraint = "Ты JARVIS. Отвечай кратко, 1-2 предложениями, для озвучки голосом. Без списков и звездочек."
+        
+        val effectiveSystem = if (systemPrompt.isNotBlank()) "$systemPrompt\n$voiceConstraint" else voiceConstraint
+        messages.add(OpenAiMessageDto("system", effectiveSystem))
+
+        history.takeLast(4).forEach { msg ->
             messages.add(OpenAiMessageDto(if (msg.role == MessageRole.ASSISTANT) "assistant" else "user", msg.text))
         }
         if (messages.lastOrNull()?.content != prompt) {
             messages.add(OpenAiMessageDto("user", prompt))
         }
 
-        val requestObj = OpenAiChatRequest(model = model, messages = messages)
+        val requestObj = OpenAiChatRequest(model = model, messages = messages, maxTokens = 120)
         val jsonBody = json.encodeToString(OpenAiChatRequest.serializer(), requestObj)
 
         val request = Request.Builder()
@@ -227,7 +227,7 @@ class UniversalAIClient @Inject constructor(
             .header("Authorization", "Bearer $apiKey")
             .header("Content-Type", "application/json")
             .header("HTTP-Referer", "https://github.com/freelanceTM/jarvis")
-            .header("X-Title", "JARVIS Assistant")
+            .header("X-Title", "JARVIS Voice Assistant")
             .build()
 
         val response = okHttpClient.newCall(request).execute()
