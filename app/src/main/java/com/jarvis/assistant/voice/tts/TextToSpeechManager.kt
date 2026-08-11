@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 import com.jarvis.assistant.voice.audio.BluetoothAudioManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,8 +36,8 @@ class TextToSpeechManager @Inject constructor(
     private val _ttsState = MutableStateFlow<TtsState>(TtsState.Initializing)
     val ttsState: StateFlow<TtsState> = _ttsState.asStateFlow()
 
-    private var currentSpeechRate = 1.0f
-    private var currentSpeechPitch = 1.0f
+    private var currentSpeechRate = 1.05f
+    private var currentSpeechPitch = 0.90f // Глубокий мужской баритон JARVIS
 
     init {
         initializeTts()
@@ -45,19 +46,14 @@ class TextToSpeechManager @Inject constructor(
     fun initializeTts() {
         if (textToSpeech == null) {
             _ttsState.value = TtsState.Initializing
-            textToSpeech = TextToSpeech(context, this)
+            // Предпочитаем движок Google Speech Services для максимально реалистичного звучания
+            textToSpeech = TextToSpeech(context, this, "com.google.android.tts")
         }
     }
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            val result = textToSpeech?.setLanguage(Locale("ru", "RU"))
-            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                textToSpeech?.setLanguage(Locale.getDefault())
-            }
-
-            textToSpeech?.setSpeechRate(currentSpeechRate)
-            textToSpeech?.setPitch(currentSpeechPitch)
+            setupVoiceAndTone()
 
             textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {
@@ -86,9 +82,47 @@ class TextToSpeechManager @Inject constructor(
             isInitialized = true
             _ttsState.value = TtsState.Ready
         } else {
-            isInitialized = false
-            _ttsState.value = TtsState.Error("Не удалось инициализировать синтезатор речи")
+            // Если Google TTS не установлен, пробуем системный движок по умолчанию (Samsung SMT)
+            textToSpeech = TextToSpeech(context, { secondaryStatus ->
+                if (secondaryStatus == TextToSpeech.SUCCESS) {
+                    setupVoiceAndTone()
+                    isInitialized = true
+                    _ttsState.value = TtsState.Ready
+                } else {
+                    isInitialized = false
+                    _ttsState.value = TtsState.Error("Не удалось инициализировать синтезатор речи")
+                }
+            })
         }
+    }
+
+    private fun setupVoiceAndTone() {
+        val localeRu = Locale("ru", "RU")
+        val result = textToSpeech?.setLanguage(localeRu)
+        if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+            textToSpeech?.setLanguage(Locale.getDefault())
+        }
+
+        // Автоматический поиск глубокого мужского нейроголоса
+        val selectedVoice = findBestJarvisVoice()
+        if (selectedVoice != null) {
+            textToSpeech?.voice = selectedVoice
+        }
+
+        textToSpeech?.setSpeechRate(currentSpeechRate)
+        textToSpeech?.setPitch(currentSpeechPitch)
+    }
+
+    private fun findBestJarvisVoice(): Voice? {
+        val voices = textToSpeech?.voices ?: return null
+        val ruVoices = voices.filter { it.locale.language == "ru" }
+
+        // Ищем качественный мужской голос (dfc/male/network)
+        return ruVoices.firstOrNull { it.name.contains("dfc", ignoreCase = true) } // Google Russian Male 1
+            ?: ruVoices.firstOrNull { it.name.contains("male", ignoreCase = true) }
+            ?: ruVoices.firstOrNull { it.name.contains("ru-ru-x", ignoreCase = true) }
+            ?: ruVoices.firstOrNull { it.quality >= Voice.QUALITY_HIGH }
+            ?: ruVoices.firstOrNull()
     }
 
     fun speak(text: String, rate: Float = currentSpeechRate, pitch: Float = currentSpeechPitch) {

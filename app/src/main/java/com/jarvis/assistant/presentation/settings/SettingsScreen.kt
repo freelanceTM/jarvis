@@ -1,55 +1,18 @@
 package com.jarvis.assistant.presentation.settings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -58,15 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jarvis.assistant.domain.models.AIModel
-import com.jarvis.assistant.presentation.theme.JarvisBackground
-import com.jarvis.assistant.presentation.theme.JarvisCardBackground
-import com.jarvis.assistant.presentation.theme.JarvisCyanPrimary
-import com.jarvis.assistant.presentation.theme.JarvisCyanSecondary
-import com.jarvis.assistant.presentation.theme.JarvisGreen
-import com.jarvis.assistant.presentation.theme.JarvisSurface
-import com.jarvis.assistant.presentation.theme.TextPrimary
-import com.jarvis.assistant.presentation.theme.TextSecondary
-import com.jarvis.assistant.presentation.theme.TextTertiary
+import com.jarvis.assistant.presentation.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -134,7 +89,7 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = uiState.userName,
                         onValueChange = { viewModel.onUserNameChanged(it) },
-                        label = { Text("Имя / Обращение") },
+                        label = { Text("Имя / Обращение (например: Сэр)") },
                         modifier = Modifier.fillMaxWidth(),
                         colors = outlinedTextFieldColors()
                     )
@@ -153,7 +108,7 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "AI API Ключ (Encrypted)",
+                            text = "AI API Ключ",
                             style = MaterialTheme.typography.titleMedium,
                             color = JarvisCyanPrimary
                         )
@@ -165,7 +120,7 @@ fun SettingsScreen(
                         )
                     }
                     Text(
-                        text = "Хранится в зашифрованном виде (AES-256 GCM) через AndroidX Security Crypto.",
+                        text = "Поддерживаются ключи OpenRouter (sk-or-...), Google Gemini (AQ.../AIza...), Groq (gsk_...) и OpenAI (sk-...).",
                         style = MaterialTheme.typography.labelSmall,
                         color = TextTertiary
                     )
@@ -173,7 +128,7 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = uiState.apiKey,
                         onValueChange = { viewModel.onApiKeyChanged(it) },
-                        label = { Text("sk-proj-...") },
+                        label = { Text("sk-or-... или AQ... или gsk_...") },
                         modifier = Modifier.fillMaxWidth(),
                         visualTransformation = if (uiState.isApiKeyHidden) PasswordVisualTransformation() else VisualTransformation.None,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -191,48 +146,120 @@ fun SettingsScreen(
                 }
             }
 
-            // 3. AI Model Selector
+            // 3. Voice Customization (JARVIS Male Baritone & Pitch presets)
             Card(
                 colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
                 shape = RoundedCornerShape(16.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "AI-Провайдер и Модель",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = JarvisCyanPrimary
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    ExposedDropdownMenuBox(
-                        expanded = modelDropdownExpanded,
-                        onExpandedChange = { modelDropdownExpanded = it }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        OutlinedTextField(
-                            value = AIModel.fromModelId(uiState.selectedModel).displayName,
-                            onValueChange = {},
-                            readOnly = true,
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelDropdownExpanded) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(),
-                            colors = outlinedTextFieldColors()
+                        Text(
+                            text = "Голос JARVIS (Text-to-Speech)",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = JarvisCyanPrimary
                         )
-                        ExposedDropdownMenu(
-                            expanded = modelDropdownExpanded,
-                            onDismissRequest = { modelDropdownExpanded = false },
-                            modifier = Modifier.background(JarvisSurface)
+                        Icon(
+                            imageVector = Icons.Default.RecordVoiceOver,
+                            contentDescription = null,
+                            tint = JarvisCyanPrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "Пресеты тембра:",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextTertiary
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Voice Preset Buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                viewModel.onSpeechPitchChanged(0.88f)
+                                viewModel.onSpeechRateChanged(1.05f)
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (uiState.speechPitch <= 0.90f) JarvisCyanPrimary else JarvisSurface,
+                                contentColor = if (uiState.speechPitch <= 0.90f) JarvisBackground else TextPrimary
+                            ),
+                            modifier = Modifier.weight(1f)
                         ) {
-                            AIModel.entries.forEach { model ->
-                                DropdownMenuItem(
-                                    text = { Text(model.displayName, color = TextPrimary) },
-                                    onClick = {
-                                        viewModel.onModelSelected(model.modelId)
-                                        modelDropdownExpanded = false
-                                    }
-                                )
-                            }
+                            Text("🎙 JARVIS", fontSize = 12.sp)
+                        }
+
+                        Button(
+                            onClick = {
+                                viewModel.onSpeechPitchChanged(0.78f)
+                                viewModel.onSpeechRateChanged(1.10f)
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (uiState.speechPitch < 0.85f) JarvisCyanPrimary else JarvisSurface,
+                                contentColor = if (uiState.speechPitch < 0.85f) JarvisBackground else TextPrimary
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("⚡ Баритон", fontSize = 12.sp)
+                        }
+
+                        Button(
+                            onClick = {
+                                viewModel.onSpeechPitchChanged(1.0f)
+                                viewModel.onSpeechRateChanged(1.0f)
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (uiState.speechPitch == 1.0f) JarvisCyanPrimary else JarvisSurface,
+                                contentColor = if (uiState.speechPitch == 1.0f) JarvisBackground else TextPrimary
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("👤 Стандарт", fontSize = 12.sp)
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = "Высота тона (Pitch): ${String.format("%.2f", uiState.speechPitch)}x (Ниже = глубже голос)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary
+                    )
+                    Slider(
+                        value = uiState.speechPitch,
+                        onValueChange = { viewModel.onSpeechPitchChanged(it) },
+                        valueRange = 0.5f..1.5f,
+                        steps = 20,
+                        colors = SliderDefaults.colors(thumbColor = JarvisCyanPrimary, activeTrackColor = JarvisCyanPrimary)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Скорость речи: ${String.format("%.2f", uiState.speechRate)}x",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary
+                    )
+                    Slider(
+                        value = uiState.speechRate,
+                        onValueChange = { viewModel.onSpeechRateChanged(it) },
+                        valueRange = 0.7f..1.8f,
+                        steps = 22,
+                        colors = SliderDefaults.colors(thumbColor = JarvisCyanPrimary, activeTrackColor = JarvisCyanPrimary)
+                    )
                 }
             }
 
@@ -247,74 +274,20 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.titleMedium,
                         color = JarvisCyanPrimary
                     )
-                    Text(
-                        text = "Задает характер, стиль ответов и модель поведения ассистента.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextTertiary
-                    )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = uiState.systemPrompt,
                         onValueChange = { viewModel.onSystemPromptChanged(it) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(180.dp),
-                        maxLines = 8,
+                            .height(160.dp),
+                        maxLines = 7,
                         colors = outlinedTextFieldColors()
                     )
                 }
             }
 
-            // 5. Speech Synthesis Settings (TTS)
-            Card(
-                colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Настройки голоса (Text-to-Speech)",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = JarvisCyanPrimary
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "Скорость речи: ${String.format("%.1f", uiState.speechRate)}x",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary
-                    )
-                    Slider(
-                        value = uiState.speechRate,
-                        onValueChange = { viewModel.onSpeechRateChanged(it) },
-                        valueRange = 0.5f..2.0f,
-                        steps = 14,
-                        colors = SliderDefaults.colors(
-                            thumbColor = JarvisCyanPrimary,
-                            activeTrackColor = JarvisCyanPrimary
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "Высота тона: ${String.format("%.1f", uiState.speechPitch)}x",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary
-                    )
-                    Slider(
-                        value = uiState.speechPitch,
-                        onValueChange = { viewModel.onSpeechPitchChanged(it) },
-                        valueRange = 0.5f..2.0f,
-                        steps = 14,
-                        colors = SliderDefaults.colors(
-                            thumbColor = JarvisCyanPrimary,
-                            activeTrackColor = JarvisCyanPrimary
-                        )
-                    )
-                }
-            }
-
-            // 6. Save Button
+            // 5. Save Button
             Button(
                 onClick = { viewModel.saveAllSettings() },
                 modifier = Modifier
