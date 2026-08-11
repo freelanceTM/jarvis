@@ -22,8 +22,8 @@ import javax.inject.Singleton
 data class OpenAiChatRequest(
     @SerialName("model") val model: String,
     @SerialName("messages") val messages: List<OpenAiMessageDto>,
-    @SerialName("temperature") val temperature: Double = 0.7,
-    @SerialName("max_tokens") val maxTokens: Int = 150
+    @SerialName("temperature") val temperature: Double = 0.5,
+    @SerialName("max_tokens") val maxTokens: Int = 90 // Короткие голосовые ответы (до 25 слов) для молниеносной скорости
 )
 
 @Serializable
@@ -98,15 +98,17 @@ class UniversalAIClient @Inject constructor(
 
         try {
             if (apiKey.startsWith("sk-or-")) {
+                // OpenRouter: Llama 3.3 70B (сверхбыстрый и умный)
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://openrouter.ai/api/v1/chat/completions",
-                    model = "openrouter/free",
+                    model = "meta-llama/llama-3.3-70b-instruct:free",
                     apiKey = apiKey,
                     prompt = prompt,
                     systemPrompt = systemPrompt,
                     history = history
                 )
             } else if (apiKey.startsWith("gsk_")) {
+                // Groq: 500 токенов/сек (мгновенный отклик 150мс)
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://api.groq.com/openai/v1/chat/completions",
                     model = "llama-3.3-70b-versatile",
@@ -116,6 +118,7 @@ class UniversalAIClient @Inject constructor(
                     history = history
                 )
             } else if (apiKey.startsWith("sk-")) {
+                // OpenAI GPT-4o Mini
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://api.openai.com/v1/chat/completions",
                     model = "gpt-4o-mini",
@@ -156,9 +159,9 @@ class UniversalAIClient @Inject constructor(
         }
 
         val effectiveSystem = if (systemPrompt.isNotBlank()) {
-            "$systemPrompt\nОтвечай кратко, 1-2 предложениями, для голосового ответа."
+            "$systemPrompt\nОтвечай ультра-кратко: ровно 1 предложение."
         } else {
-            "Отвечай кратко, 1-2 предложениями, понятным разговорным языком."
+            "Отвечай кратко, 1 предложением, живым разговорным языком."
         }
 
         val systemInstruction = GeminiSystemInstructionDto(parts = listOf(GeminiPartDto(text = effectiveSystem)))
@@ -206,7 +209,7 @@ class UniversalAIClient @Inject constructor(
         history: List<Message>
     ): Resource<String> {
         val messages = mutableListOf<OpenAiMessageDto>()
-        val voiceConstraint = "Ты JARVIS. Отвечай кратко, 1-2 предложениями, для озвучки голосом. Без списков и звездочек."
+        val voiceConstraint = "Ты JARVIS. Отвечай кратко и четко (1-2 предложения), без списков и markdown."
         
         val effectiveSystem = if (systemPrompt.isNotBlank()) "$systemPrompt\n$voiceConstraint" else voiceConstraint
         messages.add(OpenAiMessageDto("system", effectiveSystem))
@@ -218,7 +221,7 @@ class UniversalAIClient @Inject constructor(
             messages.add(OpenAiMessageDto("user", prompt))
         }
 
-        val requestObj = OpenAiChatRequest(model = model, messages = messages, maxTokens = 120)
+        val requestObj = OpenAiChatRequest(model = model, messages = messages, maxTokens = 90)
         val jsonBody = json.encodeToString(OpenAiChatRequest.serializer(), requestObj)
 
         val request = Request.Builder()

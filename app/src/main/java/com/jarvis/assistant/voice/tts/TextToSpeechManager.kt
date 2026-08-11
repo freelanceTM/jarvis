@@ -7,9 +7,12 @@ import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
 import com.jarvis.assistant.voice.audio.BluetoothAudioManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
@@ -27,17 +30,19 @@ sealed interface TtsState {
 @Singleton
 class TextToSpeechManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val bluetoothAudioManager: BluetoothAudioManager
+    private val bluetoothAudioManager: BluetoothAudioManager,
+    private val neuralVoicePlayer: NeuralVoicePlayer
 ) : TextToSpeech.OnInitListener {
 
     private var textToSpeech: TextToSpeech? = null
     private var isInitialized = false
+    private val scope = CoroutineScope(Dispatchers.Main)
 
     private val _ttsState = MutableStateFlow<TtsState>(TtsState.Initializing)
     val ttsState: StateFlow<TtsState> = _ttsState.asStateFlow()
 
     private var currentSpeechRate = 1.05f
-    private var currentSpeechPitch = 0.90f // Глубокий мужской баритон JARVIS
+    private var currentSpeechPitch = 0.90f
 
     init {
         initializeTts()
@@ -46,7 +51,6 @@ class TextToSpeechManager @Inject constructor(
     fun initializeTts() {
         if (textToSpeech == null) {
             _ttsState.value = TtsState.Initializing
-            // Предпочитаем движок Google Speech Services для максимально реалистичного звучания
             textToSpeech = TextToSpeech(context, this, "com.google.android.tts")
         }
     }
@@ -68,13 +72,11 @@ class TextToSpeechManager @Inject constructor(
 
                 override fun onError(utteranceId: String?) {
                     bluetoothAudioManager.abandonAudioFocus()
-                    _ttsState.value = TtsState.Error("Ошибка воспроизведения речи")
                     _ttsState.value = TtsState.Idle
                 }
 
                 override fun onError(utteranceId: String?, errorCode: Int) {
                     bluetoothAudioManager.abandonAudioFocus()
-                    _ttsState.value = TtsState.Error("Ошибка TTS с кодом: $errorCode")
                     _ttsState.value = TtsState.Idle
                 }
             })
@@ -82,7 +84,6 @@ class TextToSpeechManager @Inject constructor(
             isInitialized = true
             _ttsState.value = TtsState.Ready
         } else {
-            // Если Google TTS не установлен, пробуем системный движок по умолчанию (Samsung SMT)
             textToSpeech = TextToSpeech(context, { secondaryStatus ->
                 if (secondaryStatus == TextToSpeech.SUCCESS) {
                     setupVoiceAndTone()
@@ -103,7 +104,6 @@ class TextToSpeechManager @Inject constructor(
             textToSpeech?.setLanguage(Locale.getDefault())
         }
 
-        // Автоматический поиск глубокого мужского нейроголоса
         val selectedVoice = findBestJarvisVoice()
         if (selectedVoice != null) {
             textToSpeech?.voice = selectedVoice
@@ -117,41 +117,57 @@ class TextToSpeechManager @Inject constructor(
         val voices = textToSpeech?.voices ?: return null
         val ruVoices = voices.filter { it.locale.language == "ru" }
 
-        // Ищем качественный мужской голос (dfc/male/network)
-        return ruVoices.firstOrNull { it.name.contains("dfc", ignoreCase = true) } // Google Russian Male 1
+        return ruVoices.firstOrNull { it.name.contains("dfc", ignoreCase = true) }
             ?: ruVoices.firstOrNull { it.name.contains("male", ignoreCase = true) }
             ?: ruVoices.firstOrNull { it.name.contains("ru-ru-x", ignoreCase = true) }
-            ?: ruVoices.firstOrNull { it.quality >= Voice.QUALITY_HIGH }
             ?: ruVoices.firstOrNull()
     }
 
     fun speak(text: String, rate: Float = currentSpeechRate, pitch: Float = currentSpeechPitch) {
+        val cleanText = text.replace(Regex("[*#_`~]"), "").trim()
+        if (cleanText.isEmpty()) return
+
+        stop()
+        bluetoothAudioManager.requestAudioFocus()
+        val utteranceId = UUID.randomUUID().toString()
+
+        _ttsState.value = TtsState.Speaking(utteranceId, cleanText)
+
+        // 1. Попытка высококачественного воспроизведения через живой нейро-голос
+        scope.launch {
+            val playedNeural = neuralVoicePlayer.playNeuralVoice(cleanText) {
+                bluetoothAudioManager.abandonAudioFocus()
+                _ttsState.value = TtsState.Finished(utteranceId)
+                _ttsState.value = TtsState.Idle
+            }
+
+            // 2. Если нейро-голос недоступен, бесшовный fallback на локальный баритон
+            if (!playedNeural) {
+                speakLocalTts(cleanText, utteranceId, rate, pitch)
+            }
+        }
+    }
+
+    private fun speakLocalTts(text: String, utteranceId: String, rate: Float, pitch: Float) {
         if (!isInitialized || textToSpeech == null) {
             initializeTts()
             return
         }
-
-        stop()
 
         currentSpeechRate = rate
         currentSpeechPitch = pitch
         textToSpeech?.setSpeechRate(rate)
         textToSpeech?.setPitch(pitch)
 
-        bluetoothAudioManager.requestAudioFocus()
-
-        val utteranceId = UUID.randomUUID().toString()
         val params = Bundle().apply {
             putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, android.media.AudioManager.STREAM_MUSIC)
         }
 
-        val result = textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
-        if (result == TextToSpeech.ERROR) {
-            _ttsState.value = TtsState.Error("Ошибка при запуске синтеза речи")
-        }
+        textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
     }
 
     fun stop() {
+        neuralVoicePlayer.stop()
         if (isInitialized) {
             textToSpeech?.stop()
             bluetoothAudioManager.abandonAudioFocus()

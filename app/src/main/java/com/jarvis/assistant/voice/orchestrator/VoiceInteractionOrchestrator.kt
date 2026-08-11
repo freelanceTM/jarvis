@@ -26,12 +26,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 enum class OrchestratorMode {
-    STANDBY_WAKE_WORD,     // Ожидание в наушнике
+    STANDBY_WAKE_WORD,     // Ожидание
     VERIFYING_KEYWORD,     // Анализ
-    LISTENING_USER_QUERY,  // Запись вопроса
+    LISTENING_USER_QUERY,  // Запись голоса
     AI_THINKING,           // Запрос AI
     TTS_SPEAKING,          // Озвучивание ответа
-    PAUSED_CALL_OR_SLEEP   // Пауза (наушники отключены)
+    PAUSED_CALL_OR_SLEEP   // Пауза
 }
 
 @Singleton
@@ -87,7 +87,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
         if (!bluetoothAudioRouter.isHeadsetConnected()) {
             _currentMode.value = OrchestratorMode.PAUSED_CALL_OR_SLEEP
-            _assistantState.value = VoiceAssistantState.Error("Подключите Bluetooth или проводные наушники для работы")
+            _assistantState.value = VoiceAssistantState.Error("Подключите наушники для работы")
             return
         }
 
@@ -111,10 +111,9 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         playWakeChime()
                         startStandbyMode()
                     } else {
-                        // Наушники отключены -> мгновенно глушим микрофон для приватности
                         stopAll()
                         _currentMode.value = OrchestratorMode.PAUSED_CALL_OR_SLEEP
-                        _assistantState.value = VoiceAssistantState.Error("Наушники отключены. Ожидание подключения...")
+                        _assistantState.value = VoiceAssistantState.Error("Наушники отключены. Ожидание...")
                     }
                 }
             }
@@ -147,7 +146,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
         if (!bluetoothAudioRouter.isHeadsetConnected()) {
             _currentMode.value = OrchestratorMode.PAUSED_CALL_OR_SLEEP
-            _assistantState.value = VoiceAssistantState.Error("Подключите наушники для работы JARVIS")
+            _assistantState.value = VoiceAssistantState.Error("Подключите наушники")
             return
         }
 
@@ -173,9 +172,10 @@ class VoiceInteractionOrchestrator @Inject constructor(
                             _assistantState.value = VoiceAssistantState.Recognizing(event.partialText)
                             _lastQuery.value = cleanWakeWord(event.partialText)
 
+                            // Быстрая авто-отправка через 900мс тишины
                             silenceJob?.cancel()
                             silenceJob = scope.launch {
-                                delay(1200)
+                                delay(900)
                                 if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY && event.partialText.isNotBlank()) {
                                     speechRecognizerManager.stopListening()
                                     processUserQuery(cleanWakeWord(event.partialText))
@@ -202,7 +202,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     is SpeechRecognitionEvent.RecognitionError -> {
                         silenceJob?.cancel()
                         if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY) {
-                            delay(600)
+                            delay(500)
                             startStandbyMode()
                         }
                     }
@@ -241,7 +241,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     _currentMode.value = OrchestratorMode.TTS_SPEAKING
                     _assistantState.value = VoiceAssistantState.Speaking(answer)
 
-                    // Озвучиваем ответ в наушник
+                    // Озвучиваем живым нейро-голосом
                     textToSpeechManager.speak(answer, speechRate, speechPitch)
                 }
                 is Resource.Error -> {
