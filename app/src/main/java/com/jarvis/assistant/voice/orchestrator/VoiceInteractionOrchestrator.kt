@@ -26,11 +26,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 enum class OrchestratorMode {
-    STANDBY_WAKE_WORD,     // Ожидание "Джарвис"
-    VERIFYING_KEYWORD,     // Проверка ключевого слова
-    LISTENING_USER_QUERY,  // Активная запись вопроса
-    AI_THINKING,           // Быстрая генерация ответа
-    TTS_SPEAKING,          // Полное озвучивание без прерываний
+    STANDBY_WAKE_WORD,     // Ожидание команды «Джарвис»
+    VERIFYING_KEYWORD,     // Быстрая проверка
+    LISTENING_USER_QUERY,  // Запись вопроса
+    AI_THINKING,           // Ответ AI
+    TTS_SPEAKING,          // Озвучивание
     PAUSED_CALL_OR_SLEEP   // Пауза
 }
 
@@ -65,10 +65,13 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private var isServiceActive = false
 
     private var speechRate = 1.05f
-    private var speechPitch = 1.0f
+    private var speechPitch = 0.90f
 
-    // Ключевые слова для активации (без ложных срабатываний на посторонние слова)
-    private val wakeKeywords = listOf("джарвис", "jarvis", "джар", "джей", "диджей", "jarv")
+    // Широкий фонетический словарь распознавания «Джарвис» (учитывает акценты и шум микрофона)
+    private val wakeKeywords = listOf(
+        "джарвис", "jarvis", "жарвис", "дарвис", "чарвис", "джарви",
+        "джар", "джей", "диджей", "jarv", "джейвис", "сервис"
+    )
 
     init {
         try {
@@ -84,7 +87,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
     fun startServicePipeline() {
         isServiceActive = true
         bluetoothAudioRouter.routeAudioToEarbud()
-        startWakeWordListening()
+        startActiveSpeechListening()
     }
 
     fun stopServicePipeline() {
@@ -108,17 +111,22 @@ class VoiceInteractionOrchestrator @Inject constructor(
             wakeWordDetector.events.collectLatest { event ->
                 when (event) {
                     is WakeWordEvent.VoiceActivityDetected -> {
-                        // Только когда ассистент в режиме ожидания
                         if (_currentMode.value == OrchestratorMode.STANDBY_WAKE_WORD) {
-                            _currentMode.value = OrchestratorMode.VERIFYING_KEYWORD
-                            wakeWordDetector.stopListening()
-                            speechRecognizerManager.startListening()
+                            startActiveSpeechListening()
                         }
                     }
                     is WakeWordEvent.VoiceLevelChanged -> Unit
                 }
             }
         }
+    }
+
+    private fun startActiveSpeechListening() {
+        if (!isServiceActive) return
+        _currentMode.value = OrchestratorMode.STANDBY_WAKE_WORD
+        _assistantState.value = VoiceAssistantState.Idle
+        wakeWordDetector.stopListening()
+        speechRecognizerManager.startListening()
     }
 
     private fun observeSpeechRecognition() {
@@ -135,10 +143,10 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         silenceDebounceJob?.cancel()
                         if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY) {
                             _assistantState.value = VoiceAssistantState.Error(event.errorMessage)
-                            delay(1200)
-                            startWakeWordListening()
-                        } else if (_currentMode.value == OrchestratorMode.VERIFYING_KEYWORD) {
-                            startWakeWordListening()
+                            delay(1000)
+                        }
+                        if (isServiceActive && _currentMode.value != OrchestratorMode.TTS_SPEAKING && _currentMode.value != OrchestratorMode.AI_THINKING) {
+                            startActiveSpeechListening()
                         }
                     }
                     else -> Unit
@@ -150,26 +158,41 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private fun handlePartialSpeech(partialText: String) {
         val lower = partialText.lowercase().trim()
 
-        if (_currentMode.value == OrchestratorMode.VERIFYING_KEYWORD) {
-            // Проверяем, содержит ли сказанное слово "Джарвис"
-            val hasWakeWord = wakeKeywords.any { lower.contains(it) }
-            if (hasWakeWord) {
-                // Слово "Джарвис" подтверждено -> издаем звук и переходим в активное слушание
+        // 1. Проверка на ключевое слово активации
+        val containsWakeWord = wakeKeywords.any { lower.contains(it) }
+
+        if (containsWakeWord) {
+            if (_currentMode.value == OrchestratorMode.STANDBY_WAKE_WORD) {
                 playWakeChime()
                 _currentMode.value = OrchestratorMode.LISTENING_USER_QUERY
                 _assistantState.value = VoiceAssistantState.Listening
             }
+
+            val query = cleanWakeWordPrefix(partialText)
+            _lastQuery.value = query
+            _assistantState.value = VoiceAssistantState.Recognizing(query)
+
+            // Если после "Джарвис" уже пошел вопрос, авто-отправляем через 1.2 сек паузы
+            if (query.isNotBlank() && query.length >= 3) {
+                silenceDebounceJob?.cancel()
+                silenceDebounceJob = scope.launch {
+                    delay(1200)
+                    if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY) {
+                        speechRecognizerManager.stopListening()
+                        executeAiQuery(query)
+                    }
+                }
+            }
         } else if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY) {
             _assistantState.value = VoiceAssistantState.Recognizing(partialText)
-            _lastQuery.value = cleanWakeWordPrefix(partialText)
+            _lastQuery.value = partialText
 
-            // Быстрая отправка через 1.2 сек после окончания фразы
             silenceDebounceJob?.cancel()
             silenceDebounceJob = scope.launch {
                 delay(1200)
-                if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY && partialText.isNotBlank()) {
+                if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY) {
                     speechRecognizerManager.stopListening()
-                    executeAiQuery(cleanWakeWordPrefix(partialText))
+                    executeAiQuery(partialText)
                 }
             }
         }
@@ -179,54 +202,49 @@ class VoiceInteractionOrchestrator @Inject constructor(
         silenceDebounceJob?.cancel()
         val lower = finalText.lowercase().trim()
 
-        // 1. Проверка на команду прерывания
+        // Команда прерывания
         if (lower == "стоп" || lower == "хватит" || lower == "отмена" || lower == "джарвис стоп") {
             handleBargeInInterrupt()
             return
         }
 
-        // 2. Если мы были в режиме верификации ключевого слова
-        if (_currentMode.value == OrchestratorMode.VERIFYING_KEYWORD) {
-            val hasWakeWord = wakeKeywords.any { lower.contains(it) }
-            if (hasWakeWord) {
-                val cleanedQuery = cleanWakeWordPrefix(finalText)
-                if (cleanedQuery.isNotBlank()) {
-                    // Пользователь сразу сказал: "Джарвис, какая сегодня погода?"
-                    executeAiQuery(cleanedQuery)
-                } else {
-                    // Пользователь сказал только "Джарвис" -> слушаем следующий вопрос
-                    playWakeChime()
-                    _currentMode.value = OrchestratorMode.LISTENING_USER_QUERY
-                    _assistantState.value = VoiceAssistantState.Listening
-                    speechRecognizerManager.startListening()
-                }
-            } else {
-                // Сказано случайное постороннее слово -> игнорируем и возвращаемся в сон без шума!
-                startWakeWordListening()
-            }
-            return
-        }
+        val containsWakeWord = wakeKeywords.any { lower.contains(it) }
+        val query = cleanWakeWordPrefix(finalText)
 
-        // 3. Если мы были в активном слушании запроса
-        if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY) {
-            val cleanedQuery = cleanWakeWordPrefix(finalText)
-            if (cleanedQuery.isNotBlank()) {
-                executeAiQuery(cleanedQuery)
+        if (containsWakeWord) {
+            if (query.isNotBlank() && query.length >= 2) {
+                // Пользователь сказал полную фразу: «Джарвис, сколько времени?»
+                playWakeChime()
+                executeAiQuery(query)
             } else {
-                startWakeWordListening()
+                // Пользователь сказал только «Джарвис» -> ждем вопрос
+                playWakeChime()
+                _currentMode.value = OrchestratorMode.LISTENING_USER_QUERY
+                _assistantState.value = VoiceAssistantState.Listening
+                speechRecognizerManager.startListening()
             }
+        } else if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY && query.isNotBlank()) {
+            executeAiQuery(query)
+        } else {
+            // Посторонний шум -> перезапускаем непрерывный режим без шума
+            startActiveSpeechListening()
         }
     }
 
     private fun cleanWakeWordPrefix(text: String): String {
         var clean = text
         for (kw in wakeKeywords) {
-            clean = clean.replace(Regex("(?i)^.*$kw[,\\s]*"), "").trim()
+            clean = clean.replace(Regex("(?i)^.*?$kw[,\\s]*"), "").trim()
         }
-        return clean.ifEmpty { text }
+        return clean
     }
 
     private fun executeAiQuery(userText: String) {
+        if (userText.isBlank()) {
+            startActiveSpeechListening()
+            return
+        }
+
         _currentMode.value = OrchestratorMode.AI_THINKING
         _assistantState.value = VoiceAssistantState.Thinking
         _lastQuery.value = userText
@@ -240,7 +258,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     _currentMode.value = OrchestratorMode.TTS_SPEAKING
                     _assistantState.value = VoiceAssistantState.Speaking(answer)
 
-                    // Озвучиваем ответ ПОЛНОСТЬЮ без самопрерывания
+                    // Озвучиваем ответ полностью
                     textToSpeechManager.speak(answer, speechRate, speechPitch)
                 }
                 is Resource.Error -> {
@@ -249,7 +267,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     _assistantState.value = VoiceAssistantState.Error(errorMsg)
                     textToSpeechManager.speak(errorMsg, speechRate, speechPitch)
                     delay(2500)
-                    startWakeWordListening()
+                    startActiveSpeechListening()
                 }
                 is Resource.Loading -> Unit
             }
@@ -261,15 +279,14 @@ class VoiceInteractionOrchestrator @Inject constructor(
             textToSpeechManager.ttsState.collectLatest { ttsState ->
                 when (ttsState) {
                     is TtsState.Finished -> {
-                        // Озвучивание успешно завершено целиком
                         if (_currentMode.value == OrchestratorMode.TTS_SPEAKING) {
                             _assistantState.value = VoiceAssistantState.Idle
-                            startWakeWordListening()
+                            startActiveSpeechListening()
                         }
                     }
                     is TtsState.Error -> {
                         _assistantState.value = VoiceAssistantState.Error(ttsState.message)
-                        startWakeWordListening()
+                        startActiveSpeechListening()
                     }
                     else -> Unit
                 }
@@ -286,13 +303,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
         _assistantState.value = VoiceAssistantState.Idle
         _currentMode.value = OrchestratorMode.STANDBY_WAKE_WORD
-        startWakeWordListening()
-    }
-
-    private fun startWakeWordListening() {
-        if (!isServiceActive) return
-        _currentMode.value = OrchestratorMode.STANDBY_WAKE_WORD
-        wakeWordDetector.startListening()
+        startActiveSpeechListening()
     }
 
     private fun playWakeChime() {
