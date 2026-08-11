@@ -23,7 +23,6 @@ sealed interface BluetoothAudioState {
     data object Disconnected : BluetoothAudioState
     data object Connecting : BluetoothAudioState
     data class Connected(val deviceName: String, val isSingleEarbud: Boolean = true) : BluetoothAudioState
-    data class Error(val message: String) : BluetoothAudioState
 }
 
 @Singleton
@@ -36,6 +35,9 @@ class BluetoothAudioRouter @Inject constructor(
     private val _audioState = MutableStateFlow<BluetoothAudioState>(BluetoothAudioState.Disconnected)
     val audioState: StateFlow<BluetoothAudioState> = _audioState.asStateFlow()
 
+    private val _isHeadsetPlugged = MutableStateFlow(false)
+    val isHeadsetPlugged: StateFlow<Boolean> = _isHeadsetPlugged.asStateFlow()
+
     private val profileListener = object : BluetoothProfile.ServiceListener {
         @SuppressLint("MissingPermission")
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile?) {
@@ -45,6 +47,7 @@ class BluetoothAudioRouter @Inject constructor(
                 if (connectedDevices.isNotEmpty()) {
                     val name = connectedDevices.first().name ?: "Bluetooth Гарнитура"
                     _audioState.value = BluetoothAudioState.Connected(name, isSingleEarbud = true)
+                    _isHeadsetPlugged.value = true
                 }
             }
         }
@@ -53,6 +56,7 @@ class BluetoothAudioRouter @Inject constructor(
             if (profile == BluetoothProfile.HEADSET) {
                 bluetoothHeadset = null
                 _audioState.value = BluetoothAudioState.Disconnected
+                checkHeadsetConnection()
             }
         }
     }
@@ -65,17 +69,26 @@ class BluetoothAudioRouter @Inject constructor(
                     val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
                     val name = device?.name ?: "Bluetooth Наушник"
                     _audioState.value = BluetoothAudioState.Connected(name, isSingleEarbud = true)
+                    _isHeadsetPlugged.value = true
                     routeAudioToEarbud()
                 }
                 BluetoothDevice.ACTION_ACL_DISCONNECTED,
                 AudioManager.ACTION_AUDIO_BECOMING_NOISY -> {
-                    _audioState.value = BluetoothAudioState.Disconnected
-                    routeAudioToSpeaker()
+                    checkHeadsetConnection()
+                }
+                Intent.ACTION_HEADSET_PLUG -> {
+                    val state = intent.getIntExtra("state", 0)
+                    _isHeadsetPlugged.value = (state == 1) || isBluetoothConnected()
+                    if (state == 1) {
+                        _audioState.value = BluetoothAudioState.Connected("Проводные наушники")
+                    } else if (!isBluetoothConnected()) {
+                        _audioState.value = BluetoothAudioState.Disconnected
+                    }
                 }
                 AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED -> {
                     val state = intent.getIntExtra(AudioManager.EXTRA_SCO_AUDIO_STATE, -1)
                     if (state == AudioManager.SCO_AUDIO_STATE_CONNECTED) {
-                        _audioState.value = BluetoothAudioState.Connected("Моно-наушник (SCO)", true)
+                        _isHeadsetPlugged.value = true
                     }
                 }
             }
@@ -91,12 +104,37 @@ class BluetoothAudioRouter @Inject constructor(
                 addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
                 addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
                 addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+                addAction(Intent.ACTION_HEADSET_PLUG)
                 addAction(AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED)
             }
             context.registerReceiver(connectionReceiver, filter)
-            routeAudioToEarbud()
+            checkHeadsetConnection()
         } catch (_: Exception) { }
     }
+
+    fun checkHeadsetConnection(): Boolean {
+        var connected = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val devices = audioManager?.getDevices(AudioManager.GET_DEVICES_OUTPUTS) ?: emptyArray()
+            connected = devices.any {
+                it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                it.type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
+                it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                it.type == AudioDeviceInfo.TYPE_USB_HEADSET
+            }
+        }
+        _isHeadsetPlugged.value = connected
+        if (!connected) {
+            _audioState.value = BluetoothAudioState.Disconnected
+        }
+        return connected
+    }
+
+    fun isHeadsetConnected(): Boolean = _isHeadsetPlugged.value
+
+    private fun isBluetoothConnected(): Boolean = _audioState.value is BluetoothAudioState.Connected
 
     fun routeAudioToEarbud() {
         try {
@@ -115,28 +153,10 @@ class BluetoothAudioRouter @Inject constructor(
                     }
                 }
 
-                // Fallback for Android 10-11
                 am.mode = AudioManager.MODE_IN_COMMUNICATION
                 am.startBluetoothSco()
                 am.isBluetoothScoOn = true
             }
         } catch (_: Exception) { }
-    }
-
-    fun routeAudioToSpeaker() {
-        try {
-            audioManager?.let { am ->
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    am.clearCommunicationDevice()
-                }
-                am.isBluetoothScoOn = false
-                am.stopBluetoothSco()
-                am.mode = AudioManager.MODE_NORMAL
-            }
-        } catch (_: Exception) { }
-    }
-
-    fun isHeadsetConnected(): Boolean {
-        return _audioState.value is BluetoothAudioState.Connected
     }
 }

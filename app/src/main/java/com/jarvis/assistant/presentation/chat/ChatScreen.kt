@@ -2,58 +2,32 @@ package com.jarvis.assistant.presentation.chat
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.Forum
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jarvis.assistant.presentation.components.MessageItem
-import com.jarvis.assistant.presentation.theme.JarvisBackground
-import com.jarvis.assistant.presentation.theme.JarvisCardBackground
-import com.jarvis.assistant.presentation.theme.JarvisCyanPrimary
-import com.jarvis.assistant.presentation.theme.JarvisRed
-import com.jarvis.assistant.presentation.theme.JarvisSurface
-import com.jarvis.assistant.presentation.theme.TextPrimary
-import com.jarvis.assistant.presentation.theme.TextSecondary
-import com.jarvis.assistant.presentation.theme.TextTertiary
+import com.jarvis.assistant.presentation.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,7 +39,7 @@ fun ChatScreen(
     var showClearDialog by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
-    // Auto-scroll to latest message
+    // Авто-скролл к последнему сообщению
     LaunchedEffect(uiState.messages.size) {
         if (uiState.messages.isNotEmpty()) {
             listState.animateScrollToItem(uiState.messages.size - 1)
@@ -79,12 +53,12 @@ fun ChatScreen(
                 title = {
                     Column {
                         Text(
-                            text = "История диалогов",
+                            text = "Чат с JARVIS",
                             style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
                             color = TextPrimary
                         )
                         Text(
-                            text = "Всего сообщений: ${uiState.messages.size}",
+                            text = "Текстовый и голосовой режим диалога",
                             style = MaterialTheme.typography.labelSmall,
                             color = TextTertiary
                         )
@@ -104,16 +78,93 @@ fun ChatScreen(
                         IconButton(onClick = { showClearDialog = true }) {
                             Icon(
                                 imageVector = Icons.Default.DeleteSweep,
-                                contentDescription = "Очистить историю",
+                                contentDescription = "Очистить чат",
                                 tint = JarvisRed
                             )
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = JarvisSurface
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = JarvisSurface)
             )
+        },
+        bottomBar = {
+            // Нижняя панель ввода текста и микрофона
+            Surface(
+                color = JarvisSurface,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Кнопка голосового набора в чат
+                    IconButton(
+                        onClick = { viewModel.toggleVoiceDictation() },
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(if (uiState.isVoiceDictating) JarvisGreen else JarvisSurfaceVariant)
+                    ) {
+                        Icon(
+                            imageVector = if (uiState.isVoiceDictating) Icons.Default.Mic else Icons.Default.MicNone,
+                            contentDescription = "Голосовой ввод",
+                            tint = if (uiState.isVoiceDictating) JarvisBackground else JarvisCyanPrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    // Поле ввода текста
+                    OutlinedTextField(
+                        value = uiState.inputText,
+                        onValueChange = { viewModel.onInputTextChanged(it) },
+                        placeholder = { Text("Спросите JARVIS...", color = TextTertiary, fontSize = 14.sp) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = JarvisCyanPrimary,
+                            unfocusedBorderColor = JarvisSurfaceVariant,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            focusedContainerColor = JarvisCardBackground,
+                            unfocusedContainerColor = JarvisCardBackground,
+                            cursorColor = JarvisCyanPrimary
+                        ),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = { viewModel.sendTextMessage() }),
+                        maxLines = 4
+                    )
+
+                    // Кнопка отправки
+                    IconButton(
+                        onClick = { viewModel.sendTextMessage() },
+                        enabled = uiState.inputText.isNotBlank() && !uiState.isSending,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(if (uiState.inputText.isNotBlank()) JarvisCyanPrimary else JarvisSurfaceVariant)
+                    ) {
+                        if (uiState.isSending) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = JarvisBackground,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "Отправить",
+                                tint = if (uiState.inputText.isNotBlank()) JarvisBackground else TextTertiary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
         }
     ) { innerPadding ->
         Box(
@@ -122,7 +173,7 @@ fun ChatScreen(
                 .padding(innerPadding)
         ) {
             if (uiState.messages.isEmpty()) {
-                // Empty state placeholder
+                // Пустое состояние
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -138,19 +189,19 @@ fun ChatScreen(
                         Icon(
                             imageVector = Icons.Default.Forum,
                             contentDescription = null,
-                            tint = TextTertiary,
+                            tint = JarvisCyanPrimary,
                             modifier = Modifier.size(36.dp)
                         )
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "История диалогов пуста",
+                        text = "Чат с JARVIS готов",
                         style = MaterialTheme.typography.titleMedium,
-                        color = TextSecondary
+                        color = TextPrimary
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Задайте вопрос JARVIS на главном экране",
+                        text = "Напишите вопрос или нажмите микрофон для набора",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextTertiary
                     )
@@ -180,11 +231,11 @@ fun ChatScreen(
             onDismissRequest = { showClearDialog = false },
             containerColor = JarvisCardBackground,
             title = {
-                Text(text = "Очистить историю?", color = TextPrimary)
+                Text(text = "Очистить чат?", color = TextPrimary)
             },
             text = {
                 Text(
-                    text = "Все сохраненные сообщения и ответы будут удалены из локальной базы Room.",
+                    text = "Все сохраненные сообщения диалога будут удалены.",
                     color = TextSecondary
                 )
             },

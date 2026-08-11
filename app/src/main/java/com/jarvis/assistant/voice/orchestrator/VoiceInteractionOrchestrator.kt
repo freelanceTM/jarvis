@@ -26,12 +26,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 enum class OrchestratorMode {
-    STANDBY_WAKE_WORD,     // Ожидание
+    STANDBY_WAKE_WORD,     // Ожидание в наушнике
     VERIFYING_KEYWORD,     // Анализ
-    LISTENING_USER_QUERY,  // Запись голоса
+    LISTENING_USER_QUERY,  // Запись вопроса
     AI_THINKING,           // Запрос AI
     TTS_SPEAKING,          // Озвучивание ответа
-    PAUSED_CALL_OR_SLEEP   // Пауза
+    PAUSED_CALL_OR_SLEEP   // Пауза (наушники отключены)
 }
 
 @Singleton
@@ -75,6 +75,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
         } catch (_: Exception) { }
 
         observeSettings()
+        observeHeadsetPlugging()
         observeWakeDetector()
         observeSpeechRecognizer()
         observeTtsEngine()
@@ -82,6 +83,14 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
     fun startServicePipeline() {
         isServiceActive = true
+        bluetoothAudioRouter.checkHeadsetConnection()
+
+        if (!bluetoothAudioRouter.isHeadsetConnected()) {
+            _currentMode.value = OrchestratorMode.PAUSED_CALL_OR_SLEEP
+            _assistantState.value = VoiceAssistantState.Error("Подключите Bluetooth или проводные наушники для работы")
+            return
+        }
+
         bluetoothAudioRouter.routeAudioToEarbud()
         startStandbyMode()
     }
@@ -91,6 +100,25 @@ class VoiceInteractionOrchestrator @Inject constructor(
         stopAll()
         _currentMode.value = OrchestratorMode.PAUSED_CALL_OR_SLEEP
         _assistantState.value = VoiceAssistantState.Idle
+    }
+
+    private fun observeHeadsetPlugging() {
+        scope.launch {
+            bluetoothAudioRouter.isHeadsetPlugged.collectLatest { isPlugged ->
+                if (isServiceActive) {
+                    if (isPlugged) {
+                        bluetoothAudioRouter.routeAudioToEarbud()
+                        playWakeChime()
+                        startStandbyMode()
+                    } else {
+                        // Наушники отключены -> мгновенно глушим микрофон для приватности
+                        stopAll()
+                        _currentMode.value = OrchestratorMode.PAUSED_CALL_OR_SLEEP
+                        _assistantState.value = VoiceAssistantState.Error("Наушники отключены. Ожидание подключения...")
+                    }
+                }
+            }
+        }
     }
 
     private fun observeSettings() {
@@ -106,7 +134,9 @@ class VoiceInteractionOrchestrator @Inject constructor(
         scope.launch {
             wakeWordDetector.events.collectLatest { event ->
                 if (event is WakeWordEvent.VoiceActivityDetected && _currentMode.value == OrchestratorMode.STANDBY_WAKE_WORD) {
-                    switchToSpeechRecognition()
+                    if (bluetoothAudioRouter.isHeadsetConnected()) {
+                        switchToSpeechRecognition()
+                    }
                 }
             }
         }
@@ -114,6 +144,13 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
     private fun startStandbyMode() {
         if (!isServiceActive) return
+
+        if (!bluetoothAudioRouter.isHeadsetConnected()) {
+            _currentMode.value = OrchestratorMode.PAUSED_CALL_OR_SLEEP
+            _assistantState.value = VoiceAssistantState.Error("Подключите наушники для работы JARVIS")
+            return
+        }
+
         _currentMode.value = OrchestratorMode.STANDBY_WAKE_WORD
         _assistantState.value = VoiceAssistantState.Idle
         speechRecognizerManager.stopListening()
@@ -121,7 +158,6 @@ class VoiceInteractionOrchestrator @Inject constructor(
     }
 
     private fun switchToSpeechRecognition() {
-        // Строгая последовательность: Сначала освобождаем микрофон из WakeWord, затем открываем SpeechRecognizer
         wakeWordDetector.stopListening()
         _currentMode.value = OrchestratorMode.LISTENING_USER_QUERY
         _assistantState.value = VoiceAssistantState.Listening
@@ -137,10 +173,9 @@ class VoiceInteractionOrchestrator @Inject constructor(
                             _assistantState.value = VoiceAssistantState.Recognizing(event.partialText)
                             _lastQuery.value = cleanWakeWord(event.partialText)
 
-                            // Авто-отправка через 1.3 сек тишины
                             silenceJob?.cancel()
                             silenceJob = scope.launch {
-                                delay(1300)
+                                delay(1200)
                                 if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY && event.partialText.isNotBlank()) {
                                     speechRecognizerManager.stopListening()
                                     processUserQuery(cleanWakeWord(event.partialText))
@@ -206,7 +241,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     _currentMode.value = OrchestratorMode.TTS_SPEAKING
                     _assistantState.value = VoiceAssistantState.Speaking(answer)
 
-                    // Озвучиваем ответ полностью
+                    // Озвучиваем ответ в наушник
                     textToSpeechManager.speak(answer, speechRate, speechPitch)
                 }
                 is Resource.Error -> {

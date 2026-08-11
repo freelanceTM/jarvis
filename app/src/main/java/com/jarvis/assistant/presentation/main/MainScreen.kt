@@ -90,7 +90,7 @@ fun MainScreen(
                         color = JarvisCyanPrimary
                     )
                     Text(
-                        text = "v0.2 • Hands-Free & Wake Word",
+                        text = "v0.2 • Гарнитурный и текстовый режим",
                         style = MaterialTheme.typography.labelSmall,
                         color = TextTertiary
                     )
@@ -105,7 +105,7 @@ fun MainScreen(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Chat,
-                            contentDescription = "История",
+                            contentDescription = "Режим чата",
                             tint = JarvisCyanPrimary
                         )
                     }
@@ -137,7 +137,7 @@ fun MainScreen(
         ) {
             Spacer(modifier = Modifier.height(4.dp))
 
-            // 1. Status Indicators (Network, Single Earbud Bluetooth SCO, Active Listening)
+            // 1. Status Indicators (Network, Headset, Active Listening)
             StatusBadgeRow(
                 isMicActive = uiState.orchestratorMode != OrchestratorMode.PAUSED_CALL_OR_SLEEP,
                 isOnline = uiState.isOnline,
@@ -160,55 +160,80 @@ fun MainScreen(
             Spacer(modifier = Modifier.height(14.dp))
 
             // 3. Status Text Banner
-            WakeWordStatusBanner(uiState.orchestratorMode, uiState.assistantState)
+            WakeWordStatusBanner(uiState.orchestratorMode, uiState.assistantState, uiState.isBluetoothConnected)
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
-            // 4. Hands-Free Background Voice Mode Switch Button
-            Button(
-                onClick = {
-                    val hasAudio = ContextCompat.checkSelfPermission(
-                        context, Manifest.permission.RECORD_AUDIO
-                    ) == PackageManager.PERMISSION_GRANTED
-
-                    if (!hasAudio) {
-                        val perms = mutableListOf(Manifest.permission.RECORD_AUDIO)
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            perms.add(Manifest.permission.POST_NOTIFICATIONS)
-                        }
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            perms.add(Manifest.permission.BLUETOOTH_CONNECT)
-                        }
-                        permissionLauncher.launch(perms.toTypedArray())
-                    } else {
-                        viewModel.onEvent(MainUiEvent.ToggleBackgroundService)
-                    }
-                },
-                shape = RoundedCornerShape(26.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (uiState.isBackgroundServiceActive) JarvisGreen else JarvisCyanPrimary,
-                    contentColor = JarvisBackground
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(58.dp)
-                    .shadow(12.dp, RoundedCornerShape(26.dp), ambientColor = JarvisCyanGlow, spotColor = JarvisCyanPrimary)
+            // 4. Action Buttons (Voice Service & Open Chat Mode)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+                Button(
+                    onClick = {
+                        val hasAudio = ContextCompat.checkSelfPermission(
+                            context, Manifest.permission.RECORD_AUDIO
+                        ) == PackageManager.PERMISSION_GRANTED
+
+                        if (!hasAudio) {
+                            val perms = mutableListOf(Manifest.permission.RECORD_AUDIO)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                perms.add(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                perms.add(Manifest.permission.BLUETOOTH_CONNECT)
+                            }
+                            permissionLauncher.launch(perms.toTypedArray())
+                        } else {
+                            viewModel.onEvent(MainUiEvent.ToggleBackgroundService)
+                        }
+                    },
+                    shape = RoundedCornerShape(22.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (uiState.isBackgroundServiceActive) JarvisGreen else JarvisCyanPrimary,
+                        contentColor = JarvisBackground
+                    ),
+                    modifier = Modifier
+                        .weight(1.3f)
+                        .height(56.dp)
+                        .shadow(10.dp, RoundedCornerShape(22.dp), ambientColor = JarvisCyanGlow, spotColor = JarvisCyanPrimary)
                 ) {
-                    Icon(
-                        imageVector = if (uiState.isBackgroundServiceActive) Icons.Default.Hearing else Icons.Default.MicNone,
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = if (uiState.isBackgroundServiceActive) "Фоновый режим: АКТИВЕН (Скажите «Джарвис»)" else "Включить голосовой режим (Без кнопок)",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = if (uiState.isBackgroundServiceActive) Icons.Default.Headphones else Icons.Default.MicNone,
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (uiState.isBackgroundServiceActive) "В наушнике: ВКЛ" else "Включить голос",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // Кнопка быстрого перехода в Чат
+                Button(
+                    onClick = onNavigateToChat,
+                    shape = RoundedCornerShape(22.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = JarvisSurface,
+                        contentColor = JarvisCyanPrimary
+                    ),
+                    border = BorderStroke(1.dp, JarvisCyanPrimary.copy(alpha = 0.5f)),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.Forum, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Открыть Чат", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
 
@@ -254,7 +279,7 @@ fun MainScreen(
                         text = if (uiState.lastUserQuery.isNotEmpty()) {
                             "Вы: ${uiState.lastUserQuery}"
                         } else {
-                            "Скажите «Джарвис» вслух или через один наушник..."
+                            "Скажите «Джарвис» в наушник или откройте Чат..."
                         },
                         style = MaterialTheme.typography.bodyLarge,
                         color = if (uiState.lastUserQuery.isNotEmpty()) TextPrimary else TextTertiary
@@ -283,14 +308,20 @@ fun MainScreen(
 }
 
 @Composable
-fun WakeWordStatusBanner(mode: OrchestratorMode, state: VoiceAssistantState) {
+fun WakeWordStatusBanner(mode: OrchestratorMode, state: VoiceAssistantState, isHeadsetConnected: Boolean) {
     val (label, color) = when (mode) {
-        OrchestratorMode.STANDBY_WAKE_WORD -> "● Ожидание фразы «Джарвис» (Hands-Free)" to JarvisCyanPrimary
-        OrchestratorMode.VERIFYING_KEYWORD -> "● Проверка ключевого слова..." to JarvisCyanPrimary
+        OrchestratorMode.STANDBY_WAKE_WORD -> {
+            if (isHeadsetConnected) "● Ожидание фразы «Джарвис» в наушнике" to JarvisCyanPrimary
+            else "● Подключите наушники для работы" to JarvisAmber
+        }
+        OrchestratorMode.VERIFYING_KEYWORD -> "● Анализ..." to JarvisCyanPrimary
         OrchestratorMode.LISTENING_USER_QUERY -> "● Слушаю ваш запрос..." to JarvisGreen
         OrchestratorMode.AI_THINKING -> "● Генерация ответа через AI..." to JarvisCyanSecondary
         OrchestratorMode.TTS_SPEAKING -> "● Озвучивание (скажите «Стоп» для отмены)" to JarvisCyanPrimary
-        OrchestratorMode.PAUSED_CALL_OR_SLEEP -> "● Энергосбережение / Пауза" to TextTertiary
+        OrchestratorMode.PAUSED_CALL_OR_SLEEP -> {
+            if (!isHeadsetConnected) "● Наушники отключены (Пауза)" to JarvisAmber
+            else "● Энергосбережение / Пауза" to TextTertiary
+        }
     }
 
     Surface(

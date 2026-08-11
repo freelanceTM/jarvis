@@ -2,43 +2,47 @@ package com.jarvis.assistant.presentation.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.domain.models.Message
 import com.jarvis.assistant.domain.usecases.ClearChatHistoryUseCase
 import com.jarvis.assistant.domain.usecases.GetChatHistoryUseCase
 import com.jarvis.assistant.domain.usecases.GetSettingsUseCase
+import com.jarvis.assistant.domain.usecases.SendPromptUseCase
+import com.jarvis.assistant.voice.stt.SpeechRecognitionEvent
+import com.jarvis.assistant.voice.stt.SpeechRecognizerManager
 import com.jarvis.assistant.voice.tts.TextToSpeechManager
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class ChatUiState(
     val messages: List<Message> = emptyList(),
-    val isLoading: Boolean = false,
-    val isSpeaking: Boolean = false
+    val inputText: String = "",
+    val isSending: Boolean = false,
+    val isVoiceDictating: Boolean = false
 )
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val getChatHistoryUseCase: GetChatHistoryUseCase,
     private val clearChatHistoryUseCase: ClearChatHistoryUseCase,
+    private val sendPromptUseCase: SendPromptUseCase,
     private val getSettingsUseCase: GetSettingsUseCase,
-    private val textToSpeechManager: TextToSpeechManager
+    private val textToSpeechManager: TextToSpeechManager,
+    private val speechRecognizerManager: SpeechRecognizerManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
-    private var speechRate = 1.0f
-    private var speechPitch = 1.0f
+    private var speechRate = 1.05f
+    private var speechPitch = 0.90f
 
     init {
         loadHistory()
         observeSettings()
+        observeSpeechRecognizer()
     }
 
     private fun loadHistory() {
@@ -58,12 +62,58 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun speakMessage(text: String) {
-        textToSpeechManager.speak(text, speechRate, speechPitch)
+    private fun observeSpeechRecognizer() {
+        viewModelScope.launch {
+            speechRecognizerManager.speechState.collectLatest { event ->
+                when (event) {
+                    is SpeechRecognitionEvent.PartialResult -> {
+                        _uiState.update { it.copy(inputText = event.partialText) }
+                    }
+                    is SpeechRecognitionEvent.FinalResult -> {
+                        _uiState.update { it.copy(inputText = event.recognizedText, isVoiceDictating = false) }
+                        sendTextMessage(event.recognizedText)
+                    }
+                    is SpeechRecognitionEvent.RecognitionError -> {
+                        _uiState.update { it.copy(isVoiceDictating = false) }
+                    }
+                    else -> Unit
+                }
+            }
+        }
     }
 
-    fun stopSpeaking() {
-        textToSpeechManager.stop()
+    fun onInputTextChanged(newText: String) {
+        _uiState.update { it.copy(inputText = newText) }
+    }
+
+    fun sendTextMessage(textToSend: String = _uiState.value.inputText) {
+        val query = textToSend.trim()
+        if (query.isBlank() || _uiState.value.isSending) return
+
+        _uiState.update { it.copy(inputText = "", isSending = true) }
+
+        viewModelScope.launch {
+            val result = sendPromptUseCase(query)
+            _uiState.update { it.copy(isSending = false) }
+
+            if (result is Resource.Success) {
+                textToSpeechManager.speak(result.data, speechRate, speechPitch)
+            }
+        }
+    }
+
+    fun toggleVoiceDictation() {
+        if (_uiState.value.isVoiceDictating) {
+            speechRecognizerManager.stopListening()
+            _uiState.update { it.copy(isVoiceDictating = false) }
+        } else {
+            _uiState.update { it.copy(isVoiceDictating = true) }
+            speechRecognizerManager.startListening()
+        }
+    }
+
+    fun speakMessage(text: String) {
+        textToSpeechManager.speak(text, speechRate, speechPitch)
     }
 
     fun clearAllHistory() {
