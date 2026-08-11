@@ -9,8 +9,7 @@ import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
 import com.jarvis.assistant.agent.tools.accessibility.JarvisAccessibilityService
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.*
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,6 +26,7 @@ class ScreenshotTool @Inject constructor(
 
     override val parametersSchema: JsonObject = buildJsonObject {
         put("type", "object")
+        putJsonObject("properties") { }
     }
 
     override suspend fun execute(arguments: JsonObject): ToolExecutionResult {
@@ -39,7 +39,6 @@ class ScreenshotTool @Inject constructor(
             }
         }
 
-        // Если служба специальных возможностей не включена, открываем настройки
         val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
