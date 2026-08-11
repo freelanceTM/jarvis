@@ -2,6 +2,7 @@ package com.jarvis.assistant.data.repository
 
 import android.util.Log
 import com.jarvis.assistant.agent.router.TaskRouter
+import com.jarvis.assistant.agent.tools.intelligence.WebSearchTool
 import com.jarvis.assistant.ai.AIClient
 import com.jarvis.assistant.core.dispatcher.CoroutineDispatchers
 import com.jarvis.assistant.core.result.Resource
@@ -11,6 +12,8 @@ import com.jarvis.assistant.domain.repository.SettingsRepository
 import com.jarvis.assistant.data.preferences.SettingsDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,6 +21,7 @@ import javax.inject.Singleton
 class AIRepositoryImpl @Inject constructor(
     private val aiClient: AIClient,
     private val taskRouter: TaskRouter,
+    private val webSearchTool: WebSearchTool,
     private val dispatchers: CoroutineDispatchers
 ) : AIRepository {
 
@@ -29,11 +33,26 @@ class AIRepositoryImpl @Inject constructor(
         return withContext(dispatchers.io) {
             // Определяем оптимальный уровень модели (Tier 1 Fast / Tier 2 Reasoning / Tier 3 Search)
             val routingDecision = taskRouter.routeTask(prompt)
-            Log.d("AIRepository", "TaskRouter: tier=${routingDecision.tier}, model=${routingDecision.targetModelId}, reason=${routingDecision.reason}")
+            Log.d("AIRepository", "TaskRouter: tier=${routingDecision.tier}, model=${routingDecision.targetModelId}, requiresWebSearch=${routingDecision.requiresWebSearch}")
+
+            // Если нужен веб-поиск — выполняем WebSearchTool и обогащаем системный промпт
+            var enrichedSystemPrompt = systemPrompt
+            if (routingDecision.requiresWebSearch) {
+                try {
+                    val searchResult = webSearchTool.execute(
+                        buildJsonObject { put("query", prompt) }
+                    )
+                    if (searchResult.isSuccess && searchResult.summary.isNotBlank()) {
+                        enrichedSystemPrompt += "\n\nРезультаты поиска в интернете:\n${searchResult.summary}\n\nИспользуй эту информацию для точного и актуального ответа."
+                    }
+                } catch (e: Exception) {
+                    Log.w("AIRepository", "Web search failed or timed out: ${e.localizedMessage}")
+                }
+            }
 
             aiClient.complete(
                 prompt = prompt,
-                systemPrompt = systemPrompt,
+                systemPrompt = enrichedSystemPrompt,
                 history = history,
                 modelOverride = routingDecision.targetModelId
             )

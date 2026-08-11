@@ -1,30 +1,29 @@
 package com.jarvis.assistant.agent.tools.intelligence
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.core.ToolCategory
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.*
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.IOException
 import java.net.URLEncoder
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class WebSearchTool @Inject constructor(
-    @ApplicationContext private val context: Context
+    private val okHttpClient: OkHttpClient
 ) : JarvisTool {
 
     override val toolId: String = "intelligence.web_search"
-    override val description: String = "Выполняет поиск актуальной информации и новостей в интернете через браузер"
+    override val description: String = "Поиск актуальной информации, фактов и новостей в интернете"
     override val category: ToolCategory = ToolCategory.INTELLIGENCE
-    override val riskLevel: ToolRisk = ToolRisk.LOW
+    override val riskLevel: ToolRisk = ToolRisk.SAFE
     override val isOffline: Boolean = false
-    override val executionTimeoutMs: Long = 8000L
-    override val requiresForeground: Boolean = true
+    override val executionTimeoutMs: Long = 10000L
+    override val requiresForeground: Boolean = false
 
     override val parametersSchema: JsonObject = buildJsonObject {
         put("type", "object")
@@ -38,20 +37,92 @@ class WebSearchTool @Inject constructor(
     }
 
     override suspend fun execute(arguments: JsonObject): ToolExecutionResult {
-        val query = arguments["query"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+        val query = arguments["query"]?.jsonPrimitive?.contentOrNull?.trim()
+            ?: return ToolExecutionResult.failure(
+                summary = "Не указан поисковый запрос",
+                error = "MISSING_QUERY"
+            )
+
         if (query.isEmpty()) {
-            return ToolExecutionResult.failure("Пустой поисковый запрос", "EMPTY_QUERY")
+            return ToolExecutionResult.failure(
+                summary = "Пустой поисковый запрос",
+                error = "EMPTY_QUERY"
+            )
         }
 
         return try {
-            val encoded = URLEncoder.encode(query, "UTF-8")
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=$encoded")).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // DuckDuckGo Instant Answer API (бесплатный, без ключа)
+            val encodedQuery = URLEncoder.encode(query, "UTF-8")
+            val url = "https://api.duckduckgo.com/?q=$encodedQuery&format=json&no_html=1&skip_disambig=1"
+
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "JARVIS/1.0")
+                .get()
+                .build()
+
+            val response = okHttpClient.newCall(request).execute()
+            val body = response.body?.string().orEmpty()
+
+            if (response.isSuccessful && body.isNotEmpty()) {
+                val json = Json.parseToJsonElement(body).jsonObject
+
+                // 1. Попробовать AbstractText (краткий ответ)
+                val abstractText = json["AbstractText"]?.jsonPrimitive?.contentOrNull.orEmpty()
+
+                // 2. Если пусто — собрать из RelatedTopics
+                val relatedTopics = json["RelatedTopics"]?.jsonArray
+                val topicsText = relatedTopics
+                    ?.take(3)
+                    ?.mapNotNull { 
+                        if (it is JsonObject) {
+                            it["Text"]?.jsonPrimitive?.contentOrNull
+                        } else null
+                    }
+                    ?.joinToString(". ")
+                    .orEmpty()
+
+                // 3. Answer (для калькулятора, фактов и т.д.)
+                val answer = json["Answer"]?.jsonPrimitive?.contentOrNull.orEmpty()
+
+                val resultText = when {
+                    abstractText.isNotBlank() -> abstractText
+                    answer.isNotBlank() -> answer
+                    topicsText.isNotBlank() -> topicsText
+                    else -> "По запросу \"$query\" актуальных данных не найдено."
+                }
+
+                // Обрезать до 500 символов для голосового ответа
+                val trimmed = if (resultText.length > 500) {
+                    resultText.take(500) + "..."
+                } else {
+                    resultText
+                }
+
+                ToolExecutionResult.success(
+                    summary = trimmed,
+                    data = buildJsonObject {
+                        put("query", query)
+                        put("result", trimmed)
+                        put("source", json["AbstractSource"]?.jsonPrimitive?.contentOrNull ?: "DuckDuckGo")
+                    }
+                )
+            } else {
+                ToolExecutionResult.failure(
+                    summary = "Поиск временно недоступен",
+                    error = "HTTP_${response.code}"
+                )
             }
-            context.startActivity(intent)
-            ToolExecutionResult.success("Ищу в интернете: $query", actionRequiresUser = true)
+        } catch (e: IOException) {
+            ToolExecutionResult.failure(
+                summary = "Нет подключения к интернету для поиска",
+                error = "NO_INTERNET"
+            )
         } catch (e: Exception) {
-            ToolExecutionResult.failure("Не удалось выполнить поиск: ${e.localizedMessage}", "SEARCH_ERROR")
+            ToolExecutionResult.failure(
+                summary = "Ошибка поиска: ${e.localizedMessage ?: e.javaClass.simpleName}",
+                error = e.javaClass.simpleName
+            )
         }
     }
 }
