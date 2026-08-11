@@ -1,7 +1,8 @@
 package com.jarvis.assistant.agent.tools.intelligence
 
 import com.jarvis.assistant.agent.core.JarvisTool
-import com.jarvis.assistant.agent.memory.JarvisMemoryManager
+import com.jarvis.assistant.agent.memory.manager.JarvisMemoryManager
+import com.jarvis.assistant.agent.memory.model.MemoryType
 import com.jarvis.assistant.agent.model.ToolResult
 import com.jarvis.assistant.agent.model.ToolRisk
 import kotlinx.serialization.json.*
@@ -22,11 +23,11 @@ class RememberFactTool @Inject constructor(
         putJsonObject("properties") {
             putJsonObject("key") {
                 put("type", "string")
-                put("description", "Ключ факта (например: name, car, city, project, preference)")
+                put("description", "Ключ факта (например: user.name, user.car, user.city)")
             }
             putJsonObject("value") {
                 put("type", "string")
-                put("description", "Значение факта (например: Алекс, BMW M5, Москва)")
+                put("description", "Значение факта (например: Александр, BMW M5, Москва)")
             }
         }
         put("required", buildJsonArray { add("key"); add("value") })
@@ -40,7 +41,14 @@ class RememberFactTool @Inject constructor(
             return ToolResult.Error("Не указан ключ или значение для сохранения", "MISSING_PARAMS")
         }
 
-        memoryManager.saveFact(key, value)
+        memoryManager.remember(
+            type = MemoryType.FACT,
+            content = "$key: $value",
+            key = key,
+            value = value,
+            importance = 0.9f
+        )
+
         return ToolResult.Success("Запомнил: $key — $value")
     }
 }

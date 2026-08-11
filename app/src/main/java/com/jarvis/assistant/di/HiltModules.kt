@@ -4,8 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import com.jarvis.assistant.agent.core.JarvisTool
-import com.jarvis.assistant.agent.memory.dao.ProceduralMemoryDao
-import com.jarvis.assistant.agent.memory.dao.SemanticMemoryDao
+import com.jarvis.assistant.agent.memory.dao.*
 import com.jarvis.assistant.agent.tools.device.*
 import com.jarvis.assistant.agent.tools.intelligence.RecallMemoryTool
 import com.jarvis.assistant.agent.tools.intelligence.RememberFactTool
@@ -120,11 +119,19 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideSemanticMemoryDao(database: JarvisDatabase): SemanticMemoryDao = database.semanticMemoryDao()
+    fun provideMemoryDao(database: JarvisDatabase): MemoryDao = database.memoryDao()
 
     @Provides
     @Singleton
-    fun provideProceduralMemoryDao(database: JarvisDatabase): ProceduralMemoryDao = database.proceduralMemoryDao()
+    fun provideFactDao(database: JarvisDatabase): FactDao = database.factDao()
+
+    @Provides
+    @Singleton
+    fun providePreferenceDao(database: JarvisDatabase): PreferenceDao = database.preferenceDao()
+
+    @Provides
+    @Singleton
+    fun provideProcedureDao(database: JarvisDatabase): ProcedureDao = database.procedureDao()
 }
 
 @Module

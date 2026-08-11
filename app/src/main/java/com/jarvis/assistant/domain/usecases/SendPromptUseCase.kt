@@ -3,7 +3,7 @@ package com.jarvis.assistant.domain.usecases
 import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.fast.FastCommandRouter
 import com.jarvis.assistant.agent.fast.FastRouteResult
-import com.jarvis.assistant.agent.memory.JarvisMemoryManager
+import com.jarvis.assistant.agent.memory.manager.JarvisMemoryManager
 import com.jarvis.assistant.agent.model.ToolResult
 import com.jarvis.assistant.agent.parser.ToolCallParser
 import com.jarvis.assistant.agent.registry.ToolRegistry
@@ -34,13 +34,16 @@ class SendPromptUseCase @Inject constructor(
             return Resource.Error(IllegalArgumentException("Пустой запрос"))
         }
 
-        // 1. Слой 2: Сохраняем входящее событие в Episodic Memory (Room)
+        // 1. Слой 2 (Episodic Memory): Сохранение входящего события в Room
         val userMessage = Message(
             role = MessageRole.USER,
             text = trimmedPrompt,
             timestamp = System.currentTimeMillis()
         )
         messageRepository.insertMessage(userMessage)
+
+        // 2. Автономное извлечение фактов и предпочтений в фоновом режиме (Cognitive Extraction)
+        memoryManager.extractAndRememberInBackground(trimmedPrompt)
 
         // =========================================================================
         // ⚡ TIER 0: FAST BRAIN (Мгновенное локальное действие без сети и без LLM)
@@ -56,7 +59,6 @@ class SendPromptUseCase @Inject constructor(
                 is ToolResult.Error -> "Не удалось: ${executionResult.message}"
             }
 
-            // Фиксация в памяти
             memoryManager.workingMemory.setLastAction(fastResult.toolCall.name)
 
             val assistantMessage = Message(
@@ -70,13 +72,15 @@ class SendPromptUseCase @Inject constructor(
         }
 
         // =========================================================================
-        // 🧠 TIER 1–3: MULTI-MODEL ROUTER + 4-СЛОЙНАЯ ПАМЯТЬ JARVIS
+        // 🧠 TIER 1–3: MULTI-MODEL TASK ROUTER + СЕМАНТИЧЕСКИЙ ВЕКТОРНЫЙ ПОИСК ПАМЯТИ
         // =========================================================================
         val routingDecision = taskRouter.routeTask(trimmedPrompt)
 
         val baseSystemPrompt = settingsRepository.systemPromptFlow.first()
         val toolsSystemPrompt = toolRegistry.buildSystemPrompt()
-        val memoryContextPrompt = memoryManager.buildMemoryContextPrompt(trimmedPrompt)
+        
+        // Извлекаем только 3-5 самых релевантных фактов по векторному косинусному сходству
+        val memoryContextPrompt = memoryManager.buildPromptMemoryContext(trimmedPrompt)
 
         val fullSystemPrompt = buildString {
             append(baseSystemPrompt)
@@ -90,7 +94,6 @@ class SendPromptUseCase @Inject constructor(
 
         val history = messageRepository.getRecentMessages(limit = 4)
 
-        // Запрос к соответствующей модели через роутер
         val aiResult = aiRepository.generateResponse(
             prompt = trimmedPrompt,
             systemPrompt = fullSystemPrompt,
@@ -126,16 +129,12 @@ class SendPromptUseCase @Inject constructor(
 
         for (res in executionResults) {
             when (res) {
-                is ToolResult.Success -> {
-                    summaries.add(res.message)
-                }
+                is ToolResult.Success -> summaries.add(res.message)
                 is ToolResult.RequiresConfirmation -> {
                     requiresConfirmation = true
                     summaries.add(res.message)
                 }
-                is ToolResult.Error -> {
-                    summaries.add("Не удалось: ${res.message}")
-                }
+                is ToolResult.Error -> summaries.add("Не удалось: ${res.message}")
             }
         }
 
