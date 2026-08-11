@@ -90,7 +90,7 @@ fun MainScreen(
                         color = JarvisCyanPrimary
                     )
                     Text(
-                        text = "v0.2 • Гарнитурный и текстовый режим",
+                        text = "v0.2.4 • Fast Brain & Ear Mode",
                         style = MaterialTheme.typography.labelSmall,
                         color = TextTertiary
                     )
@@ -316,7 +316,8 @@ fun WakeWordStatusBanner(mode: OrchestratorMode, state: VoiceAssistantState, isH
         }
         OrchestratorMode.VERIFYING_KEYWORD -> "● Анализ..." to JarvisCyanPrimary
         OrchestratorMode.LISTENING_USER_QUERY -> "● Слушаю ваш запрос..." to JarvisGreen
-        OrchestratorMode.AI_THINKING -> "● Генерация ответа через AI..." to JarvisCyanSecondary
+        OrchestratorMode.CONTINUOUS_CONVERSATION -> "● Слушаю продолжение (говорите без «Джарвис»)..." to JarvisGreen
+        OrchestratorMode.AI_THINKING -> "● Выполнение команды..." to JarvisCyanSecondary
         OrchestratorMode.TTS_SPEAKING -> "● Озвучивание (скажите «Стоп» для отмены)" to JarvisCyanPrimary
         OrchestratorMode.PAUSED_CALL_OR_SLEEP -> {
             if (!isHeadsetConnected) "● Наушники отключены (Пауза)" to JarvisAmber

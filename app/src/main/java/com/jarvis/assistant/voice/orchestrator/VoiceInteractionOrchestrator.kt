@@ -26,12 +26,13 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 enum class OrchestratorMode {
-    STANDBY_WAKE_WORD,     // Ожидание
-    VERIFYING_KEYWORD,     // Анализ
-    LISTENING_USER_QUERY,  // Запись голоса
-    AI_THINKING,           // Запрос AI
-    TTS_SPEAKING,          // Озвучивание ответа
-    PAUSED_CALL_OR_SLEEP   // Пауза
+    STANDBY_WAKE_WORD,        // Ожидание «Джарвис»
+    VERIFYING_KEYWORD,        // Анализ
+    LISTENING_USER_QUERY,     // Запись голоса
+    CONTINUOUS_CONVERSATION,  // Диалоговое окно (без повтора «Джарвис»)
+    AI_THINKING,              // Запрос AI / Fast Router
+    TTS_SPEAKING,             // Озвучивание ответа
+    PAUSED_CALL_OR_SLEEP      // Пауза
 }
 
 @Singleton
@@ -62,6 +63,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private var toneGenerator: ToneGenerator? = null
     private var aiJob: Job? = null
     private var silenceJob: Job? = null
+    private var followUpWindowJob: Job? = null
     private var isServiceActive = false
 
     private var speechRate = 1.05f
@@ -150,6 +152,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
             return
         }
 
+        followUpWindowJob?.cancel()
         _currentMode.value = OrchestratorMode.STANDBY_WAKE_WORD
         _assistantState.value = VoiceAssistantState.Idle
         speechRecognizerManager.stopListening()
@@ -168,15 +171,17 @@ class VoiceInteractionOrchestrator @Inject constructor(
             speechRecognizerManager.speechState.collectLatest { event ->
                 when (event) {
                     is SpeechRecognitionEvent.PartialResult -> {
-                        if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY) {
+                        if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY ||
+                            _currentMode.value == OrchestratorMode.CONTINUOUS_CONVERSATION) {
                             _assistantState.value = VoiceAssistantState.Recognizing(event.partialText)
                             _lastQuery.value = cleanWakeWord(event.partialText)
 
-                            // Быстрая авто-отправка через 900мс тишины
+                            // Быстрая авто-отправка через 850мс тишины
                             silenceJob?.cancel()
                             silenceJob = scope.launch {
-                                delay(900)
-                                if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY && event.partialText.isNotBlank()) {
+                                delay(850)
+                                val current = _currentMode.value
+                                if ((current == OrchestratorMode.LISTENING_USER_QUERY || current == OrchestratorMode.CONTINUOUS_CONVERSATION) && event.partialText.isNotBlank()) {
                                     speechRecognizerManager.stopListening()
                                     processUserQuery(cleanWakeWord(event.partialText))
                                 }
@@ -201,8 +206,9 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     }
                     is SpeechRecognitionEvent.RecognitionError -> {
                         silenceJob?.cancel()
-                        if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY) {
-                            delay(500)
+                        if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY ||
+                            _currentMode.value == OrchestratorMode.CONTINUOUS_CONVERSATION) {
+                            delay(400)
                             startStandbyMode()
                         }
                     }
@@ -227,6 +233,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
         }
 
         playWakeChime()
+        followUpWindowJob?.cancel()
         _currentMode.value = OrchestratorMode.AI_THINKING
         _assistantState.value = VoiceAssistantState.Thinking
         _lastQuery.value = query
@@ -241,7 +248,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     _currentMode.value = OrchestratorMode.TTS_SPEAKING
                     _assistantState.value = VoiceAssistantState.Speaking(answer)
 
-                    // Озвучиваем живым нейро-голосом
+                    // Озвучиваем ответ живым нейро-голосом
                     textToSpeechManager.speak(answer, speechRate, speechPitch)
                 }
                 is Resource.Error -> {
@@ -249,7 +256,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     _lastAnswer.value = "Ошибка: $errorMsg"
                     _assistantState.value = VoiceAssistantState.Error(errorMsg)
                     textToSpeechManager.speak(errorMsg, speechRate, speechPitch)
-                    delay(2500)
+                    delay(2000)
                     startStandbyMode()
                 }
                 is Resource.Loading -> Unit
@@ -263,7 +270,8 @@ class VoiceInteractionOrchestrator @Inject constructor(
                 when (ttsState) {
                     is TtsState.Finished -> {
                         if (_currentMode.value == OrchestratorMode.TTS_SPEAKING) {
-                            startStandbyMode()
+                            // v0.2.3 Continuous Conversation: Открываем 4-секундное окно для следующего вопроса без повтора «Джарвис»
+                            openContinuousConversationWindow()
                         }
                     }
                     is TtsState.Error -> {
@@ -275,8 +283,25 @@ class VoiceInteractionOrchestrator @Inject constructor(
         }
     }
 
+    private fun openContinuousConversationWindow() {
+        if (!isServiceActive) return
+        _currentMode.value = OrchestratorMode.CONTINUOUS_CONVERSATION
+        _assistantState.value = VoiceAssistantState.Idle
+        wakeWordDetector.stopListening()
+        speechRecognizerManager.startListening()
+
+        followUpWindowJob?.cancel()
+        followUpWindowJob = scope.launch {
+            delay(4000) // 4 секунды на продолжение диалога
+            if (_currentMode.value == OrchestratorMode.CONTINUOUS_CONVERSATION) {
+                startStandbyMode()
+            }
+        }
+    }
+
     private fun handleCancel() {
         silenceJob?.cancel()
+        followUpWindowJob?.cancel()
         aiJob?.cancel()
         aiJob = null
         textToSpeechManager.stop()
@@ -286,13 +311,13 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
     private fun playWakeChime() {
         try {
-            toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 100)
+            toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 80)
         } catch (_: Exception) { }
     }
 
     private fun playCancelChime() {
         try {
-            toneGenerator?.startTone(ToneGenerator.TONE_PROP_NACK, 90)
+            toneGenerator?.startTone(ToneGenerator.TONE_PROP_NACK, 70)
         } catch (_: Exception) { }
     }
 
@@ -309,6 +334,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
     fun stopAll() {
         silenceJob?.cancel()
+        followUpWindowJob?.cancel()
         aiJob?.cancel()
         aiJob = null
         wakeWordDetector.stopListening()

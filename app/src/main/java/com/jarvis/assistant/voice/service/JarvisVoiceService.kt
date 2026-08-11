@@ -110,12 +110,13 @@ class JarvisVoiceService : Service() {
         serviceScope.launch {
             orchestrator.currentMode.collectLatest { mode ->
                 val statusText = when (mode) {
-                    OrchestratorMode.STANDBY_WAKE_WORD -> "● Ожидание фразы «Джарвис»..."
+                    OrchestratorMode.STANDBY_WAKE_WORD -> "● Ожидание фразы «Джарвис» в наушнике..."
                     OrchestratorMode.VERIFYING_KEYWORD -> "● Проверка голоса..."
                     OrchestratorMode.LISTENING_USER_QUERY -> "● Слушаю ваш запрос..."
-                    OrchestratorMode.AI_THINKING -> "● Генерация ответа через AI..."
+                    OrchestratorMode.CONTINUOUS_CONVERSATION -> "● Слушаю продолжение диалога..."
+                    OrchestratorMode.AI_THINKING -> "● Выполнение команды..."
                     OrchestratorMode.TTS_SPEAKING -> "● Озвучивание (скажите «Стоп» для отмены)..."
-                    OrchestratorMode.PAUSED_CALL_OR_SLEEP -> "● Энергосбережение / Пауза"
+                    OrchestratorMode.PAUSED_CALL_OR_SLEEP -> "● Наушники отключены / Пауза"
                 }
                 updateNotification(statusText)
             }
@@ -175,7 +176,7 @@ class JarvisVoiceService : Service() {
         val pendingStop = PendingIntent.getService(this, 2, stopIntent, PendingIntent.FLAG_IMMUTABLE)
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("JARVIS v0.2")
+            .setContentTitle("JARVIS v0.2.4 (Ear Mode)")
             .setContentText(statusText)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentIntent(pendingMain)
