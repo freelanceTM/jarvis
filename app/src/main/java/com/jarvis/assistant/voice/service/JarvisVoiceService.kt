@@ -8,13 +8,13 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.telephony.PhoneStateListener
 import android.telephony.TelephonyManager
 import androidx.core.app.NotificationCompat
-import com.jarvis.assistant.R
 import com.jarvis.assistant.presentation.MainActivity
 import com.jarvis.assistant.voice.orchestrator.OrchestratorMode
 import com.jarvis.assistant.voice.orchestrator.VoiceInteractionOrchestrator
@@ -37,7 +37,8 @@ class JarvisVoiceService : Service() {
     private var telephonyManager: TelephonyManager? = null
 
     companion object {
-        const val CHANNEL_ID = "jarvis_voice_channel"
+        const val CHANNEL_ID = "jarvis_voice"
+        const val CHANNEL_NAME = "JARVIS Voice Service"
         const val NOTIFICATION_ID = 1001
 
         const val ACTION_START = "com.jarvis.action.START_SERVICE"
@@ -60,7 +61,7 @@ class JarvisVoiceService : Service() {
             val intent = Intent(context, JarvisVoiceService::class.java).apply {
                 action = ACTION_STOP
             }
-            context.startService(intent)
+            context.stopService(intent)
         }
     }
 
@@ -82,6 +83,7 @@ class JarvisVoiceService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        startServiceForeground(buildNotification("JARVIS слушает..."))
         acquireWakeLock()
         registerPhoneStateListener()
         observeOrchestrator()
@@ -90,7 +92,7 @@ class JarvisVoiceService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START, ACTION_RESUME -> {
-                startForeground(NOTIFICATION_ID, buildNotification("JARVIS активен (Скажите «Джарвис»)..."))
+                startServiceForeground(buildNotification("JARVIS слушает..."))
                 orchestrator.startServicePipeline()
             }
             ACTION_PAUSE -> {
@@ -102,21 +104,36 @@ class JarvisVoiceService : Service() {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
+            else -> {
+                orchestrator.startServicePipeline()
+            }
         }
         return START_STICKY
+    }
+
+    private fun startServiceForeground(notification: Notification) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     private fun observeOrchestrator() {
         serviceScope.launch {
             orchestrator.currentMode.collectLatest { mode ->
                 val statusText = when (mode) {
-                    OrchestratorMode.STANDBY_WAKE_WORD -> "● Ожидание фразы «Джарвис» в наушнике..."
-                    OrchestratorMode.VERIFYING_KEYWORD -> "● Проверка голоса..."
-                    OrchestratorMode.LISTENING_USER_QUERY -> "● Слушаю ваш запрос..."
-                    OrchestratorMode.CONTINUOUS_CONVERSATION -> "● Слушаю продолжение диалога..."
-                    OrchestratorMode.AI_THINKING -> "● Выполнение команды..."
-                    OrchestratorMode.TTS_SPEAKING -> "● Озвучивание (скажите «Стоп» для отмены)..."
-                    OrchestratorMode.PAUSED_CALL_OR_SLEEP -> "● Наушники отключены / Пауза"
+                    OrchestratorMode.STANDBY_WAKE_WORD -> "JARVIS слушает (в наушнике)..."
+                    OrchestratorMode.VERIFYING_KEYWORD -> "Анализ голоса..."
+                    OrchestratorMode.LISTENING_USER_QUERY -> "Слушаю ваш запрос..."
+                    OrchestratorMode.CONTINUOUS_CONVERSATION -> "Слушаю продолжение диалога..."
+                    OrchestratorMode.AI_THINKING -> "Выполнение команды..."
+                    OrchestratorMode.TTS_SPEAKING -> "Озвучивание ответа..."
+                    OrchestratorMode.PAUSED_CALL_OR_SLEEP -> "Наушники отключены / Пауза"
                 }
                 updateNotification(statusText)
             }
@@ -151,10 +168,10 @@ class JarvisVoiceService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Голосовой сервис JARVIS",
+                CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Фоновое распознавание фразы «Джарвис» и голосовые ответы"
+                description = "Фоновое распознавание ключевого слова и голосовые ответы"
                 setShowBadge(false)
             }
             val manager = getSystemService(NotificationManager::class.java)
@@ -169,20 +186,16 @@ class JarvisVoiceService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val pauseIntent = Intent(this, JarvisVoiceService::class.java).apply { action = ACTION_PAUSE }
-        val pendingPause = PendingIntent.getService(this, 1, pauseIntent, PendingIntent.FLAG_IMMUTABLE)
-
         val stopIntent = Intent(this, JarvisVoiceService::class.java).apply { action = ACTION_STOP }
         val pendingStop = PendingIntent.getService(this, 2, stopIntent, PendingIntent.FLAG_IMMUTABLE)
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("JARVIS v0.2.4 (Ear Mode)")
+            .setContentTitle("JARVIS Voice Service")
             .setContentText(statusText)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentIntent(pendingMain)
             .setOngoing(true)
-            .addAction(android.R.drawable.ic_media_pause, "Пауза", pendingPause)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Завершить", pendingStop)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Остановить", pendingStop)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .build()

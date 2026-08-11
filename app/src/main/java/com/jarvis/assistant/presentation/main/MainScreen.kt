@@ -90,7 +90,7 @@ fun MainScreen(
                         color = JarvisCyanPrimary
                     )
                     Text(
-                        text = "v0.2.4 • Fast Brain & Ear Mode",
+                        text = "v0.6 • Foreground Voice Service",
                         style = MaterialTheme.typography.labelSmall,
                         color = TextTertiary
                     )
@@ -164,7 +164,7 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // 4. Action Buttons (Voice Service & Open Chat Mode)
+            // 4. Primary Foreground Service Launch / Stop Buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -190,7 +190,7 @@ fun MainScreen(
                     },
                     shape = RoundedCornerShape(22.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (uiState.isBackgroundServiceActive) JarvisGreen else JarvisCyanPrimary,
+                        containerColor = if (uiState.isBackgroundServiceActive) JarvisRed else JarvisGreen,
                         contentColor = JarvisBackground
                     ),
                     modifier = Modifier
@@ -203,15 +203,17 @@ fun MainScreen(
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Icon(
-                            imageVector = if (uiState.isBackgroundServiceActive) Icons.Default.Headphones else Icons.Default.MicNone,
+                            imageVector = if (uiState.isBackgroundServiceActive) Icons.Default.Stop else Icons.Default.PlayArrow,
                             contentDescription = null,
-                            modifier = Modifier.size(22.dp)
+                            tint = JarvisBackground,
+                            modifier = Modifier.size(24.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (uiState.isBackgroundServiceActive) "В наушнике: ВКЛ" else "Включить голос",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold
+                            text = if (uiState.isBackgroundServiceActive) "Остановить JARVIS" else "Запустить JARVIS",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = JarvisBackground
                         )
                     }
                 }
@@ -226,13 +228,13 @@ fun MainScreen(
                     ),
                     border = BorderStroke(1.dp, JarvisCyanPrimary.copy(alpha = 0.5f)),
                     modifier = Modifier
-                        .weight(1f)
+                        .weight(0.9f)
                         .height(56.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(imageVector = Icons.Default.Forum, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Открыть Чат", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Чат", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -279,7 +281,7 @@ fun MainScreen(
                         text = if (uiState.lastUserQuery.isNotEmpty()) {
                             "Вы: ${uiState.lastUserQuery}"
                         } else {
-                            "Скажите «Джарвис» в наушник или откройте Чат..."
+                            "Скажите «Джарвис» в наушник или нажмите «Запустить JARVIS»..."
                         },
                         style = MaterialTheme.typography.bodyLarge,
                         color = if (uiState.lastUserQuery.isNotEmpty()) TextPrimary else TextTertiary
@@ -311,7 +313,7 @@ fun MainScreen(
 fun WakeWordStatusBanner(mode: OrchestratorMode, state: VoiceAssistantState, isHeadsetConnected: Boolean) {
     val (label, color) = when (mode) {
         OrchestratorMode.STANDBY_WAKE_WORD -> {
-            if (isHeadsetConnected) "● Ожидание фразы «Джарвис» в наушнике" to JarvisCyanPrimary
+            if (isHeadsetConnected) "● JARVIS слушает в наушнике (Скажите «Джарвис»)" to JarvisCyanPrimary
             else "● Подключите наушники для работы" to JarvisAmber
         }
         OrchestratorMode.VERIFYING_KEYWORD -> "● Анализ..." to JarvisCyanPrimary
@@ -321,7 +323,7 @@ fun WakeWordStatusBanner(mode: OrchestratorMode, state: VoiceAssistantState, isH
         OrchestratorMode.TTS_SPEAKING -> "● Озвучивание (скажите «Стоп» для отмены)" to JarvisCyanPrimary
         OrchestratorMode.PAUSED_CALL_OR_SLEEP -> {
             if (!isHeadsetConnected) "● Наушники отключены (Пауза)" to JarvisAmber
-            else "● Энергосбережение / Пауза" to TextTertiary
+            else "● Энергосбережение / Сервис остановлен" to TextTertiary
         }
     }
 
