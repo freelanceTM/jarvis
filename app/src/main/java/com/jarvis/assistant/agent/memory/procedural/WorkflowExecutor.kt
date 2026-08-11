@@ -25,10 +25,8 @@ class WorkflowExecutor @Inject constructor(
             .replace(Regex("^(джарвис|jarvis|жарвис)[,\\s]*"), "")
             .trim()
 
-        // 1. Поиск в БД
         var workflow = procedureDao.getProcedureByTrigger(cleanTrigger)
 
-        // 2. Встроенные сценарии по умолчанию
         if (workflow == null) {
             when {
                 cleanTrigger == "сон" || cleanTrigger == "я спать" || cleanTrigger == "спокойной ночи" || cleanTrigger == "я пошел спать" -> {
@@ -74,20 +72,19 @@ class WorkflowExecutor @Inject constructor(
             ToolCall(name = "set_volume", arguments = buildJsonObject { put("action", "set"); put("percent", 10) }),
             ToolCall(name = "flashlight", arguments = buildJsonObject { put("enabled", false) })
         )
-        registerWorkflow("сон", sleepActions, "Режим подготовки ко сну")
+        registerWorkflow("сон", sleepActions)
 
         // Сценарий "Работа": открыть Telegram и установить громкость 50%
         val workActions = listOf(
             ToolCall(name = "open_app", arguments = buildJsonObject { put("app_name", "telegram") }),
             ToolCall(name = "set_volume", arguments = buildJsonObject { put("action", "set"); put("percent", 50) })
         )
-        registerWorkflow("работа", workActions, "Рабочий режим")
+        registerWorkflow("работа", workActions)
     }
 
     suspend fun registerWorkflow(
         trigger: String,
-        actions: List<ToolCall>,
-        description: String = ""
+        actions: List<ToolCall>
     ) = withContext(Dispatchers.IO) {
         val actionsJson = buildString {
             append("[")
@@ -102,7 +99,6 @@ class WorkflowExecutor @Inject constructor(
             ProcedureEntity(
                 triggerPhrase = trigger.trim().lowercase(),
                 actionsJson = actionsJson,
-                description = description,
                 executionCount = 0,
                 updatedAt = System.currentTimeMillis()
             )
