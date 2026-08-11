@@ -2,6 +2,7 @@ package com.jarvis.assistant.agent.registry
 
 import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.core.ToolCategory
+import com.jarvis.assistant.agent.discovery.ToolDiscoveryEngine
 import com.jarvis.assistant.agent.model.ToolDefinition
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import kotlinx.serialization.json.JsonObject
@@ -10,9 +11,9 @@ import javax.inject.Singleton
 
 @Singleton
 class ToolRegistry @Inject constructor(
-    tools: Set<@JvmSuppressWildcards JarvisTool>
+    tools: Set<@JvmSuppressWildcards JarvisTool>,
+    private val discoveryEngine: ToolDiscoveryEngine
 ) {
-    // Индексация по полному toolId и короткому имени для обратной совместимости
     private val toolsById: Map<String, JarvisTool> = tools.associateBy { it.toolId }
     private val toolsByName: Map<String, JarvisTool> = tools.associateBy { it.name.substringAfterLast(".") }
 
@@ -27,6 +28,21 @@ class ToolRegistry @Inject constructor(
     }
 
     fun getToolDefinitions(): List<ToolDefinition> = toolsById.values.map { it.toDefinition() }
+
+    /**
+     * Tool Discovery 2.0: Динамически отбирает 3-4 инструмента под конкретный запрос
+     */
+    fun discoverRelevantTools(userQuery: String, maxTools: Int = 4): List<JarvisTool> {
+        return discoveryEngine.discoverTools(userQuery, getAllTools(), maxTools)
+    }
+
+    /**
+     * Формирует сжатый системный промпт ТОЛЬКО для найденных через Discovery инструментов
+     */
+    fun buildTargetedSystemPrompt(userQuery: String): String {
+        val discovered = discoverRelevantTools(userQuery)
+        return discoveryEngine.buildTargetedToolsPrompt(discovered)
+    }
 
     suspend fun execute(toolIdentifier: String, arguments: JsonObject): ToolExecutionResult {
         val tool = getTool(toolIdentifier)
@@ -48,35 +64,5 @@ class ToolRegistry @Inject constructor(
                 executionTimeMs = duration
             )
         }
-    }
-
-    /**
-     * Формирует системную инструкцию со спецификациями схемы Tool Registry 2.0
-     */
-    fun buildSystemPrompt(): String {
-        val sb = StringBuilder()
-        sb.append("Ты автономный агент JARVIS, управляющий операционной системой Android.\n")
-        sb.append("Доступные зарегистрированные инструменты (Tool Registry 2.0):\n")
-
-        toolsById.values.forEach { tool ->
-            val offlineBadge = if (tool.isOffline) "[ОФЛАЙН]" else "[ОНЛАЙН]"
-            sb.append("- \"${tool.toolId}\" $offlineBadge: ${tool.description}. Схема: ${tool.parametersSchema}\n")
-        }
-
-        sb.append("\nПРАВИЛА СТРУКТУРИРОВАННОГО ВЫЗОВА (JSON):\n")
-        sb.append("Если запрос пользователя требует действий, верни JSON строго в формате:\n")
-        sb.append("```json\n")
-        sb.append("{\n")
-        sb.append("  \"tool_calls\": [\n")
-        sb.append("    {\n")
-        sb.append("      \"tool\": \"идентификатор_инструмента\",\n")
-        sb.append("      \"arguments\": { ... }\n")
-        sb.append("    }\n")
-        sb.append("  ]\n")
-        sb.append("}\n")
-        sb.append("```\n")
-        sb.append("Если действие не требуется — отвечай кратко в 1-2 предложения.\n")
-
-        return sb.toString()
     }
 }

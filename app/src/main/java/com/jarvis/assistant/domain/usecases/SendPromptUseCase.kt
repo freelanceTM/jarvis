@@ -74,7 +74,6 @@ class SendPromptUseCase @Inject constructor(
 
         // =========================================================================
         // 🧠 ЭТАП 2: ДИНАМИЧЕСКИЙ ПЛАНИРОВЩИК (Intent ──► Plan ──► Execute ──► Observe)
-        // Пример: «Джарвис, я ухожу», «Я дома», «Подготовь ко сну»
         // =========================================================================
         val dynamicPlan = cognitivePlanner.planForGoal(trimmedPrompt)
         if (dynamicPlan != null) {
@@ -106,11 +105,13 @@ class SendPromptUseCase @Inject constructor(
         }
 
         // =========================================================================
-        // 🧠 ЭТАП 4: TIER 1-3 AI PLANNING & REASONING С СЕМАНТИЧЕСКОЙ ПАМЯТЬЮ
+        // 🔍 ЭТАП 4: TOOL DISCOVERY 2.0 + СЕМАНТИЧЕСКАЯ ПАМЯТЬ + AI BRAIN
         // =========================================================================
         val routingDecision = taskRouter.routeTask(trimmedPrompt)
         val baseSystemPrompt = settingsRepository.systemPromptFlow.first()
-        val toolsSystemPrompt = toolRegistry.buildSystemPrompt()
+
+        // ДИНАМИЧЕСКИЙ TOOL DISCOVERY: Отбираем ТОЛЬКО 2-4 нужных инструмента
+        val targetedToolsPrompt = toolRegistry.buildTargetedSystemPrompt(trimmedPrompt)
         
         // 3-4 релевантных факта по векторному сходству
         val memoryContextPrompt = memoryManager.buildPromptMemoryContext(trimmedPrompt)
@@ -122,7 +123,7 @@ class SendPromptUseCase @Inject constructor(
                 append(memoryContextPrompt)
                 append("\n\n")
             }
-            append(toolsSystemPrompt)
+            append(targetedToolsPrompt)
         }
 
         val history = messageRepository.getRecentMessages(limit = 4)
@@ -136,7 +137,6 @@ class SendPromptUseCase @Inject constructor(
         if (aiResult is Resource.Success) {
             val rawOutput = aiResult.data.trim()
 
-            // Проверяем, вернул ли AI план выполнения действий
             val llmPlan = cognitivePlanner.planForGoal(trimmedPrompt, rawOutput)
             val finalVoiceAnswer = if (llmPlan != null && llmPlan.steps.isNotEmpty()) {
                 val loopSummary = agentCognitiveLoop.runPlan(llmPlan)
