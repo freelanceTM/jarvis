@@ -3,8 +3,7 @@ package com.jarvis.assistant.agent.tools.system
 import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.model.ToolResult
 import com.jarvis.assistant.agent.model.ToolRisk
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.*
 import java.text.SimpleDateFormat
 import java.util.*
 import javax.inject.Inject
@@ -19,7 +18,7 @@ class GetTimeTool @Inject constructor() : JarvisTool {
 
     override val parametersSchema: JsonObject = buildJsonObject {
         put("type", "object")
-        put("properties", buildJsonObject { })
+        putJsonObject("properties") { }
     }
 
     override suspend fun execute(arguments: JsonObject): ToolResult {

@@ -7,9 +7,7 @@ import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.model.ToolResult
 import com.jarvis.assistant.agent.model.ToolRisk
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import kotlinx.serialization.json.*
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,12 +22,12 @@ class SetBrightnessTool @Inject constructor(
 
     override val parametersSchema: JsonObject = buildJsonObject {
         put("type", "object")
-        put("properties", buildJsonObject {
-            put("level", buildJsonObject {
+        putJsonObject("properties") {
+            putJsonObject("level") {
                 put("type", "number")
                 put("description", "Уровень яркости (0-100)")
-            })
-        })
+            }
+        }
     }
 
     override suspend fun execute(arguments: JsonObject): ToolResult {

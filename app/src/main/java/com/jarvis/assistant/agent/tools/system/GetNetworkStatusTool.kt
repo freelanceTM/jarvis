@@ -7,8 +7,7 @@ import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.model.ToolResult
 import com.jarvis.assistant.agent.model.ToolRisk
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.*
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,7 +22,7 @@ class GetNetworkStatusTool @Inject constructor(
 
     override val parametersSchema: JsonObject = buildJsonObject {
         put("type", "object")
-        put("properties", buildJsonObject { })
+        putJsonObject("properties") { }
     }
 
     override suspend fun execute(arguments: JsonObject): ToolResult {
