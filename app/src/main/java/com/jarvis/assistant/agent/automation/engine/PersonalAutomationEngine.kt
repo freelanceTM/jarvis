@@ -1,5 +1,6 @@
 package com.jarvis.assistant.agent.automation.engine
 
+import android.util.Log
 import com.jarvis.assistant.agent.automation.dao.AutomationDao
 import com.jarvis.assistant.agent.automation.entity.AutomationEntity
 import com.jarvis.assistant.agent.automation.model.AutomationTriggerType
@@ -30,9 +31,12 @@ class PersonalAutomationEngine @Inject constructor(
      * Обработка системного события (например: подключение наушников, смена Wi-Fi, падение батареи)
      */
     suspend fun onSystemEvent(triggerType: AutomationTriggerType, extraData: Map<String, Any> = emptyMap()) = withContext(Dispatchers.IO) {
+        Log.d("AutomationEngine", ">>> Event received: ${triggerType.name}")
+
         initDefaultAutomationsIfNeeded()
 
         val candidateRules = automationDao.getAutomationsByTrigger(triggerType.name)
+        Log.d("AutomationEngine", "Found ${candidateRules.size} rules for ${triggerType.name}")
         if (candidateRules.isEmpty()) return@withContext
 
         val now = Calendar.getInstance(Locale.getDefault())
@@ -42,12 +46,14 @@ class PersonalAutomationEngine @Inject constructor(
         for (rule in candidateRules) {
             // 1. Проверка предусловий (Conditions: Time Window)
             if (!isConditionSatisfied(rule.conditionsJson, currentHour, currentMinute)) {
+                Log.d("AutomationEngine", "Rule '${rule.name}' skipped: time condition not satisfied")
                 continue
             }
 
             // 2. Парсинг и последовательное выполнение действий инструмента
             val calls = parseActionCalls(rule.actionsJson)
             if (calls.isNotEmpty()) {
+                Log.d("AutomationEngine", "Executing ${calls.size} actions for rule '${rule.name}'")
                 val results = toolExecutor.executeAll(calls)
                 automationDao.recordTrigger(rule.id)
 

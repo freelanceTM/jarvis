@@ -5,25 +5,39 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.net.wifi.WifiManager
+import android.util.Log
 import com.jarvis.assistant.agent.automation.engine.PersonalAutomationEngine
 import com.jarvis.assistant.agent.automation.model.AutomationTriggerType
-import dagger.hilt.android.AndroidEntryPoint
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@AndroidEntryPoint
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface SystemEventReceiverEntryPoint {
+    fun automationEngine(): PersonalAutomationEngine
+}
+
 class SystemEventReceiver : BroadcastReceiver() {
-
-    @Inject
-    lateinit var automationEngine: PersonalAutomationEngine
 
     private val receiverScope = CoroutineScope(Dispatchers.IO)
 
     override fun onReceive(context: Context?, intent: Intent?) {
-        val action = intent?.action ?: return
+        if (context == null || intent == null) return
+
+        val action = intent.action ?: return
+        Log.d("SystemEventReceiver", "onReceive action: $action")
+
+        // Безопасное получение automationEngine через Hilt EntryPoint
+        val entryPoint = EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            SystemEventReceiverEntryPoint::class.java
+        )
+        val automationEngine = entryPoint.automationEngine()
 
         when (action) {
             // 🎧 1. Проводные наушники
