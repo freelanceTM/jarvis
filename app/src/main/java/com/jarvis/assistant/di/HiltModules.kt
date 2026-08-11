@@ -22,7 +22,7 @@ import com.jarvis.assistant.data.repository.SettingsRepositoryImpl
 import com.jarvis.assistant.domain.repository.AIRepository
 import com.jarvis.assistant.domain.repository.MessageRepository
 import com.jarvis.assistant.domain.repository.SettingsRepository
-import com.jarvis.assistant.voice.wakeword.NativeWakeWordDetector
+import com.jarvis.assistant.voice.wakeword.AlisaStyleWakeWordEngine
 import com.jarvis.assistant.voice.wakeword.WakeWordDetector
 import dagger.Binds
 import dagger.Module
@@ -63,7 +63,7 @@ abstract class SecurityAndNetworkBindingModule {
 
     @Binds
     @Singleton
-    abstract fun bindWakeWordDetector(impl: NativeWakeWordDetector): WakeWordDetector
+    abstract fun bindWakeWordDetector(impl: AlisaStyleWakeWordEngine): WakeWordDetector
 }
 
 @Module
