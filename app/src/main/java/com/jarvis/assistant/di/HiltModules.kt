@@ -5,10 +5,16 @@ import androidx.room.Room
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.memory.dao.*
+import com.jarvis.assistant.agent.tools.communication.*
 import com.jarvis.assistant.agent.tools.device.*
 import com.jarvis.assistant.agent.tools.intelligence.RecallMemoryTool
 import com.jarvis.assistant.agent.tools.intelligence.RememberFactTool
 import com.jarvis.assistant.agent.tools.intelligence.WebSearchTool
+import com.jarvis.assistant.agent.tools.location.LocationNavigationTool
+import com.jarvis.assistant.agent.tools.media.MediaControlTool
+import com.jarvis.assistant.agent.tools.productivity.AlarmTimerTool
+import com.jarvis.assistant.agent.tools.productivity.CalendarTool
+import com.jarvis.assistant.agent.tools.productivity.ClipboardTool
 import com.jarvis.assistant.agent.tools.system.*
 import com.jarvis.assistant.ai.AIClient
 import com.jarvis.assistant.ai.UniversalAIClient
@@ -77,21 +83,38 @@ abstract class SecurityAndNetworkBindingModule {
     @Multibinds
     abstract fun bindToolsSet(): Set<JarvisTool>
 
-    // 1. Системные инструменты
+    // 1. Системные инструменты (System)
     @Binds @IntoSet abstract fun bindGetDeviceInfoTool(tool: GetDeviceInfoTool): JarvisTool
     @Binds @IntoSet abstract fun bindGetBatteryTool(tool: GetBatteryTool): JarvisTool
     @Binds @IntoSet abstract fun bindGetTimeTool(tool: GetTimeTool): JarvisTool
     @Binds @IntoSet abstract fun bindGetNetworkStatusTool(tool: GetNetworkStatusTool): JarvisTool
 
-    // 2. Инструменты устройства
+    // 2. Управление устройством (Device & Media)
     @Binds @IntoSet abstract fun bindOpenAppTool(tool: OpenAppTool): JarvisTool
     @Binds @IntoSet abstract fun bindSetVolumeTool(tool: SetVolumeTool): JarvisTool
     @Binds @IntoSet abstract fun bindSetBrightnessTool(tool: SetBrightnessTool): JarvisTool
     @Binds @IntoSet abstract fun bindFlashlightTool(tool: FlashlightTool): JarvisTool
     @Binds @IntoSet abstract fun bindBluetoothTool(tool: BluetoothTool): JarvisTool
     @Binds @IntoSet abstract fun bindWifiTool(tool: WifiTool): JarvisTool
+    @Binds @IntoSet abstract fun bindDoNotDisturbTool(tool: DoNotDisturbTool): JarvisTool
+    @Binds @IntoSet abstract fun bindScreenshotTool(tool: ScreenshotTool): JarvisTool
+    @Binds @IntoSet abstract fun bindMediaControlTool(tool: MediaControlTool): JarvisTool
 
-    // 3. Инструменты интеллекта и памяти
+    // 3. Связь и коммуникации (Communication)
+    @Binds @IntoSet abstract fun bindCallTool(tool: CallTool): JarvisTool
+    @Binds @IntoSet abstract fun bindSmsTool(tool: SmsTool): JarvisTool
+    @Binds @IntoSet abstract fun bindContactsTool(tool: ContactsTool): JarvisTool
+    @Binds @IntoSet abstract fun bindShareTool(tool: ShareTool): JarvisTool
+
+    // 4. Продуктивность и задачи (Productivity)
+    @Binds @IntoSet abstract fun bindAlarmTimerTool(tool: AlarmTimerTool): JarvisTool
+    @Binds @IntoSet abstract fun bindCalendarTool(tool: CalendarTool): JarvisTool
+    @Binds @IntoSet abstract fun bindClipboardTool(tool: ClipboardTool): JarvisTool
+
+    // 5. Локация и навигация (Location)
+    @Binds @IntoSet abstract fun bindLocationNavigationTool(tool: LocationNavigationTool): JarvisTool
+
+    // 6. Интеллект, память и поиск (Intelligence)
     @Binds @IntoSet abstract fun bindRememberFactTool(tool: RememberFactTool): JarvisTool
     @Binds @IntoSet abstract fun bindRecallMemoryTool(tool: RecallMemoryTool): JarvisTool
     @Binds @IntoSet abstract fun bindWebSearchTool(tool: WebSearchTool): JarvisTool
