@@ -7,7 +7,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Tool Discovery Engine (Семантический фильтр инструментов)
+ * Tool Discovery Engine (Семантический фильтр инструментов с поддержкой словаря синонимов)
  * Динамически подбирает только 3–5 самых релевантных инструментов под конкретный запрос пользователя.
  * Предотвращает раздувание промпта, галлюцинации моделей и снижает задержку LLM.
  */
@@ -43,12 +43,21 @@ class ToolDiscoveryEngine @Inject constructor(
             val toolVector = vectorEngine.createEmbedding(toolText)
             val semanticScore = vectorEngine.computeCosineSimilarity(queryVector, toolVector)
 
-            // Лексический буст за прямое совпадение ключевых слов
+            // Лексический буст за прямое совпадение ключевых слов и синонимов
             var lexicalBoost = 0f
             val words = q.split(Regex("[\\s,?.!]+")).filter { it.length >= 3 }
             for (word in words) {
                 if (toolText.contains(word)) {
                     lexicalBoost += 0.35f
+                }
+
+                // Synonym boost через расширенный словарь синонимов
+                val synonyms = SynonymDictionary.getSynonyms(word)
+                for (syn in synonyms) {
+                    if (toolText.contains(syn)) {
+                        lexicalBoost += 0.30f  // чуть меньше чем прямое совпадение
+                        break  // одного совпавшего синонима на слово достаточно
+                    }
                 }
             }
 
