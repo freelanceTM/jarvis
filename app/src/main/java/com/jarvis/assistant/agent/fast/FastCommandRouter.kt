@@ -17,7 +17,7 @@ sealed interface FastRouteResult {
 }
 
 /**
- * Fast Command Router v0.4 (Локальный NLU-движок без интернета и без LLM)
+ * Fast Command Router v0.5 (Локальный NLU-движок с поддержкой Memory Governance)
  * Время срабатывания: < 10 миллисекунд.
  */
 @Singleton
@@ -30,7 +30,22 @@ class FastCommandRouter @Inject constructor() {
 
         if (q.isEmpty()) return FastRouteResult.ForwardToLlm
 
-        // 1. Приветствия и проверка связи
+        // 1. Команды забывания / очистки памяти (Memory 2.0 Governance)
+        if (q.startsWith("забудь") || q.startsWith("удали из памяти") || q.startsWith("сотри из памяти")) {
+            val target = q.replace(Regex("^(забудь|удали из памяти|сотри из памяти)\\s*"), "")
+                .replace(Regex("^(что я|что у меня|обо мне|про|мою|мой)\\s*"), "").trim()
+            if (target.isNotEmpty()) {
+                return FastRouteResult.HandledLocally(
+                    toolCall = ToolCall(
+                        toolId = "memory.forget",
+                        arguments = buildJsonObject { put("target", target) }
+                    ),
+                    immediateVoiceResponse = "Удаляю информацию о \"$target\" из памяти, сэр."
+                )
+            }
+        }
+
+        // 2. Приветствия и проверка связи
         if (q in listOf("ты тут", "ты тут?", "ты здесь", "ты здесь?", "але", "алло", "на связи")) {
             return FastRouteResult.HandledLocally(immediateVoiceResponse = "Да, сэр, я на связи. Чем могу помочь?")
         }
@@ -38,7 +53,7 @@ class FastCommandRouter @Inject constructor() {
             return FastRouteResult.HandledLocally(immediateVoiceResponse = "Приветствую, сэр. Я готов к работе.")
         }
 
-        // 2. Управление медиа и музыкой (Play, Pause, Next, Prev)
+        // 3. Управление медиа и музыкой
         if (q.contains("пауз") || q == "стоп музыка" || q == "музыка стоп") {
             return FastRouteResult.HandledLocally(
                 toolCall = ToolCall(toolId = "media.control", arguments = buildJsonObject { put("action", "pause") }),
@@ -58,7 +73,7 @@ class FastCommandRouter @Inject constructor() {
             )
         }
 
-        // 3. Фонарик (Flashlight)
+        // 4. Фонарик
         if (q.contains("фонарик") || q.contains("вспышк") || q.contains("посвети") || q.contains("свет")) {
             val isOff = q.contains("выключ") || q.contains("погаси") || q.contains("туши") || q.contains("выруби")
             val isToggle = q.contains("включ") || q.contains("зажги") || q.contains("посвети") || q.contains("фонарик") || q.contains("вруби")
@@ -74,7 +89,7 @@ class FastCommandRouter @Inject constructor() {
             }
         }
 
-        // 4. Громкость (Volume)
+        // 5. Громкость
         if (q.contains("громк") || q.contains("звук") || q.contains("тише") || q.contains("погромче") || q.contains("прибавь") || q.contains("убавь")) {
             val percentMatch = Regex("""(\d+)\s*(%|процент)""").find(q)
             if (percentMatch != null) {
@@ -116,7 +131,7 @@ class FastCommandRouter @Inject constructor() {
             )
         }
 
-        // 5. Батарея
+        // 6. Батарея
         if (q.contains("батаре") || q.contains("заряд") || q.contains("аккумулятор") || q.contains("сколько процентов")) {
             return FastRouteResult.HandledLocally(
                 toolCall = ToolCall(toolId = "system.battery", arguments = JsonObject(emptyMap())),
@@ -124,7 +139,7 @@ class FastCommandRouter @Inject constructor() {
             )
         }
 
-        // 6. Время и дата
+        // 7. Время и дата
         if (q.contains("время") || q.contains("который час") || q.contains("сколько времени") || q.contains("число") || q.contains("дата") || q.contains("день недели")) {
             return FastRouteResult.HandledLocally(
                 toolCall = ToolCall(toolId = "system.time", arguments = JsonObject(emptyMap())),
@@ -132,7 +147,7 @@ class FastCommandRouter @Inject constructor() {
             )
         }
 
-        // 7. Скриншот
+        // 8. Скриншот
         if (q.contains("скриншот") || q.contains("снимок экрана")) {
             return FastRouteResult.HandledLocally(
                 toolCall = ToolCall(toolId = "device.screenshot", arguments = JsonObject(emptyMap())),
@@ -140,7 +155,7 @@ class FastCommandRouter @Inject constructor() {
             )
         }
 
-        // 8. Режим «Не беспокоить» (DND)
+        // 9. Режим «Не беспокоить» (DND)
         if (q.contains("не беспокоить") || q.contains("режим тишины") || q.contains("без уведомлений")) {
             val isOff = q.contains("выключ") || q.contains("отключ")
             return FastRouteResult.HandledLocally(
@@ -149,7 +164,7 @@ class FastCommandRouter @Inject constructor() {
             )
         }
 
-        // 9. Навигация и карты
+        // 10. Навигация и карты
         if (q.startsWith("навигатор в") || q.startsWith("маршрут в") || q.startsWith("поехали в") || q.startsWith("проложи маршрут до")) {
             val dest = q.replace(Regex("^(навигатор в|маршрут в|поехали в|проложи маршрут до)\\s*"), "").trim()
             if (dest.isNotEmpty()) {
@@ -160,7 +175,7 @@ class FastCommandRouter @Inject constructor() {
             }
         }
 
-        // 10. Телефонный звонок
+        // 11. Телефонный звонок
         if (q.startsWith("позвони") || q.startsWith("набери") || q.startsWith("вызови")) {
             val contact = q.replace(Regex("^(позвони|набери|вызови)\\s*"), "").trim()
             if (contact.isNotEmpty()) {
@@ -171,7 +186,7 @@ class FastCommandRouter @Inject constructor() {
             }
         }
 
-        // 11. Запуск приложений
+        // 12. Запуск приложений
         if (q.startsWith("открой") || q.startsWith("запусти") || q.startsWith("включи") || q.startsWith("перейди в") || q.startsWith("вруби")) {
             val app = when {
                 q.contains("телеграм") || q.contains("telegram") || q.contains("телегу") || q.contains("тг") || q.contains("tg") -> "telegram"
@@ -210,7 +225,7 @@ class FastCommandRouter @Inject constructor() {
             }
         }
 
-        // 12. Bluetooth & Wi-Fi
+        // 13. Bluetooth & Wi-Fi
         if (q.contains("блютуз") || q.contains("bluetooth")) {
             return FastRouteResult.HandledLocally(
                 toolCall = ToolCall(toolId = "device.bluetooth", arguments = JsonObject(emptyMap())),
@@ -224,7 +239,7 @@ class FastCommandRouter @Inject constructor() {
             )
         }
 
-        // 13. Информация об устройстве
+        // 14. Информация об устройстве
         if (q.contains("модель") || q.contains("что за телефон") || q.contains("версия андроид") || q.contains("характеристики")) {
             return FastRouteResult.HandledLocally(
                 toolCall = ToolCall(toolId = "system.device_info", arguments = JsonObject(emptyMap())),

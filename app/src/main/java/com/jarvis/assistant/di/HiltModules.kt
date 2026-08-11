@@ -7,6 +7,7 @@ import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.memory.dao.*
 import com.jarvis.assistant.agent.tools.communication.*
 import com.jarvis.assistant.agent.tools.device.*
+import com.jarvis.assistant.agent.tools.intelligence.ForgetMemoryTool
 import com.jarvis.assistant.agent.tools.intelligence.RecallMemoryTool
 import com.jarvis.assistant.agent.tools.intelligence.RememberFactTool
 import com.jarvis.assistant.agent.tools.intelligence.WebSearchTool
@@ -114,9 +115,10 @@ abstract class SecurityAndNetworkBindingModule {
     // 5. Локация и навигация (Location)
     @Binds @IntoSet abstract fun bindLocationNavigationTool(tool: LocationNavigationTool): JarvisTool
 
-    // 6. Интеллект, память и поиск (Intelligence)
+    // 6. Интеллект, память и поиск (Intelligence & Memory 2.0)
     @Binds @IntoSet abstract fun bindRememberFactTool(tool: RememberFactTool): JarvisTool
     @Binds @IntoSet abstract fun bindRecallMemoryTool(tool: RecallMemoryTool): JarvisTool
+    @Binds @IntoSet abstract fun bindForgetMemoryTool(tool: ForgetMemoryTool): JarvisTool
     @Binds @IntoSet abstract fun bindWebSearchTool(tool: WebSearchTool): JarvisTool
 }
 

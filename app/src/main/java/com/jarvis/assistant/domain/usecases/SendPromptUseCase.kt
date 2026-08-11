@@ -50,8 +50,8 @@ class SendPromptUseCase @Inject constructor(
         )
         messageRepository.insertMessage(userMessage)
 
-        // 2. Автономное извлечение фактов в фоне
-        memoryManager.extractAndRememberInBackground(trimmedPrompt)
+        // 2. Memory 2.0 Governance: Извлечение фактов, дедупликация и обработка команд "Забудь..."
+        memoryManager.processTurnGovernance(trimmedPrompt)
 
         // =========================================================================
         // ⚡ ЭТАП 1: TIER 0 FAST BRAIN (Локальный NLU - < 10мс, 100% ОФЛАЙН)
@@ -99,13 +99,13 @@ class SendPromptUseCase @Inject constructor(
         // 🛡️ ПРОВЕРКА СЕТИ ДЛЯ СЛОЖНЫХ ЗАДАЧ
         // =========================================================================
         if (!networkMonitor.isCurrentlyOnline()) {
-            val offlineMsg = "Нет подключения к интернету. Локальные команды и сценарии (фонарик, звук, батарея, приложения) работают офлайн."
+            val offlineMsg = "Нет подключения к интернету. Локальные команды (фонарик, звук, батарея, приложения, память) работают офлайн."
             saveAssistantMessage(offlineMsg)
             return Resource.Success(offlineMsg)
         }
 
         // =========================================================================
-        // 🔍 ЭТАП 4: TOOL DISCOVERY 2.0 + СЕМАНТИЧЕСКАЯ ПАМЯТЬ + AI BRAIN
+        // 🔍 ЭТАП 4: TOOL DISCOVERY 2.0 + СЕМАНТИЧЕСКАЯ ПАМЯТЬ 2.0 + AI BRAIN
         // =========================================================================
         val routingDecision = taskRouter.routeTask(trimmedPrompt)
         val baseSystemPrompt = settingsRepository.systemPromptFlow.first()
@@ -113,7 +113,7 @@ class SendPromptUseCase @Inject constructor(
         // ДИНАМИЧЕСКИЙ TOOL DISCOVERY: Отбираем ТОЛЬКО 2-4 нужных инструмента
         val targetedToolsPrompt = toolRegistry.buildTargetedSystemPrompt(trimmedPrompt)
         
-        // 3-4 релевантных факта по векторному сходству
+        // Извлекаем только 3-4 релевантных факта по векторному сходству
         val memoryContextPrompt = memoryManager.buildPromptMemoryContext(trimmedPrompt)
 
         val fullSystemPrompt = buildString {

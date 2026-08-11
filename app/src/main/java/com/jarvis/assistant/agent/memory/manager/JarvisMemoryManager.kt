@@ -7,6 +7,7 @@ import com.jarvis.assistant.agent.memory.dao.PreferenceDao
 import com.jarvis.assistant.agent.memory.dao.ProcedureDao
 import com.jarvis.assistant.agent.memory.entity.*
 import com.jarvis.assistant.agent.memory.extractor.AutonomousMemoryExtractor
+import com.jarvis.assistant.agent.memory.model.ForgetResult
 import com.jarvis.assistant.agent.memory.model.MemoryItem
 import com.jarvis.assistant.agent.memory.model.MemoryType
 import com.jarvis.assistant.agent.memory.vector.VectorEmbeddingEngine
@@ -17,8 +18,9 @@ import javax.inject.Singleton
 import kotlin.math.exp
 
 /**
- * Единый когнитивный менеджер гибридной памяти JARVIS v0.3
- * (Room DB + Векторный семантический поиск + Автономный экстрактор + Разрешение конфликтов).
+ * Memory Governance Engine 2.0 (JARVIS v0.5)
+ * Реализует полный цикл управления памятью:
+ * Extractor ──► Deduplication ──► Multi-Type Storage ──► Vector Scored Retrieval ──► Semantic Forget/Deletion.
  */
 @Singleton
 class JarvisMemoryManager @Inject constructor(
@@ -31,7 +33,7 @@ class JarvisMemoryManager @Inject constructor(
     private val memoryExtractor: AutonomousMemoryExtractor
 ) {
     /**
-     * Сохранение нового воспоминания с вычислением вектора и разрешением конфликтов
+     * Сохранение нового воспоминания с вычислением вектора, дедупликацией и разрешением конфликтов
      */
     suspend fun remember(
         type: MemoryType,
@@ -42,19 +44,21 @@ class JarvisMemoryManager @Inject constructor(
         confidence: Float = 1.0f
     ): Long = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
+        val cleanKey = key?.trim()?.lowercase()
+        val cleanContent = content.trim()
 
-        // 1. Вычисляем нормализованный 64-мерный вектор эмбеддинга текста
-        val vector = vectorEngine.createEmbedding(content)
+        // 1. Векторное представление текста
+        val vector = vectorEngine.createEmbedding(cleanContent)
         val vectorStr = vectorEngine.serializeVector(vector)
 
-        // 2. Разрешение конфликтов для структурированных фактов (Facts / Preferences)
-        if (!key.isNullOrBlank()) {
+        // 2. Дедупликация и обновление в специализированных таблицах (Facts / Preferences)
+        if (!cleanKey.isNullOrBlank()) {
             when (type) {
                 MemoryType.FACT -> {
                     factDao.insertFact(
                         FactEntity(
-                            factKey = key.trim().lowercase(),
-                            factValue = value ?: content,
+                            factKey = cleanKey,
+                            factValue = value ?: cleanContent,
                             confidence = confidence,
                             updatedAt = now
                         )
@@ -63,21 +67,23 @@ class JarvisMemoryManager @Inject constructor(
                 MemoryType.PREFERENCE -> {
                     preferenceDao.insertPreference(
                         PreferenceEntity(
-                            prefKey = key.trim().lowercase(),
-                            prefValue = value ?: content,
+                            prefKey = cleanKey,
+                            prefValue = value ?: cleanContent,
                             updatedAt = now
                         )
                     )
                 }
                 else -> Unit
             }
+            // Удаляем устаревшее воспоминание по этому же ключу в общей таблице для исключения дубликатов
+            memoryDao.deleteMemoryByKey(cleanKey)
         }
 
-        // 3. Сохранение в общую таблицу воспоминаний
+        // 3. Сохранение в общую таблицу воспоминаний с важностью и уверенностью
         val entity = MemoryEntity(
             type = type.name,
-            keyName = key?.trim()?.lowercase(),
-            content = content.trim(),
+            keyName = cleanKey,
+            content = cleanContent,
             importance = importance.coerceIn(0.1f, 1.0f),
             confidence = confidence.coerceIn(0.1f, 1.0f),
             accessCount = 1,
@@ -91,10 +97,10 @@ class JarvisMemoryManager @Inject constructor(
     }
 
     /**
-     * Семантический поиск по косинусному сходству + формула веса важности/актуальности
+     * Семантический поиск воспоминаний по формуле взвешенного ранжирования:
      * Score = (CosineSim * 0.40) + (Importance * 0.25) + (Recency * 0.20) + (Frequency * 0.15)
      */
-    suspend fun recall(query: String, limit: Int = 5): List<MemoryItem> = withContext(Dispatchers.IO) {
+    suspend fun recall(query: String, limit: Int = 4): List<MemoryItem> = withContext(Dispatchers.IO) {
         val queryVector = vectorEngine.createEmbedding(query)
         val allMemories = memoryDao.getAllMemoriesForVectorSearch()
 
@@ -107,28 +113,24 @@ class JarvisMemoryManager @Inject constructor(
             val memVector = vectorEngine.deserializeVector(mem.embeddingVector)
             val cosineSim = vectorEngine.computeCosineSimilarity(queryVector, memVector)
 
-            // Фактор давности (затухание по времени: 30 дней)
             val daysAgo = (now - mem.lastAccessedAt) / (1000f * 60 * 60 * 24)
             val recencyFactor = exp(-daysAgo / 30.0f)
-
-            // Фактор частоты обращений
             val frequencyFactor = (mem.accessCount / 10.0f).coerceAtMost(1.0f)
 
-            // Взвешенная формула ранжирования памяти
             val totalScore = (cosineSim * 0.40f) +
                     (mem.importance * 0.25f) +
                     (recencyFactor * 0.20f) +
                     (frequencyFactor * 0.15f)
 
-            scoredList.add(mem to totalScore)
+            if (cosineSim > 0.20f || mem.importance >= 0.8f) {
+                scoredList.add(mem to totalScore)
+            }
         }
 
-        // Сортируем по финальному баллу и берем топ N
         val topResults = scoredList
             .sortedByDescending { it.second }
             .take(limit)
 
-        // Обновляем метрику доступа для релевантных воспоминаний
         topResults.forEach { (entity, _) ->
             memoryDao.recordAccess(entity.id, now)
         }
@@ -137,11 +139,73 @@ class JarvisMemoryManager @Inject constructor(
     }
 
     /**
-     * Фоновый экстрактор: после каждой реплики определяет, нужно ли зафиксировать новый факт
+     * Семантическое удаление / забывание факта («Джарвис, забудь, что я хотел BMW»)
      */
-    suspend fun extractAndRememberInBackground(userMessage: String) = withContext(Dispatchers.IO) {
-        val extracted = memoryExtractor.extractFromTurn(userMessage)
-        if (extracted != null && extracted.shouldRemember) {
+    suspend fun forgetMemory(targetQuery: String): ForgetResult = withContext(Dispatchers.IO) {
+        val cleanTarget = targetQuery.lowercase().trim()
+        if (cleanTarget.isEmpty() || cleanTarget == "всё" || cleanTarget == "все") {
+            // Полная очистка памяти
+            val all = memoryDao.getAllMemoriesForVectorSearch()
+            all.forEach { memoryDao.deleteMemoryById(it.id) }
+            return@withContext ForgetResult(
+                isSuccess = true,
+                deletedCount = all.size,
+                deletedSummaries = listOf("Вся память очищена"),
+                confirmationMessage = "Хорошо, сэр. Я полностью очистил память о вас."
+            )
+        }
+
+        val queryVector = vectorEngine.createEmbedding(cleanTarget)
+        val allMemories = memoryDao.getAllMemoriesForVectorSearch()
+        val toDelete = mutableListOf<MemoryEntity>()
+
+        for (mem in allMemories) {
+            val memVector = vectorEngine.deserializeVector(mem.embeddingVector)
+            val similarity = vectorEngine.computeCosineSimilarity(queryVector, memVector)
+            val containsWord = mem.content.contains(cleanTarget, ignoreCase = true) ||
+                    (mem.keyName?.contains(cleanTarget, ignoreCase = true) == true)
+
+            if (similarity >= 0.40f || containsWord) {
+                toDelete.add(mem)
+            }
+        }
+
+        val deletedSummaries = mutableListOf<String>()
+        for (mem in toDelete) {
+            memoryDao.deleteMemoryById(mem.id)
+            mem.keyName?.let { key ->
+                factDao.deleteFact(key)
+                preferenceDao.deletePreference(key)
+            }
+            deletedSummaries.add(mem.content)
+        }
+
+        if (toDelete.isNotEmpty()) {
+            ForgetResult(
+                isSuccess = true,
+                deletedCount = toDelete.size,
+                deletedSummaries = deletedSummaries,
+                confirmationMessage = "Хорошо, сэр. Я стёр информацию о \"$cleanTarget\" из памяти."
+            )
+        } else {
+            ForgetResult(
+                isSuccess = false,
+                deletedCount = 0,
+                deletedSummaries = emptyList(),
+                confirmationMessage = "Я не нашёл в памяти записей о \"$cleanTarget\"."
+            )
+        }
+    }
+
+    /**
+     * Фоновый конвейер Governance: извлекает и сохраняет только важные факты, либо стирает по запросу
+     */
+    suspend fun processTurnGovernance(userMessage: String) = withContext(Dispatchers.IO) {
+        val extracted = memoryExtractor.extractFromTurn(userMessage) ?: return@withContext
+
+        if (extracted.governanceAction == "DELETE_FORGET") {
+            forgetMemory(extracted.key ?: userMessage)
+        } else if (extracted.shouldRemember) {
             val type = try { MemoryType.valueOf(extracted.type) } catch (_: Exception) { MemoryType.FACT }
             remember(
                 type = type,
@@ -155,7 +219,7 @@ class JarvisMemoryManager @Inject constructor(
     }
 
     /**
-     * Формирует сжатый контекст из 3-5 самых релевантных фактов для системного промпта
+     * Формирует сжатый контекст из 3-4 самых релевантных фактов для системного промпта
      */
     suspend fun buildPromptMemoryContext(userQuery: String): String = withContext(Dispatchers.IO) {
         val relevant = recall(userQuery, limit = 4)
@@ -167,18 +231,12 @@ class JarvisMemoryManager @Inject constructor(
         }
 
         if (relevant.isNotEmpty()) {
-            sb.append("Релевантная долговременная память:\n")
+            sb.append("Долговременная память о пользователе:\n")
             relevant.forEach { item ->
                 sb.append("• ${item.content}\n")
             }
         }
 
         return@withContext sb.toString().trim()
-    }
-
-    suspend fun deleteMemoryByKey(key: String) = withContext(Dispatchers.IO) {
-        memoryDao.deleteMemoryByKey(key.trim().lowercase())
-        factDao.deleteFact(key.trim().lowercase())
-        preferenceDao.deletePreference(key.trim().lowercase())
     }
 }
