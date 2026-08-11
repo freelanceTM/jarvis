@@ -335,8 +335,13 @@ class VoiceInteractionOrchestrator @Inject constructor(
                 text.contains("выполняй") ||
                 text.contains("разрешаю") ||
                 text.contains("звони") ||
+                text.contains("набирай") ||
                 text.contains("отправляй") ||
-                text.contains("согласен")
+                text.contains("согласен") ||
+                text.contains("делай") ||
+                text.contains("конечно") ||
+                text.contains("ага") ||
+                text.contains("добро")
 
         val isNo = text.contains("нет") ||
                 text.contains("отмена") ||
@@ -344,7 +349,10 @@ class VoiceInteractionOrchestrator @Inject constructor(
                 text.contains("отменить") ||
                 text.contains("не надо") ||
                 text.contains("не нужно") ||
-                text.contains("отбой")
+                text.contains("отбой") ||
+                text.contains("не стоит") ||
+                text.contains("передумал") ||
+                text.contains("хватит")
 
         when {
             isYes && pendingToolCall != null -> {
