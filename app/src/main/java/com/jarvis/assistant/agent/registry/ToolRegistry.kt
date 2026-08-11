@@ -31,19 +31,25 @@ class ToolRegistry @Inject constructor(
     }
 
     /**
-     * Генерирует компактное описание инструментов для системного промпта LLM
+     * Генерирует четкий системный промпт с реальными примерами для надежного Function Calling
      */
     fun buildToolsSystemPrompt(): String {
         val sb = StringBuilder()
-        sb.append("Доступные системные инструменты Android:\n")
+        sb.append("Ты автономный агент JARVIS, управляющий телефоном Android.\n")
+        sb.append("Список доступных системных инструментов:\n")
         toolsMap.values.forEach { tool ->
-            sb.append("- ${tool.name}: ${tool.description}. Параметры: ")
-            sb.append(tool.parameters.joinToString(", ") { "${it.name} (${it.type}): ${it.description}" })
-            sb.append("\n")
+            sb.append("- Имя инструмента: \"${tool.name}\". Назначение: ${tool.description}.\n")
         }
-        sb.append("\nЕсли запрос пользователя требует действия с телефоном, ответь строго в формате JSON-вызова действия:\n")
-        sb.append("ACTION_CALL: {\"tool\": \"tool_name\", \"params\": {\"param1\": \"val1\"}}\n")
-        sb.append("Если действие не требуется — отвечай обычным текстом кратко.\n")
+        sb.append("\nПРАВИЛА ВЫЗОВА ИНСТРУМЕНТОВ (Строгий формат JSON):\n")
+        sb.append("1. Запуск приложений (Telegram, YouTube, WhatsApp, Камера, Музыка, Хром):\n")
+        sb.append("ACTION_CALL: {\"tool\": \"open_app\", \"params\": {\"app_name\": \"telegram\"}}\n")
+        sb.append("2. Управление громкостью (громче, тише, выключить, процент):\n")
+        sb.append("ACTION_CALL: {\"tool\": \"set_volume\", \"params\": {\"action\": \"up\"}}\n")
+        sb.append("3. Настройки телефона (Bluetooth, Wi-Fi, Батарея, Экран):\n")
+        sb.append("ACTION_CALL: {\"tool\": \"open_settings\", \"params\": {\"target\": \"bluetooth\"}}\n")
+        sb.append("4. Таймеры и будильники:\n")
+        sb.append("ACTION_CALL: {\"tool\": \"set_timer_alarm\", \"params\": {\"type\": \"timer\", \"value\": \"5\"}}\n")
+        sb.append("5. Если команда пользователя - обычный разговор, отвечай текстом кратко в 1-2 предложения.\n")
         return sb.toString()
     }
 }
