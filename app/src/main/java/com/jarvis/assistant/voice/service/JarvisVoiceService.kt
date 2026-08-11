@@ -6,9 +6,12 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -31,6 +34,9 @@ class JarvisVoiceService : Service() {
 
     @Inject
     lateinit var orchestrator: VoiceInteractionOrchestrator
+
+    @Inject
+    lateinit var systemEventReceiver: SystemEventReceiver
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private var wakeLock: PowerManager.WakeLock? = null
@@ -86,6 +92,7 @@ class JarvisVoiceService : Service() {
         startServiceForeground(buildNotification("JARVIS слушает..."))
         acquireWakeLock()
         registerPhoneStateListener()
+        registerSystemReceivers()
         observeOrchestrator()
     }
 
@@ -109,6 +116,19 @@ class JarvisVoiceService : Service() {
             }
         }
         return START_STICKY
+    }
+
+    private fun registerSystemReceivers() {
+        try {
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_HEADSET_PLUG)
+                addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+                addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+                addAction(Intent.ACTION_BATTERY_LOW)
+                addAction(WifiManager.WIFI_STATE_CHANGED_ACTION)
+            }
+            registerReceiver(systemEventReceiver, filter)
+        } catch (_: Exception) { }
     }
 
     private fun startServiceForeground(notification: Notification) {
@@ -211,6 +231,9 @@ class JarvisVoiceService : Service() {
         super.onDestroy()
         orchestrator.stopServicePipeline()
         releaseWakeLock()
+        try {
+            unregisterReceiver(systemEventReceiver)
+        } catch (_: Exception) { }
         try {
             telephonyManager?.listen(phoneStateListener, PhoneStateListener.LISTEN_NONE)
         } catch (_: Exception) { }
