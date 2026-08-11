@@ -86,7 +86,8 @@ class UniversalAIClient @Inject constructor(
     override suspend fun complete(
         prompt: String,
         systemPrompt: String,
-        history: List<Message>
+        history: List<Message>,
+        modelOverride: String?
     ): Resource<String> = withContext(Dispatchers.IO) {
         val apiKey = securityManager.getApiKey().trim()
         if (apiKey.isEmpty() || apiKey.length < 5) {
@@ -101,7 +102,7 @@ class UniversalAIClient @Inject constructor(
                 // OpenRouter: Llama 3.3 70B (сверхбыстрый и умный)
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://openrouter.ai/api/v1/chat/completions",
-                    model = "meta-llama/llama-3.3-70b-instruct:free",
+                    model = modelOverride ?: "meta-llama/llama-3.3-70b-instruct:free",
                     apiKey = apiKey,
                     prompt = prompt,
                     systemPrompt = systemPrompt,
@@ -109,9 +110,14 @@ class UniversalAIClient @Inject constructor(
                 )
             } else if (apiKey.startsWith("gsk_")) {
                 // Groq: 500 токенов/сек (мгновенный отклик 150мс)
+                val groqModel = if (modelOverride != null && !modelOverride.contains("/")) {
+                    modelOverride
+                } else {
+                    "llama-3.3-70b-versatile"
+                }
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://api.groq.com/openai/v1/chat/completions",
-                    model = "llama-3.3-70b-versatile",
+                    model = groqModel,
                     apiKey = apiKey,
                     prompt = prompt,
                     systemPrompt = systemPrompt,
@@ -119,16 +125,21 @@ class UniversalAIClient @Inject constructor(
                 )
             } else if (apiKey.startsWith("sk-")) {
                 // OpenAI GPT-4o Mini
+                val openAiModel = if (modelOverride != null && !modelOverride.contains("/")) {
+                    modelOverride
+                } else {
+                    "gpt-4o-mini"
+                }
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://api.openai.com/v1/chat/completions",
-                    model = "gpt-4o-mini",
+                    model = openAiModel,
                     apiKey = apiKey,
                     prompt = prompt,
                     systemPrompt = systemPrompt,
                     history = history
                 )
             } else {
-                return@withContext callDirectGemini(apiKey, prompt, systemPrompt, history)
+                return@withContext callDirectGemini(apiKey, prompt, systemPrompt, history, modelOverride)
             }
         } catch (e: SocketTimeoutException) {
             Resource.Error(e, "Таймаут подключения к AI. Проверьте интернет.")
@@ -143,7 +154,8 @@ class UniversalAIClient @Inject constructor(
         apiKey: String,
         prompt: String,
         systemPrompt: String,
-        history: List<Message>
+        history: List<Message>,
+        modelOverride: String? = null
     ): Resource<String> {
         val contents = mutableListOf<GeminiContentDto>()
         history.takeLast(4).forEach { msg ->
@@ -169,7 +181,13 @@ class UniversalAIClient @Inject constructor(
         val requestBodyObj = GeminiRequestDto(contents, systemInstruction)
         val jsonBody = json.encodeToString(GeminiRequestDto.serializer(), requestBodyObj)
 
-        val requestUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=$apiKey"
+        val geminiModel = if (modelOverride != null && (modelOverride.startsWith("gemini-") || !modelOverride.contains("/"))) {
+            modelOverride
+        } else {
+            "gemini-flash-latest"
+        }
+
+        val requestUrl = "https://generativelanguage.googleapis.com/v1beta/models/$geminiModel:generateContent?key=$apiKey"
 
         val request = Request.Builder()
             .url(requestUrl)

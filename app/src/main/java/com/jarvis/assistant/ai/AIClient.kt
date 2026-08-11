@@ -16,7 +16,8 @@ interface AIClient {
     suspend fun complete(
         prompt: String,
         systemPrompt: String,
-        history: List<Message>
+        history: List<Message>,
+        modelOverride: String? = null
     ): Resource<String>
 }
 
@@ -31,7 +32,8 @@ class OpenAiDirectClient @Inject constructor(
     override suspend fun complete(
         prompt: String,
         systemPrompt: String,
-        history: List<Message>
+        history: List<Message>,
+        modelOverride: String?
     ): Resource<String> {
         if (!securityManager.hasValidApiKey()) {
             return Resource.Error(
@@ -41,7 +43,7 @@ class OpenAiDirectClient @Inject constructor(
         }
 
         return try {
-            val selectedModel = settingsDataStore.selectedModelFlow.first()
+            val selectedModel = modelOverride ?: settingsDataStore.selectedModelFlow.first()
             val messageList = promptManager.buildChatPrompt(
                 systemPrompt = systemPrompt,
                 userPrompt = prompt,

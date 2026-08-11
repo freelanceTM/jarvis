@@ -1,5 +1,7 @@
 package com.jarvis.assistant.data.repository
 
+import android.util.Log
+import com.jarvis.assistant.agent.router.TaskRouter
 import com.jarvis.assistant.ai.AIClient
 import com.jarvis.assistant.core.dispatcher.CoroutineDispatchers
 import com.jarvis.assistant.core.result.Resource
@@ -15,6 +17,7 @@ import javax.inject.Singleton
 @Singleton
 class AIRepositoryImpl @Inject constructor(
     private val aiClient: AIClient,
+    private val taskRouter: TaskRouter,
     private val dispatchers: CoroutineDispatchers
 ) : AIRepository {
 
@@ -24,7 +27,16 @@ class AIRepositoryImpl @Inject constructor(
         history: List<Message>
     ): Resource<String> {
         return withContext(dispatchers.io) {
-            aiClient.complete(prompt, systemPrompt, history)
+            // Определяем оптимальный уровень модели (Tier 1 Fast / Tier 2 Reasoning / Tier 3 Search)
+            val routingDecision = taskRouter.routeTask(prompt)
+            Log.d("AIRepository", "TaskRouter: tier=${routingDecision.tier}, model=${routingDecision.targetModelId}, reason=${routingDecision.reason}")
+
+            aiClient.complete(
+                prompt = prompt,
+                systemPrompt = systemPrompt,
+                history = history,
+                modelOverride = routingDecision.targetModelId
+            )
         }
     }
 }
