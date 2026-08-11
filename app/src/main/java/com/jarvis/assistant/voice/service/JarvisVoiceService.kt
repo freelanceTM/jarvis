@@ -35,9 +35,7 @@ class JarvisVoiceService : Service() {
     @Inject
     lateinit var orchestrator: VoiceInteractionOrchestrator
 
-    @Inject
-    lateinit var systemEventReceiver: SystemEventReceiver
-
+    private val systemEventReceiver = SystemEventReceiver()
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private var wakeLock: PowerManager.WakeLock? = null
     private var telephonyManager: TelephonyManager? = null
