@@ -12,12 +12,14 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.net.wifi.WifiManager
+import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.telephony.PhoneStateListener
 import android.telephony.TelephonyManager
 import androidx.core.app.NotificationCompat
+import com.jarvis.assistant.agent.memory.WorkingMemory
 import com.jarvis.assistant.presentation.MainActivity
 import com.jarvis.assistant.voice.orchestrator.OrchestratorMode
 import com.jarvis.assistant.voice.orchestrator.VoiceInteractionOrchestrator
@@ -34,6 +36,9 @@ class JarvisVoiceService : Service() {
 
     @Inject
     lateinit var orchestrator: VoiceInteractionOrchestrator
+
+    @Inject
+    lateinit var workingMemory: WorkingMemory
 
     private val systemEventReceiver = SystemEventReceiver()
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
@@ -91,6 +96,7 @@ class JarvisVoiceService : Service() {
         acquireWakeLock()
         registerPhoneStateListener()
         registerSystemReceivers()
+        initWorkingMemoryDefaults()
         observeOrchestrator()
     }
 
@@ -114,6 +120,16 @@ class JarvisVoiceService : Service() {
             }
         }
         return START_STICKY
+    }
+
+    private fun initWorkingMemoryDefaults() {
+        try {
+            val batteryManager = getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+            val level = batteryManager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+            if (level > 0) {
+                workingMemory.put("battery_percent", level)
+            }
+        } catch (_: Exception) { }
     }
 
     private fun registerSystemReceivers() {

@@ -20,19 +20,23 @@ class AgentObservationEngine @Inject constructor(
         return when (val cond = step.condition) {
             is PlanCondition.Always -> true to null
             is PlanCondition.IfBatteryBelow -> {
-                val lastBattery = (workingMemory.get("battery_percent") as? Int) ?: 100
-                if (lastBattery < cond.percentThreshold) {
+                val lastBattery = workingMemory.get("battery_percent") as? Int
+                if (lastBattery == null) {
+                    true to null // Данных нет — выполнить шаг (не блокировать)
+                } else if (lastBattery < cond.percentThreshold) {
                     true to null
                 } else {
                     false to "Батарея $lastBattery% (выше порога ${cond.percentThreshold}%)"
                 }
             }
             is PlanCondition.IfVolumeAbove -> {
-                val lastVol = (workingMemory.get("volume_percent") as? Int) ?: 50
-                if (lastVol > cond.percentThreshold) {
+                val lastVol = workingMemory.get("volume_percent") as? Int
+                if (lastVol == null) {
+                    true to null
+                } else if (lastVol > cond.percentThreshold) {
                     true to null
                 } else {
-                    false to "Громкость $lastVol% (ниже порога)"
+                    false to "Громкость $lastVol% (ниже порога ${cond.percentThreshold}%)"
                 }
             }
             is PlanCondition.IfResultContains -> true to null
