@@ -4,7 +4,7 @@ import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.memory.dao.ProcedureDao
 import com.jarvis.assistant.agent.memory.entity.ProcedureEntity
 import com.jarvis.assistant.agent.model.ToolCall
-import com.jarvis.assistant.agent.model.ToolResult
+import com.jarvis.assistant.agent.model.ToolExecutionResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
@@ -20,7 +20,7 @@ class WorkflowExecutor @Inject constructor(
     /**
      * Проверяет, является ли команда сохраненным процедурным макросом (например: "сон", "работа", "тренировка")
      */
-    suspend fun tryExecuteWorkflow(trigger: String): ToolResult? = withContext(Dispatchers.IO) {
+    suspend fun tryExecuteWorkflow(trigger: String): ToolExecutionResult? = withContext(Dispatchers.IO) {
         val cleanTrigger = trigger.lowercase().trim()
             .replace(Regex("^(джарвис|jarvis|жарвис)[,\\s]*"), "")
             .trim()
@@ -50,34 +50,32 @@ class WorkflowExecutor @Inject constructor(
                 val obj = elem.jsonObject
                 val toolName = obj["tool"]?.jsonPrimitive?.content ?: continue
                 val args = obj["arguments"]?.jsonObject ?: JsonObject(emptyMap())
-                calls.add(ToolCall(name = toolName, arguments = args))
+                calls.add(ToolCall(toolId = toolName, arguments = args))
             }
 
             if (calls.isEmpty()) return@withContext null
 
-            // Выполняем все действия сценария последовательно
+            // Выполняем все действия сценария последовательно с транзакционным откатом
             val results = toolExecutor.executeAll(calls)
             procedureDao.recordExecution(workflow.triggerPhrase)
 
-            val summary = results.joinToString(". ") { it.message }
-            return@withContext ToolResult.Success("Сценарий '${workflow.triggerPhrase}' выполнен: $summary")
+            val summary = results.joinToString(". ") { it.summary }
+            return@withContext ToolExecutionResult.success("Сценарий '${workflow.triggerPhrase}' выполнен: $summary")
         } catch (e: Exception) {
-            return@withContext ToolResult.Error("Сбой выполнения сценария $cleanTrigger: ${e.localizedMessage}")
+            return@withContext ToolExecutionResult.failure("Сбой выполнения сценария $cleanTrigger", e.localizedMessage ?: "Unknown error")
         }
     }
 
     private suspend fun registerDefaultWorkflows() {
-        // Сценарий "Сон": убавить звук до 10% и выключить фонарик
         val sleepActions = listOf(
-            ToolCall(name = "set_volume", arguments = buildJsonObject { put("action", "set"); put("percent", 10) }),
-            ToolCall(name = "flashlight", arguments = buildJsonObject { put("enabled", false) })
+            ToolCall(toolId = "device.volume", arguments = buildJsonObject { put("action", "set"); put("percent", 10) }),
+            ToolCall(toolId = "device.flashlight", arguments = buildJsonObject { put("enabled", false) })
         )
         registerWorkflow("сон", sleepActions)
 
-        // Сценарий "Работа": открыть Telegram и установить громкость 50%
         val workActions = listOf(
-            ToolCall(name = "open_app", arguments = buildJsonObject { put("app_name", "telegram") }),
-            ToolCall(name = "set_volume", arguments = buildJsonObject { put("action", "set"); put("percent", 50) })
+            ToolCall(toolId = "device.open_app", arguments = buildJsonObject { put("app_name", "telegram") }),
+            ToolCall(toolId = "device.volume", arguments = buildJsonObject { put("action", "set"); put("percent", 50) })
         )
         registerWorkflow("работа", workActions)
     }
@@ -89,7 +87,7 @@ class WorkflowExecutor @Inject constructor(
         val actionsJson = buildString {
             append("[")
             actions.forEachIndexed { idx, call ->
-                append("{\"tool\":\"${call.name}\",\"arguments\":${call.arguments}}")
+                append("{\"tool\":\"${call.toolId}\",\"arguments\":${call.arguments}}")
                 if (idx < actions.size - 1) append(",")
             }
             append("]")

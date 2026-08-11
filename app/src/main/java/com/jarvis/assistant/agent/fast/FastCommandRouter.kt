@@ -17,7 +17,7 @@ sealed interface FastRouteResult {
 }
 
 /**
- * Fast Command Router (Локальный NLU-движок без интернета и без LLM)
+ * Fast Command Router 2.0 (Локальный NLU-движок без интернета и без LLM)
  * Время срабатывания: < 10 миллисекунд.
  */
 @Singleton
@@ -31,13 +31,13 @@ class FastCommandRouter @Inject constructor() {
         if (q.isEmpty()) return FastRouteResult.ForwardToLlm
 
         // 1. Мгновенные приветствия и проверка связи (Zero-LLM)
-        if (q == "ты тут" || q == "ты тут?" || q == "ты здесь" || q == "ты здесь?" || q == "але" || q == "алло" || q == "на связи") {
+        if (q in listOf("ты тут", "ты тут?", "ты здесь", "ты здесь?", "але", "алло", "на связи")) {
             return FastRouteResult.HandledLocally(
                 immediateVoiceResponse = "Да, сэр, я на связи. Чем могу помочь?"
             )
         }
 
-        if (q == "привет" || q == "здравствуй" || q == "добрый день" || q == "добрый вечер" || q == "доброе утро" || q == "хай" || q == "салам") {
+        if (q in listOf("привет", "здравствуй", "добрый день", "добрый вечер", "доброе утро", "хай", "салам")) {
             return FastRouteResult.HandledLocally(
                 immediateVoiceResponse = "Приветствую, сэр. Я готов к работе."
             )
@@ -51,7 +51,7 @@ class FastCommandRouter @Inject constructor() {
                 val enabled = !isOff
                 return FastRouteResult.HandledLocally(
                     toolCall = ToolCall(
-                        name = "flashlight",
+                        toolId = "device.flashlight",
                         arguments = buildJsonObject { put("enabled", enabled) }
                     ),
                     immediateVoiceResponse = if (enabled) "Фонарик включён, сэр." else "Фонарик выключен, сэр."
@@ -66,7 +66,7 @@ class FastCommandRouter @Inject constructor() {
                 val percent = percentMatch.groupValues[1].toIntOrNull() ?: 50
                 return FastRouteResult.HandledLocally(
                     toolCall = ToolCall(
-                        name = "set_volume",
+                        toolId = "device.volume",
                         arguments = buildJsonObject {
                             put("action", "set")
                             put("percent", percent)
@@ -94,7 +94,7 @@ class FastCommandRouter @Inject constructor() {
 
             return FastRouteResult.HandledLocally(
                 toolCall = ToolCall(
-                    name = "set_volume",
+                    toolId = "device.volume",
                     arguments = buildJsonObject { put("action", action) }
                 ),
                 immediateVoiceResponse = voice
@@ -104,7 +104,7 @@ class FastCommandRouter @Inject constructor() {
         // 4. Батарея и заряд (Battery)
         if (q.contains("батаре") || q.contains("заряд") || q.contains("аккумулятор") || q.contains("сколько процентов")) {
             return FastRouteResult.HandledLocally(
-                toolCall = ToolCall(name = "get_battery", arguments = JsonObject(emptyMap())),
+                toolCall = ToolCall(toolId = "system.battery", arguments = JsonObject(emptyMap())),
                 immediateVoiceResponse = "Проверяю заряд батареи, сэр."
             )
         }
@@ -112,12 +112,12 @@ class FastCommandRouter @Inject constructor() {
         // 5. Время, дата и день недели (Time / Date)
         if (q.contains("время") || q.contains("который час") || q.contains("сколько времени") || q.contains("число") || q.contains("дата") || q.contains("день недели")) {
             return FastRouteResult.HandledLocally(
-                toolCall = ToolCall(name = "get_time", arguments = JsonObject(emptyMap())),
+                toolCall = ToolCall(toolId = "system.time", arguments = JsonObject(emptyMap())),
                 immediateVoiceResponse = "Проверяю время, сэр."
             )
         }
 
-        // 6. Запуск приложений (App Launcher) - включая "открой тг"
+        // 6. Запуск приложений (App Launcher)
         if (q.startsWith("открой") || q.startsWith("запусти") || q.startsWith("включи") || q.startsWith("перейди в") || q.startsWith("вруби")) {
             val app = when {
                 q.contains("телеграм") || q.contains("telegram") || q.contains("телегу") || q.contains("тг") || q.contains("tg") -> "telegram"
@@ -148,7 +148,7 @@ class FastCommandRouter @Inject constructor() {
 
                 return FastRouteResult.HandledLocally(
                     toolCall = ToolCall(
-                        name = "open_app",
+                        toolId = "device.open_app",
                         arguments = buildJsonObject { put("app_name", app) }
                     ),
                     immediateVoiceResponse = "Открываю $appTitle, сэр."
@@ -159,14 +159,14 @@ class FastCommandRouter @Inject constructor() {
         // 7. Bluetooth & Wi-Fi настройки
         if (q.contains("блютуз") || q.contains("bluetooth")) {
             return FastRouteResult.HandledLocally(
-                toolCall = ToolCall(name = "bluetooth_control", arguments = JsonObject(emptyMap())),
+                toolCall = ToolCall(toolId = "device.bluetooth", arguments = JsonObject(emptyMap())),
                 immediateVoiceResponse = "Открываю панель Bluetooth, сэр."
             )
         }
 
         if (q.contains("вайфай") || q.contains("wifi") || q.contains("wi-fi") || q.contains("интернет")) {
             return FastRouteResult.HandledLocally(
-                toolCall = ToolCall(name = "wifi_control", arguments = JsonObject(emptyMap())),
+                toolCall = ToolCall(toolId = "device.wifi", arguments = JsonObject(emptyMap())),
                 immediateVoiceResponse = "Открываю настройки Wi-Fi, сэр."
             )
         }
@@ -174,7 +174,7 @@ class FastCommandRouter @Inject constructor() {
         // 8. Информация об устройстве
         if (q.contains("модель") || q.contains("что за телефон") || q.contains("версия андроид") || q.contains("характеристики")) {
             return FastRouteResult.HandledLocally(
-                toolCall = ToolCall(name = "get_device_info", arguments = JsonObject(emptyMap())),
+                toolCall = ToolCall(toolId = "system.device_info", arguments = JsonObject(emptyMap())),
                 immediateVoiceResponse = "Получаю информацию об устройстве, сэр."
             )
         }

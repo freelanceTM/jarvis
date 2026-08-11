@@ -5,7 +5,7 @@ import com.jarvis.assistant.agent.fast.FastCommandRouter
 import com.jarvis.assistant.agent.fast.FastRouteResult
 import com.jarvis.assistant.agent.memory.manager.JarvisMemoryManager
 import com.jarvis.assistant.agent.memory.procedural.WorkflowExecutor
-import com.jarvis.assistant.agent.model.ToolResult
+import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.parser.ToolCallParser
 import com.jarvis.assistant.agent.registry.ToolRegistry
 import com.jarvis.assistant.agent.router.TaskRouter
@@ -51,10 +51,9 @@ class SendPromptUseCase @Inject constructor(
         // =========================================================================
         val workflowResult = workflowExecutor.tryExecuteWorkflow(trimmedPrompt)
         if (workflowResult != null) {
-            val voiceResponse = when (workflowResult) {
-                is ToolResult.Success -> "${workflowResult.message}, сэр."
-                is ToolResult.RequiresConfirmation -> workflowResult.message
-                is ToolResult.Error -> "Ошибка сценария: ${workflowResult.message}"
+            val voiceResponse = when {
+                workflowResult.isSuccess -> "${workflowResult.summary}, сэр."
+                else -> workflowResult.summary
             }
             saveAssistantMessage(voiceResponse)
             return Resource.Success(voiceResponse)
@@ -69,10 +68,10 @@ class SendPromptUseCase @Inject constructor(
 
             if (fastResult.toolCall != null) {
                 val executionResult = toolExecutor.execute(fastResult.toolCall)
-                if (executionResult is ToolResult.Success) {
-                    voiceAnswer = "${executionResult.message}, сэр."
+                if (executionResult.isSuccess) {
+                    voiceAnswer = "${executionResult.summary}, сэр."
                 }
-                memoryManager.workingMemory.setLastAction(fastResult.toolCall.name)
+                memoryManager.workingMemory.setLastAction(fastResult.toolCall.toolId)
             }
 
             saveAssistantMessage(voiceAnswer)
@@ -149,20 +148,12 @@ class SendPromptUseCase @Inject constructor(
 
         val executionResults = toolExecutor.executeAll(toolCalls)
         val summaries = mutableListOf<String>()
-        var requiresConfirmation = false
 
         for (res in executionResults) {
-            when (res) {
-                is ToolResult.Success -> summaries.add(res.message)
-                is ToolResult.RequiresConfirmation -> {
-                    requiresConfirmation = true
-                    summaries.add(res.message)
-                }
-                is ToolResult.Error -> summaries.add("Не удалось: ${res.message}")
-            }
+            summaries.add(res.summary)
         }
 
         val combinedSummary = summaries.joinToString(". ")
-        return if (requiresConfirmation) combinedSummary else "$combinedSummary, сэр."
+        return "$combinedSummary, сэр."
     }
 }

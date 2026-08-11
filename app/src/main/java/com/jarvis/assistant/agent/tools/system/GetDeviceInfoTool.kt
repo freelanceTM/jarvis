@@ -3,7 +3,8 @@ package com.jarvis.assistant.agent.tools.system
 import android.content.Context
 import android.os.Build
 import com.jarvis.assistant.agent.core.JarvisTool
-import com.jarvis.assistant.agent.model.ToolResult
+import com.jarvis.assistant.agent.core.ToolCategory
+import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.*
@@ -15,22 +16,32 @@ class GetDeviceInfoTool @Inject constructor(
     @ApplicationContext private val context: Context
 ) : JarvisTool {
 
-    override val name: String = "get_device_info"
-    override val description: String = "Возвращает информацию об устройстве: модель, производитель, версия Android"
-    override val risk: ToolRisk = ToolRisk.SAFE
+    override val toolId: String = "system.device_info"
+    override val description: String = "Возвращает модель устройства, производителя и версию Android"
+    override val category: ToolCategory = ToolCategory.SYSTEM
+    override val riskLevel: ToolRisk = ToolRisk.SAFE
+    override val isOffline: Boolean = true
+    override val supportsParallel: Boolean = true
 
     override val parametersSchema: JsonObject = buildJsonObject {
         put("type", "object")
         putJsonObject("properties") { }
     }
 
-    override suspend fun execute(arguments: JsonObject): ToolResult {
+    override suspend fun execute(arguments: JsonObject): ToolExecutionResult {
         val model = Build.MODEL
         val manufacturer = Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
         val androidVersion = Build.VERSION.RELEASE
         val sdk = Build.VERSION.SDK_INT
 
-        val infoText = "Устройство $manufacturer $model, Android $androidVersion (API $sdk)"
-        return ToolResult.Success(infoText)
+        val summary = "Устройство $manufacturer $model, Android $androidVersion (API $sdk)"
+        val dataObj = buildJsonObject {
+            put("manufacturer", manufacturer)
+            put("model", model)
+            put("android_version", androidVersion)
+            put("api_level", sdk)
+        }
+
+        return ToolExecutionResult.success(summary = summary, data = dataObj)
     }
 }

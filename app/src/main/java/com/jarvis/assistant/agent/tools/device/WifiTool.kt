@@ -5,7 +5,8 @@ import android.content.Intent
 import android.os.Build
 import android.provider.Settings
 import com.jarvis.assistant.agent.core.JarvisTool
-import com.jarvis.assistant.agent.model.ToolResult
+import com.jarvis.assistant.agent.core.ToolCategory
+import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.*
@@ -17,9 +18,12 @@ class WifiTool @Inject constructor(
     @ApplicationContext private val context: Context
 ) : JarvisTool {
 
-    override val name: String = "wifi_control"
+    override val toolId: String = "device.wifi"
     override val description: String = "Управляет Wi-Fi сетью и открывает системную панель интернета"
-    override val risk: ToolRisk = ToolRisk.LOW
+    override val category: ToolCategory = ToolCategory.DEVICE
+    override val riskLevel: ToolRisk = ToolRisk.LOW
+    override val isOffline: Boolean = true
+    override val requiresForeground: Boolean = true
 
     override val parametersSchema: JsonObject = buildJsonObject {
         put("type", "object")
@@ -31,7 +35,7 @@ class WifiTool @Inject constructor(
         }
     }
 
-    override suspend fun execute(arguments: JsonObject): ToolResult {
+    override suspend fun execute(arguments: JsonObject): ToolExecutionResult {
         return try {
             val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY).apply {
@@ -43,9 +47,9 @@ class WifiTool @Inject constructor(
                 }
             }
             context.startActivity(intent)
-            ToolResult.Success("Открываю панель управления Wi-Fi")
+            ToolExecutionResult.success("Открываю панель управления Wi-Fi", actionRequiresUser = true)
         } catch (e: Exception) {
-            ToolResult.Error("Не удалось открыть настройки Wi-Fi", "WIFI_ERROR")
+            ToolExecutionResult.failure("Не удалось открыть настройки Wi-Fi", "WIFI_ERROR")
         }
     }
 }

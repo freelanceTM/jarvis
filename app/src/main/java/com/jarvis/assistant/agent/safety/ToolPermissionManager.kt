@@ -16,9 +16,9 @@ class ToolPermissionManager @Inject constructor(
      * Проверяет, разрешено ли автоматическое выполнение инструмента
      */
     fun isExecutionAllowed(tool: JarvisTool, call: ToolCall): Boolean {
-        return when (tool.risk) {
+        return when (tool.riskLevel) {
             ToolRisk.SAFE, ToolRisk.LOW -> true
-            ToolRisk.CONFIRMATION_REQUIRED, ToolRisk.HIGH -> false
+            ToolRisk.CONFIRMATION_REQUIRED, ToolRisk.HIGH, ToolRisk.CRITICAL -> false
         }
     }
 
@@ -26,6 +26,6 @@ class ToolPermissionManager @Inject constructor(
      * Формирует понятный текст запроса подтверждения для пользователя
      */
     fun buildConfirmationPrompt(tool: JarvisTool, call: ToolCall): String {
-        return "Внимание: действие '${tool.name}' требует подтверждения. Подтвердить выполнение, сэр?"
+        return "Внимание: действие '${tool.description}' требует подтверждения. Подтвердить выполнение, сэр?"
     }
 }
