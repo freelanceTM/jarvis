@@ -61,7 +61,7 @@ class RememberFactTool @Inject constructor(
 
     override suspend fun rollback(arguments: JsonObject, rollbackData: JsonObject?): Boolean {
         val key = rollbackData?.get("rollback_key")?.jsonPrimitive?.contentOrNull ?: return false
-        memoryManager.deleteMemoryByKey(key)
+        memoryManager.forgetMemory(key)
         return true
     }
 }
