@@ -3,11 +3,9 @@ package com.jarvis.assistant.di
 import android.content.Context
 import androidx.room.Room
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
-import com.jarvis.assistant.agent.registry.JarvisTool
-import com.jarvis.assistant.agent.tools.device.AppLauncherTool
-import com.jarvis.assistant.agent.tools.device.DeviceSettingsTool
-import com.jarvis.assistant.agent.tools.device.VolumeTool
-import com.jarvis.assistant.agent.tools.productivity.TimerReminderTool
+import com.jarvis.assistant.agent.core.JarvisTool
+import com.jarvis.assistant.agent.tools.device.*
+import com.jarvis.assistant.agent.tools.system.*
 import com.jarvis.assistant.ai.AIClient
 import com.jarvis.assistant.ai.UniversalAIClient
 import com.jarvis.assistant.core.constants.AppConstants
@@ -75,21 +73,46 @@ abstract class SecurityAndNetworkBindingModule {
     @Multibinds
     abstract fun bindToolsSet(): Set<JarvisTool>
 
+    // 10 Базовых инструментов системы Android
     @Binds
     @IntoSet
-    abstract fun bindAppLauncherTool(tool: AppLauncherTool): JarvisTool
+    abstract fun bindGetDeviceInfoTool(tool: GetDeviceInfoTool): JarvisTool
 
     @Binds
     @IntoSet
-    abstract fun bindVolumeTool(tool: VolumeTool): JarvisTool
+    abstract fun bindGetBatteryTool(tool: GetBatteryTool): JarvisTool
 
     @Binds
     @IntoSet
-    abstract fun bindDeviceSettingsTool(tool: DeviceSettingsTool): JarvisTool
+    abstract fun bindGetTimeTool(tool: GetTimeTool): JarvisTool
 
     @Binds
     @IntoSet
-    abstract fun bindTimerReminderTool(tool: TimerReminderTool): JarvisTool
+    abstract fun bindGetNetworkStatusTool(tool: GetNetworkStatusTool): JarvisTool
+
+    @Binds
+    @IntoSet
+    abstract fun bindOpenAppTool(tool: OpenAppTool): JarvisTool
+
+    @Binds
+    @IntoSet
+    abstract fun bindSetVolumeTool(tool: SetVolumeTool): JarvisTool
+
+    @Binds
+    @IntoSet
+    abstract fun bindSetBrightnessTool(tool: SetBrightnessTool): JarvisTool
+
+    @Binds
+    @IntoSet
+    abstract fun bindFlashlightTool(tool: FlashlightTool): JarvisTool
+
+    @Binds
+    @IntoSet
+    abstract fun bindBluetoothTool(tool: BluetoothTool): JarvisTool
+
+    @Binds
+    @IntoSet
+    abstract fun bindWifiTool(tool: WifiTool): JarvisTool
 }
 
 @Module

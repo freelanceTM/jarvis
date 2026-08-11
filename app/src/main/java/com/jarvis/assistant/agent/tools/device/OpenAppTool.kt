@@ -3,30 +3,33 @@ package com.jarvis.assistant.agent.tools.device
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import com.jarvis.assistant.agent.registry.JarvisTool
-import com.jarvis.assistant.agent.registry.ToolCategory
-import com.jarvis.assistant.agent.registry.ToolParamSpec
-import com.jarvis.assistant.agent.registry.ToolResult
+import com.jarvis.assistant.agent.core.JarvisTool
+import com.jarvis.assistant.agent.model.ToolResult
+import com.jarvis.assistant.agent.model.ToolRisk
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.serialization.json.*
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class AppLauncherTool @Inject constructor(
+class OpenAppTool @Inject constructor(
     @ApplicationContext private val context: Context
 ) : JarvisTool {
 
     override val name: String = "open_app"
-    override val description: String = "Открывает установленное приложение на телефоне (Telegram, YouTube, WhatsApp, Chrome, Камера, Музыка, Настройки)"
-    override val category: ToolCategory = ToolCategory.DEVICE
+    override val description: String = "Открывает любое установленное приложение (Telegram, YouTube, WhatsApp, Камера, Chrome, Spotify, Настройки, Калькулятор)"
+    override val risk: ToolRisk = ToolRisk.LOW
 
-    override val parameters: List<ToolParamSpec> = listOf(
-        ToolParamSpec(
-            name = "app_name",
-            type = "string",
-            description = "Название приложения: telegram, youtube, whatsapp, chrome, camera, spotify, settings, gallery, calculator"
-        )
-    )
+    override val parametersSchema: JsonObject = buildJsonObject {
+        put("type", "object")
+        put("properties", buildJsonObject {
+            put("app_name", buildJsonObject {
+                put("type", "string")
+                put("description", "Название: telegram, youtube, whatsapp, camera, chrome, spotify, settings, calculator, gallery, maps")
+            })
+        })
+        put("required", buildJsonArray { add("app_name") })
+    }
 
     private val packageMap = mapOf(
         "telegram" to "org.telegram.messenger",
@@ -47,19 +50,20 @@ class AppLauncherTool @Inject constructor(
         "settings" to "android.settings.SETTINGS",
         "настройки" to "android.settings.SETTINGS",
         "calculator" to "com.google.android.calculator",
-        "калькулятор" to "com.google.android.calculator"
+        "калькулятор" to "com.google.android.calculator",
+        "maps" to "com.google.android.apps.maps",
+        "карты" to "com.google.android.apps.maps"
     )
 
-    override suspend fun execute(args: Map<String, String>): ToolResult {
-        val rawName = args["app_name"]?.lowercase()?.trim().orEmpty()
+    override suspend fun execute(arguments: JsonObject): ToolResult {
+        val rawName = arguments["app_name"]?.jsonPrimitive?.contentOrNull?.lowercase()?.trim().orEmpty()
         if (rawName.isEmpty()) {
-            return ToolResult.Failure("Не указано имя приложения", "Missing app_name")
+            return ToolResult.Error("Не указано название приложения", "MISSING_PARAM")
         }
 
         val target = packageMap[rawName] ?: rawName
 
-        try {
-            // 1. Попытка запуска по Package Name
+        return try {
             val launchIntent = context.packageManager.getLaunchIntentForPackage(target)
             if (launchIntent != null) {
                 launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -67,23 +71,19 @@ class AppLauncherTool @Inject constructor(
                 return ToolResult.Success("Приложение $rawName успешно открыто")
             }
 
-            // 2. Попытка запуска по Intent Action (Камера, Настройки)
             if (target.startsWith("android.")) {
-                val actionIntent = Intent(target).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
+                val actionIntent = Intent(target).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
                 context.startActivity(actionIntent)
                 return ToolResult.Success("Открываю $rawName")
             }
 
-            // 3. Fallback: Поиск в маркете, если не установлено
             val marketIntent = Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=$rawName")).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(marketIntent)
-            return ToolResult.Success("Приложение $rawName не найдено, открыт поиск")
+            ToolResult.Success("Приложение $rawName не установлено, открыт магазин приложений")
         } catch (e: Exception) {
-            return ToolResult.Failure("Не удалось открыть $rawName: ${e.message}", e.localizedMessage ?: "")
+            ToolResult.Error("Не удалось запустить $rawName: ${e.localizedMessage}", "LAUNCH_ERROR")
         }
     }
 }
