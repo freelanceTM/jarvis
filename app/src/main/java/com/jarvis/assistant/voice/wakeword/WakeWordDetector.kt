@@ -14,21 +14,18 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.abs
 import kotlin.math.sqrt
 
 sealed interface WakeWordEvent {
-    data object WakeWordDetected : WakeWordEvent       // "Джарвис"
-    data object InterruptDetected : WakeWordEvent      // "Джарвис, стоп" / "Стоп"
+    data object VoiceActivityDetected : WakeWordEvent // Голос обнаружен для верификации
     data class VoiceLevelChanged(val rms: Float) : WakeWordEvent
 }
 
 interface WakeWordDetector {
     val events: SharedFlow<WakeWordEvent>
-    fun startListening(isInterruptModeOnly: Boolean = false)
+    fun startListening()
     fun stopListening()
     fun isRunning(): Boolean
     fun setSensitivity(sensitivity: Float)
@@ -46,8 +43,7 @@ class NativeWakeWordDetector @Inject constructor(
     private var listeningJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Default)
 
-    private var sensitivity: Float = 0.7f // 0.1 .. 1.0
-    private var isInterruptOnlyMode: Boolean = false
+    private var sensitivity: Float = 0.65f
     private var isRecording = false
 
     private val sampleRate = 16000
@@ -62,11 +58,9 @@ class NativeWakeWordDetector @Inject constructor(
     override fun isRunning(): Boolean = isRecording
 
     @SuppressLint("MissingPermission")
-    override fun startListening(isInterruptModeOnly: Boolean) {
-        if (isRecording && this.isInterruptOnlyMode == isInterruptModeOnly) return
-
+    override fun startListening() {
+        if (isRecording) return
         stopListening()
-        this.isInterruptOnlyMode = isInterruptModeOnly
 
         try {
             audioRecord = AudioRecord(
@@ -86,14 +80,14 @@ class NativeWakeWordDetector @Inject constructor(
 
             listeningJob = scope.launch {
                 val buffer = ShortArray(bufferSize / 2)
-                var voiceEnergyCount = 0
-                val energyThreshold = (1200 * (1.1f - sensitivity)).toInt()
+                var consecutiveVoiceFrames = 0
+                // Повышенный порог шума для предотвращения ложных срабатываний
+                val energyThreshold = (1800 * (1.15f - sensitivity)).toInt()
 
                 while (isActive && isRecording) {
                     val readSamples = audioRecord?.read(buffer, 0, buffer.size) ?: 0
                     if (readSamples <= 0) continue
 
-                    // 1. Calculate RMS Energy (Voice Activity Detection - VAD)
                     var sum = 0.0
                     for (i in 0 until readSamples) {
                         sum += buffer[i] * buffer[i]
@@ -101,20 +95,15 @@ class NativeWakeWordDetector @Inject constructor(
                     val rms = sqrt(sum / readSamples).toFloat()
                     _events.tryEmit(WakeWordEvent.VoiceLevelChanged(rms))
 
-                    // 2. High-speed Acoustic VAD trigger
+                    // Фильтр устойчивой речи: нужно несколько непрерывных кадров уверенного голоса
                     if (rms > energyThreshold) {
-                        voiceEnergyCount++
-                        if (voiceEnergyCount >= 3) {
-                            // Voice burst detected
-                            if (isInterruptOnlyMode) {
-                                _events.emit(WakeWordEvent.InterruptDetected)
-                            } else {
-                                _events.emit(WakeWordEvent.WakeWordDetected)
-                            }
-                            voiceEnergyCount = 0
+                        consecutiveVoiceFrames++
+                        if (consecutiveVoiceFrames >= 4) {
+                            _events.emit(WakeWordEvent.VoiceActivityDetected)
+                            consecutiveVoiceFrames = 0
                         }
                     } else {
-                        voiceEnergyCount = (voiceEnergyCount - 1).coerceAtLeast(0)
+                        consecutiveVoiceFrames = (consecutiveVoiceFrames - 1).coerceAtLeast(0)
                     }
                 }
             }

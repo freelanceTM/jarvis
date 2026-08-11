@@ -9,25 +9,35 @@ import javax.inject.Singleton
 @Singleton
 class PromptManager @Inject constructor() {
 
+    private val voiceSystemConstraint = """Ты JARVIS — персональный голосовой AI-ассистент.
+Правила ответа:
+1. Отвечай кратко и емко: ровно 1-2 предложения, максимум 3.
+2. Говори живым разговорным языком для озвучивания вслух.
+3. Категорически запрещено использовать списки, маркировку, markdown-звездочки (**), решетки (#) и спецсимволы.
+4. Отвечай прямо по сути без лишних вступительных фраз."""
+
     fun buildChatPrompt(
         systemPrompt: String,
         userPrompt: String,
         recentHistory: List<Message> = emptyList(),
-        maxHistoryItems: Int = 6
+        maxHistoryItems: Int = 4
     ): List<ApiMessageDto> {
         val messages = mutableListOf<ApiMessageDto>()
 
-        // 1. Injected System Prompt
-        if (systemPrompt.isNotBlank()) {
-            messages.add(
-                ApiMessageDto(
-                    role = MessageRole.SYSTEM.value,
-                    content = systemPrompt.trim()
-                )
-            )
+        val effectiveSystemPrompt = if (systemPrompt.isNotBlank()) {
+            "$systemPrompt\n\n$voiceSystemConstraint"
+        } else {
+            voiceSystemConstraint
         }
 
-        // 2. Formatted Context Window (Oldest to newest)
+        messages.add(
+            ApiMessageDto(
+                role = MessageRole.SYSTEM.value,
+                content = effectiveSystemPrompt.trim()
+            )
+        )
+
+        // Контекст истории
         val sortedHistory = recentHistory
             .takeLast(maxHistoryItems)
             .filter { it.text.isNotBlank() }
@@ -41,7 +51,6 @@ class PromptManager @Inject constructor() {
             )
         }
 
-        // 3. Current User Command (if not already in history)
         if (sortedHistory.lastOrNull()?.text != userPrompt) {
             messages.add(
                 ApiMessageDto(
