@@ -111,6 +111,7 @@ class JarvisVoiceService : Service() {
             orchestrator.currentMode.collectLatest { mode ->
                 val statusText = when (mode) {
                     OrchestratorMode.STANDBY_WAKE_WORD -> "● Ожидание фразы «Джарвис»..."
+                    OrchestratorMode.VERIFYING_KEYWORD -> "● Проверка голоса..."
                     OrchestratorMode.LISTENING_USER_QUERY -> "● Слушаю ваш запрос..."
                     OrchestratorMode.AI_THINKING -> "● Генерация ответа через AI..."
                     OrchestratorMode.TTS_SPEAKING -> "● Озвучивание (скажите «Стоп» для отмены)..."

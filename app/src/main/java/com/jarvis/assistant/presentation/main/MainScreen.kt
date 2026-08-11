@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -103,7 +104,7 @@ fun MainScreen(
                             .background(JarvisSurface)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Chat,
+                            imageVector = Icons.AutoMirrored.Filled.Chat,
                             contentDescription = "История",
                             tint = JarvisCyanPrimary
                         )
@@ -285,6 +286,7 @@ fun MainScreen(
 fun WakeWordStatusBanner(mode: OrchestratorMode, state: VoiceAssistantState) {
     val (label, color) = when (mode) {
         OrchestratorMode.STANDBY_WAKE_WORD -> "● Ожидание фразы «Джарвис» (Hands-Free)" to JarvisCyanPrimary
+        OrchestratorMode.VERIFYING_KEYWORD -> "● Проверка ключевого слова..." to JarvisCyanPrimary
         OrchestratorMode.LISTENING_USER_QUERY -> "● Слушаю ваш запрос..." to JarvisGreen
         OrchestratorMode.AI_THINKING -> "● Генерация ответа через AI..." to JarvisCyanSecondary
         OrchestratorMode.TTS_SPEAKING -> "● Озвучивание (скажите «Стоп» для отмены)" to JarvisCyanPrimary
