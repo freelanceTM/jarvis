@@ -96,18 +96,18 @@ class UniversalAIClient @Inject constructor(
         }
 
         try {
-            // 1. Прямой запрос к OpenRouter (Официальный Google Gemini без VPN)
+            // 1. OpenRouter (Использует универсальную бесплатную модель openrouter/free)
             if (apiKey.startsWith("sk-or-")) {
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://openrouter.ai/api/v1/chat/completions",
-                    model = "google/gemini-2.0-flash-exp:free",
+                    model = "openrouter/free",
                     apiKey = apiKey,
                     prompt = prompt,
                     systemPrompt = systemPrompt,
                     history = history
                 )
             }
-            // 2. Прямой запрос к Groq (Llama 3.3 70B)
+            // 2. Groq (Llama 3.3 70B)
             else if (apiKey.startsWith("gsk_")) {
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://api.groq.com/openai/v1/chat/completions",
@@ -118,7 +118,7 @@ class UniversalAIClient @Inject constructor(
                     history = history
                 )
             }
-            // 3. Прямой запрос к OpenAI (GPT-4o Mini)
+            // 3. OpenAI (GPT-4o Mini)
             else if (apiKey.startsWith("sk-")) {
                 return@withContext callOpenAiCompatible(
                     endpointUrl = "https://api.openai.com/v1/chat/completions",
@@ -129,16 +129,16 @@ class UniversalAIClient @Inject constructor(
                     history = history
                 )
             }
-            // 4. Прямой официальный запрос к Google Gemini
+            // 4. Google Gemini API
             else {
                 return@withContext callDirectGemini(apiKey, prompt, systemPrompt, history)
             }
         } catch (e: SocketTimeoutException) {
-            Resource.Error(e, "Таймаут подключения. Проверьте интернет-соединение.")
+            Resource.Error(e, "Таймаут подключения к AI. Проверьте интернет.")
         } catch (e: IOException) {
-            Resource.Error(e, "Ошибка сети: ${e.localizedMessage ?: "Нет интернета"}")
+            Resource.Error(e, "Ошибка сети при запросе к AI.")
         } catch (e: Exception) {
-            Resource.Error(e, "Ошибка: ${e.localizedMessage}")
+            Resource.Error(e, "Ошибка AI: ${e.localizedMessage}")
         }
     }
 
@@ -168,7 +168,6 @@ class UniversalAIClient @Inject constructor(
         val requestBodyObj = GeminiRequestDto(contents, systemInstruction)
         val jsonBody = json.encodeToString(GeminiRequestDto.serializer(), requestBodyObj)
 
-        // Прямой официальный URL Google Gemini без шлюзов
         val requestUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=$apiKey"
 
         val request = Request.Builder()
@@ -192,16 +191,9 @@ class UniversalAIClient @Inject constructor(
         } else {
             val code = response.code
             val userMsg = when (code) {
-                400 -> {
-                    if (responseBody.contains("User location is not supported", ignoreCase = true)) {
-                        "Google блокирует запросы из вашего региона. Включите VPN или используйте ключ OpenRouter."
-                    } else {
-                        "Неверный формат запроса или ключа Gemini ($code)."
-                    }
-                }
-                401, 403 -> "Google отклонил ключ (403). Включите VPN на телефоне или используйте ключ OpenRouter (sk-or-...)."
+                400, 403 -> "Google блокирует запросы из вашего региона без VPN. Включите VPN или используйте ключ OpenRouter (sk-or-...)."
                 429 -> "Лимит запросов Gemini исчерпан. Пожалуйста, подождите 30 секунд."
-                else -> "Ошибка сервера Google ($code)."
+                else -> "Ошибка сервера AI ($code)."
             }
             return Resource.Error(IllegalStateException("HTTP $code: $responseBody"), userMsg)
         }
@@ -235,7 +227,7 @@ class UniversalAIClient @Inject constructor(
             .header("Authorization", "Bearer $apiKey")
             .header("Content-Type", "application/json")
             .header("HTTP-Referer", "https://github.com/freelanceTM/jarvis")
-            .header("X-Title", "JARVIS Voice Assistant")
+            .header("X-Title", "JARVIS Assistant")
             .build()
 
         val response = okHttpClient.newCall(request).execute()

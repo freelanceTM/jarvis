@@ -60,6 +60,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
     private var toneGenerator: ToneGenerator? = null
     private var aiJob: Job? = null
+    private var silenceDebounceJob: Job? = null
     private var inactivityTimerJob: Job? = null
 
     private var speechRate = 1.0f
@@ -132,6 +133,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
     }
 
     private fun handleBargeInInterrupt() {
+        silenceDebounceJob?.cancel()
         aiJob?.cancel()
         aiJob = null
         textToSpeechManager.stop()
@@ -149,8 +151,19 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     is SpeechRecognitionEvent.PartialResult -> {
                         _assistantState.value = VoiceAssistantState.Recognizing(event.partialText)
                         _lastQuery.value = event.partialText
+
+                        // Авто-отправка через 1.5 секунды после окончания фразы, если телефон задерживает финал
+                        silenceDebounceJob?.cancel()
+                        silenceDebounceJob = scope.launch {
+                            delay(1500)
+                            if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY && event.partialText.isNotBlank()) {
+                                speechRecognizerManager.stopListening()
+                                executeAiQuery(event.partialText)
+                            }
+                        }
                     }
                     is SpeechRecognitionEvent.FinalResult -> {
+                        silenceDebounceJob?.cancel()
                         _lastQuery.value = event.recognizedText
                         val text = event.recognizedText.lowercase()
 
@@ -162,6 +175,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         executeAiQuery(event.recognizedText)
                     }
                     is SpeechRecognitionEvent.RecognitionError -> {
+                        silenceDebounceJob?.cancel()
                         if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY) {
                             _assistantState.value = VoiceAssistantState.Error(event.errorMessage)
                             textToSpeechManager.speak(event.errorMessage, speechRate, speechPitch)
@@ -269,6 +283,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
     }
 
     fun stopAll() {
+        silenceDebounceJob?.cancel()
         aiJob?.cancel()
         aiJob = null
         wakeWordDetector.stopListening()
