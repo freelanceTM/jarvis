@@ -3,6 +3,7 @@ package com.jarvis.assistant.di
 import android.content.Context
 import androidx.room.Room
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import com.jarvis.assistant.agent.automation.dao.AutomationDao
 import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.memory.dao.*
 import com.jarvis.assistant.agent.tools.communication.*
@@ -157,6 +158,10 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideProcedureDao(database: JarvisDatabase): ProcedureDao = database.procedureDao()
+
+    @Provides
+    @Singleton
+    fun provideAutomationDao(database: JarvisDatabase): AutomationDao = database.automationDao()
 }
 
 @Module

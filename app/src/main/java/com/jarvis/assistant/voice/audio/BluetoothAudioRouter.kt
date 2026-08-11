@@ -12,10 +12,15 @@ import android.content.IntentFilter
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
+import com.jarvis.assistant.agent.automation.engine.PersonalAutomationEngine
+import com.jarvis.assistant.agent.automation.model.AutomationTriggerType
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,10 +32,12 @@ sealed interface BluetoothAudioState {
 
 @Singleton
 class BluetoothAudioRouter @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val automationEngine: PersonalAutomationEngine
 ) {
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     private var bluetoothHeadset: BluetoothHeadset? = null
+    private val scope = CoroutineScope(Dispatchers.IO)
 
     private val _audioState = MutableStateFlow<BluetoothAudioState>(BluetoothAudioState.Disconnected)
     val audioState: StateFlow<BluetoothAudioState> = _audioState.asStateFlow()
@@ -48,6 +55,7 @@ class BluetoothAudioRouter @Inject constructor(
                     val name = connectedDevices.first().name ?: "Bluetooth Гарнитура"
                     _audioState.value = BluetoothAudioState.Connected(name, isSingleEarbud = true)
                     _isHeadsetPlugged.value = true
+                    triggerHeadphoneAutomation()
                 }
             }
         }
@@ -71,6 +79,7 @@ class BluetoothAudioRouter @Inject constructor(
                     _audioState.value = BluetoothAudioState.Connected(name, isSingleEarbud = true)
                     _isHeadsetPlugged.value = true
                     routeAudioToEarbud()
+                    triggerHeadphoneAutomation()
                 }
                 BluetoothDevice.ACTION_ACL_DISCONNECTED,
                 AudioManager.ACTION_AUDIO_BECOMING_NOISY -> {
@@ -81,6 +90,7 @@ class BluetoothAudioRouter @Inject constructor(
                     _isHeadsetPlugged.value = (state == 1) || isBluetoothConnected()
                     if (state == 1) {
                         _audioState.value = BluetoothAudioState.Connected("Проводные наушники")
+                        triggerHeadphoneAutomation()
                     } else if (!isBluetoothConnected()) {
                         _audioState.value = BluetoothAudioState.Disconnected
                     }
@@ -110,6 +120,12 @@ class BluetoothAudioRouter @Inject constructor(
             context.registerReceiver(connectionReceiver, filter)
             checkHeadsetConnection()
         } catch (_: Exception) { }
+    }
+
+    private fun triggerHeadphoneAutomation() {
+        scope.launch {
+            automationEngine.onSystemEvent(AutomationTriggerType.HEADPHONES_CONNECTED)
+        }
     }
 
     fun checkHeadsetConnection(): Boolean {
