@@ -3,6 +3,11 @@ package com.jarvis.assistant.di
 import android.content.Context
 import androidx.room.Room
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import com.jarvis.assistant.agent.registry.JarvisTool
+import com.jarvis.assistant.agent.tools.device.AppLauncherTool
+import com.jarvis.assistant.agent.tools.device.DeviceSettingsTool
+import com.jarvis.assistant.agent.tools.device.VolumeTool
+import com.jarvis.assistant.agent.tools.productivity.TimerReminderTool
 import com.jarvis.assistant.ai.AIClient
 import com.jarvis.assistant.ai.UniversalAIClient
 import com.jarvis.assistant.core.constants.AppConstants
@@ -30,6 +35,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import dagger.multibindings.IntoSet
+import dagger.multibindings.Multibinds
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -64,6 +71,25 @@ abstract class SecurityAndNetworkBindingModule {
     @Binds
     @Singleton
     abstract fun bindWakeWordDetector(impl: AlisaStyleWakeWordEngine): WakeWordDetector
+
+    @Multibinds
+    abstract fun bindToolsSet(): Set<JarvisTool>
+
+    @Binds
+    @IntoSet
+    abstract fun bindAppLauncherTool(tool: AppLauncherTool): JarvisTool
+
+    @Binds
+    @IntoSet
+    abstract fun bindVolumeTool(tool: VolumeTool): JarvisTool
+
+    @Binds
+    @IntoSet
+    abstract fun bindDeviceSettingsTool(tool: DeviceSettingsTool): JarvisTool
+
+    @Binds
+    @IntoSet
+    abstract fun bindTimerReminderTool(tool: TimerReminderTool): JarvisTool
 }
 
 @Module
