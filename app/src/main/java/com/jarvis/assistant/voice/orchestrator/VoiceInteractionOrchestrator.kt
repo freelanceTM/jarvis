@@ -3,6 +3,7 @@ package com.jarvis.assistant.voice.orchestrator
 import android.content.Context
 import android.media.ToneGenerator
 import android.media.AudioManager
+import android.util.Log
 import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.model.ToolCall
 import com.jarvis.assistant.core.result.Resource
@@ -18,13 +19,12 @@ import com.jarvis.assistant.voice.tts.TtsState
 import com.jarvis.assistant.voice.wakeword.WakeWordDetector
 import com.jarvis.assistant.voice.wakeword.WakeWordEvent
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonObject
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -51,7 +51,12 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private val securityManager: SecurityManager,
     private val toolExecutor: ToolExecutor
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main + Job())
+    companion object {
+        private const val TAG = "VoiceOrchestrator"
+    }
+
+    private var orchestratorJob = SupervisorJob()
+    private var scope = CoroutineScope(Dispatchers.Main.immediate + orchestratorJob)
 
     private val _currentMode = MutableStateFlow(OrchestratorMode.STANDBY_WAKE_WORD)
     val currentMode: StateFlow<OrchestratorMode> = _currentMode.asStateFlow()
@@ -72,6 +77,8 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private var confirmationTimeoutJob: Job? = null
     private var isServiceActive = false
 
+    private val isProcessingQuery = AtomicBoolean(false)
+
     private var pendingToolCall: ToolCall? = null
     private var pendingConfirmationPrompt: String = ""
 
@@ -81,10 +88,17 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private val wakeKeywords = listOf("джарвис", "jarvis", "жарвис", "дарвис", "джей", "диджей", "джар")
 
     init {
+        initToneGenerator()
+        observePipelines()
+    }
+
+    private fun initToneGenerator() {
         try {
             toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 85)
         } catch (_: Exception) { }
+    }
 
+    private fun observePipelines() {
         observeSettings()
         observeHeadsetPlugging()
         observeWakeDetector()
@@ -93,6 +107,12 @@ class VoiceInteractionOrchestrator @Inject constructor(
     }
 
     fun startServicePipeline() {
+        if (!orchestratorJob.isActive) {
+            orchestratorJob = SupervisorJob()
+            scope = CoroutineScope(Dispatchers.Main.immediate + orchestratorJob)
+            observePipelines()
+        }
+
         isServiceActive = true
         bluetoothAudioRouter.checkHeadsetConnection()
 
@@ -164,8 +184,11 @@ class VoiceInteractionOrchestrator @Inject constructor(
         followUpWindowJob?.cancel()
         confirmationTimeoutJob?.cancel()
         confirmationTimeoutJob = null
+        silenceJob?.cancel()
+        silenceJob = null
         pendingToolCall = null
         toolExecutor.clearPendingConfirmation()
+        isProcessingQuery.set(false)
 
         _currentMode.value = OrchestratorMode.STANDBY_WAKE_WORD
         _assistantState.value = VoiceAssistantState.Idle
@@ -179,12 +202,10 @@ class VoiceInteractionOrchestrator @Inject constructor(
         _assistantState.value = VoiceAssistantState.Listening
         speechRecognizerManager.startListening()
 
-        // 2.5 секунды таймаут на распознавание ключевого слова
         silenceJob?.cancel()
         silenceJob = scope.launch {
             delay(2500)
             if (_currentMode.value == OrchestratorMode.VERIFYING_KEYWORD) {
-                // Если за 2.5 секунды ключевое слово не произнесено -> тихо возвращаемся в Standby
                 startStandbyMode()
             }
         }
@@ -205,13 +226,11 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         val partial = event.partialText.lowercase().trim()
 
                         if (_currentMode.value == OrchestratorMode.VERIFYING_KEYWORD) {
-                            // Быстрая проверка частичного распознавания на ключевое слово
                             if (containsWakeWord(partial)) {
                                 silenceJob?.cancel()
                                 playWakeChime()
                                 val clean = cleanWakeWord(event.partialText)
                                 if (clean.isNotBlank()) {
-                                    // Пользователь произнёс всю команду сразу ("Джарвис включи свет")
                                     _currentMode.value = OrchestratorMode.LISTENING_USER_QUERY
                                     _assistantState.value = VoiceAssistantState.Recognizing(clean)
                                     _lastQuery.value = clean
@@ -224,7 +243,6 @@ class VoiceInteractionOrchestrator @Inject constructor(
                                         }
                                     }
                                 } else {
-                                    // Сказали только "Джарвис" -> переходим в режим записи запроса
                                     _currentMode.value = OrchestratorMode.LISTENING_USER_QUERY
                                     _assistantState.value = VoiceAssistantState.Listening
                                 }
@@ -234,7 +252,6 @@ class VoiceInteractionOrchestrator @Inject constructor(
                             _assistantState.value = VoiceAssistantState.Recognizing(event.partialText)
                             _lastQuery.value = cleanWakeWord(event.partialText)
 
-                            // Быстрая авто-отправка через 850мс тишины
                             silenceJob?.cancel()
                             silenceJob = scope.launch {
                                 delay(850)
@@ -248,6 +265,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     }
                     is SpeechRecognitionEvent.FinalResult -> {
                         silenceJob?.cancel()
+                        followUpWindowJob?.cancel()
                         val text = event.recognizedText.trim()
 
                         if (text.lowercase() in listOf("стоп", "хватит", "отмена", "джарвис стоп")) {
@@ -255,13 +273,11 @@ class VoiceInteractionOrchestrator @Inject constructor(
                             return@collectLatest
                         }
 
-                        // Если находимся в режиме ожидания голосового подтверждения (Да/Нет)
                         if (_currentMode.value == OrchestratorMode.AWAITING_CONFIRMATION) {
                             handleConfirmationResponse(text)
                             return@collectLatest
                         }
 
-                        // Если находимся на этапе верификации ключевого слова
                         if (_currentMode.value == OrchestratorMode.VERIFYING_KEYWORD) {
                             if (containsWakeWord(text)) {
                                 playWakeChime()
@@ -272,7 +288,6 @@ class VoiceInteractionOrchestrator @Inject constructor(
                                     switchToSpeechRecognition()
                                 }
                             } else {
-                                // Ключевого слова нет (фоновый разговор / шум) -> тихо возвращаемся в Standby
                                 startStandbyMode()
                             }
                             return@collectLatest
@@ -314,77 +329,86 @@ class VoiceInteractionOrchestrator @Inject constructor(
     }
 
     private fun processUserQuery(query: String) {
-        if (query.isBlank()) {
+        val clean = query.trim()
+        if (clean.isBlank()) {
             startStandbyMode()
             return
         }
 
+        // Предотвращение race condition при двойном вызове
+        if (!isProcessingQuery.compareAndSet(false, true)) {
+            Log.d(TAG, "Query '$clean' already processing, skipping duplicate dispatch.")
+            return
+        }
+
+        silenceJob?.cancel()
         followUpWindowJob?.cancel()
         confirmationTimeoutJob?.cancel()
+
         _currentMode.value = OrchestratorMode.AI_THINKING
         _assistantState.value = VoiceAssistantState.Thinking
-        _lastQuery.value = query
+        _lastQuery.value = clean
 
         aiJob?.cancel()
         aiJob = scope.launch {
-            val result = sendPromptUseCase(query)
-            when (result) {
-                is Resource.Success -> {
-                    val answer = result.data.trim()
+            try {
+                val result = sendPromptUseCase(clean)
+                when (result) {
+                    is Resource.Success -> {
+                        val answer = result.data.trim()
 
-                    // Проверка: требуется ли голосовое подтверждение опасного действия
-                    if (answer.contains("CONFIRM:")) {
-                        val parts = answer.split(":")
-                        val toolId = parts.getOrNull(1)?.trim().orEmpty()
-                        pendingConfirmationPrompt = if (parts.size >= 3) {
-                            parts.subList(2, parts.size).joinToString(":")
-                        } else {
-                            parts.getOrNull(1) ?: "Подтвердите действие, сэр."
-                        }
-
-                        pendingToolCall = toolExecutor.pendingConfirmationCall ?: run {
-                            if (toolId.isNotBlank()) ToolCall(toolId, JsonObject(emptyMap())) else null
-                        }
-
-                        _lastAnswer.value = pendingConfirmationPrompt
-                        _currentMode.value = OrchestratorMode.AWAITING_CONFIRMATION
-                        _assistantState.value = VoiceAssistantState.Speaking(pendingConfirmationPrompt)
-
-                        // Озвучиваем вопрос подтверждения пользователю
-                        textToSpeechManager.speak(pendingConfirmationPrompt, speechRate, speechPitch)
-
-                        // 10-секундный таймаут ожидания голосового ответа
-                        confirmationTimeoutJob?.cancel()
-                        confirmationTimeoutJob = scope.launch {
-                            delay(10_000)
-                            if (_currentMode.value == OrchestratorMode.AWAITING_CONFIRMATION) {
-                                val timeoutMsg = "Время ожидания истекло. Операция отменена, сэр."
-                                _lastAnswer.value = timeoutMsg
-                                _assistantState.value = VoiceAssistantState.Speaking(timeoutMsg)
-                                textToSpeechManager.speak(timeoutMsg, speechRate, speechPitch)
-                                pendingToolCall = null
-                                toolExecutor.clearPendingConfirmation()
-                                delay(2000)
-                                startStandbyMode()
+                        if (answer.contains("CONFIRM:")) {
+                            val parts = answer.split(":")
+                            val toolId = parts.getOrNull(1)?.trim().orEmpty()
+                            pendingConfirmationPrompt = if (parts.size >= 3) {
+                                parts.subList(2, parts.size).joinToString(":")
+                            } else {
+                                parts.getOrNull(1) ?: "Подтвердите действие, сэр."
                             }
+
+                            pendingToolCall = toolExecutor.pendingConfirmationCall ?: run {
+                                if (toolId.isNotBlank()) ToolCall(toolId, JsonObject(emptyMap())) else null
+                            }
+
+                            _lastAnswer.value = pendingConfirmationPrompt
+                            _currentMode.value = OrchestratorMode.AWAITING_CONFIRMATION
+                            _assistantState.value = VoiceAssistantState.Speaking(pendingConfirmationPrompt)
+
+                            textToSpeechManager.speak(pendingConfirmationPrompt, speechRate, speechPitch)
+
+                            confirmationTimeoutJob?.cancel()
+                            confirmationTimeoutJob = scope.launch {
+                                delay(10_000)
+                                if (_currentMode.value == OrchestratorMode.AWAITING_CONFIRMATION) {
+                                    val timeoutMsg = "Время ожидания истекло. Операция отменена, сэр."
+                                    _lastAnswer.value = timeoutMsg
+                                    _assistantState.value = VoiceAssistantState.Speaking(timeoutMsg)
+                                    textToSpeechManager.speak(timeoutMsg, speechRate, speechPitch)
+                                    pendingToolCall = null
+                                    toolExecutor.clearPendingConfirmation()
+                                    delay(2000)
+                                    startStandbyMode()
+                                }
+                            }
+                        } else {
+                            _lastAnswer.value = answer
+                            _currentMode.value = OrchestratorMode.TTS_SPEAKING
+                            _assistantState.value = VoiceAssistantState.Speaking(answer)
+                            textToSpeechManager.speak(answer, speechRate, speechPitch)
                         }
-                    } else {
-                        // Обычный ответ — озвучиваем
-                        _lastAnswer.value = answer
-                        _currentMode.value = OrchestratorMode.TTS_SPEAKING
-                        _assistantState.value = VoiceAssistantState.Speaking(answer)
-                        textToSpeechManager.speak(answer, speechRate, speechPitch)
                     }
+                    is Resource.Error -> {
+                        val errorMsg = result.message ?: "Ошибка связи с AI"
+                        _lastAnswer.value = "Ошибка: $errorMsg"
+                        _assistantState.value = VoiceAssistantState.Error(errorMsg)
+                        textToSpeechManager.speak(errorMsg, speechRate, speechPitch)
+                        delay(2000)
+                        startStandbyMode()
+                    }
+                    is Resource.Loading -> Unit
                 }
-                is Resource.Error -> {
-                    val errorMsg = result.message ?: "Ошибка связи с AI"
-                    _lastAnswer.value = "Ошибка: $errorMsg"
-                    _assistantState.value = VoiceAssistantState.Error(errorMsg)
-                    textToSpeechManager.speak(errorMsg, speechRate, speechPitch)
-                    delay(2000)
-                    startStandbyMode()
-                }
-                is Resource.Loading -> Unit
+            } finally {
+                isProcessingQuery.set(false)
             }
         }
     }
@@ -452,12 +476,10 @@ class VoiceInteractionOrchestrator @Inject constructor(
                 textToSpeechManager.speak(cancelMsg, speechRate, speechPitch)
             }
             else -> {
-                // Переспросить
                 val retryMsg = "Не понял. Скажите да или нет."
                 _assistantState.value = VoiceAssistantState.Speaking(retryMsg)
                 textToSpeechManager.speak(retryMsg, speechRate, speechPitch)
 
-                // Перезапуск 10-секундного таймаута
                 confirmationTimeoutJob?.cancel()
                 confirmationTimeoutJob = scope.launch {
                     delay(10_000)
@@ -486,7 +508,6 @@ class VoiceInteractionOrchestrator @Inject constructor(
                                 openContinuousConversationWindow()
                             }
                             OrchestratorMode.AWAITING_CONFIRMATION -> {
-                                // Начинаем слушать ответ пользователя (Да/Нет)
                                 wakeWordDetector.stopListening()
                                 speechRecognizerManager.startListening()
                             }
@@ -511,7 +532,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
         followUpWindowJob?.cancel()
         followUpWindowJob = scope.launch {
-            delay(4000) // 4 секунды на продолжение диалога
+            delay(4000)
             if (_currentMode.value == OrchestratorMode.CONTINUOUS_CONVERSATION) {
                 startStandbyMode()
             }
@@ -525,6 +546,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
         confirmationTimeoutJob = null
         pendingToolCall = null
         toolExecutor.clearPendingConfirmation()
+        isProcessingQuery.set(false)
         aiJob?.cancel()
         aiJob = null
         textToSpeechManager.stop()
@@ -562,10 +584,24 @@ class VoiceInteractionOrchestrator @Inject constructor(
         confirmationTimeoutJob = null
         pendingToolCall = null
         toolExecutor.clearPendingConfirmation()
+        isProcessingQuery.set(false)
         aiJob?.cancel()
         aiJob = null
         wakeWordDetector.stopListening()
         speechRecognizerManager.stopListening()
         textToSpeechManager.stop()
+    }
+
+    /**
+     * Полное освобождение ресурсов при уничтожении службы
+     */
+    fun destroy() {
+        stopAll()
+        isServiceActive = false
+        orchestratorJob.cancel()
+        try {
+            toneGenerator?.release()
+        } catch (_: Exception) { }
+        toneGenerator = null
     }
 }

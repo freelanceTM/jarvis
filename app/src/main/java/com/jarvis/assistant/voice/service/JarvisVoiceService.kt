@@ -244,7 +244,7 @@ class JarvisVoiceService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        orchestrator.stopServicePipeline()
+        orchestrator.destroy()
         releaseWakeLock()
         try {
             unregisterReceiver(systemEventReceiver)
