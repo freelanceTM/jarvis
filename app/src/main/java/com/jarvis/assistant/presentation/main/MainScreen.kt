@@ -59,7 +59,14 @@ fun MainScreen(
                 is MainUiEffect.NavigateToSettings -> onNavigateToSettings()
                 is MainUiEffect.ShowToast -> snackbarHostState.showSnackbar(effect.message)
                 is MainUiEffect.RequestServicePermissions -> {
-                    val list = mutableListOf(Manifest.permission.RECORD_AUDIO)
+                    val list = mutableListOf(
+                        Manifest.permission.RECORD_AUDIO,
+                        Manifest.permission.CALL_PHONE,
+                        Manifest.permission.READ_CONTACTS,
+                        Manifest.permission.SEND_SMS,
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    )
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         list.add(Manifest.permission.POST_NOTIFICATIONS)
                     }
@@ -171,19 +178,27 @@ fun MainScreen(
             ) {
                 Button(
                     onClick = {
-                        val hasAudio = ContextCompat.checkSelfPermission(
-                            context, Manifest.permission.RECORD_AUDIO
-                        ) == PackageManager.PERMISSION_GRANTED
+                        val required = mutableListOf(
+                            Manifest.permission.RECORD_AUDIO,
+                            Manifest.permission.CALL_PHONE,
+                            Manifest.permission.READ_CONTACTS,
+                            Manifest.permission.SEND_SMS,
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            required.add(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            required.add(Manifest.permission.BLUETOOTH_CONNECT)
+                        }
 
-                        if (!hasAudio) {
-                            val perms = mutableListOf(Manifest.permission.RECORD_AUDIO)
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                perms.add(Manifest.permission.POST_NOTIFICATIONS)
-                            }
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                perms.add(Manifest.permission.BLUETOOTH_CONNECT)
-                            }
-                            permissionLauncher.launch(perms.toTypedArray())
+                        val missing = required.filter {
+                            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+                        }
+
+                        if (missing.isNotEmpty()) {
+                            permissionLauncher.launch(missing.toTypedArray())
                         } else {
                             viewModel.onEvent(MainUiEvent.ToggleBackgroundService)
                         }
