@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.abs
 import kotlin.math.sqrt
 
 sealed interface WakeWordEvent {
@@ -43,6 +42,9 @@ class AlisaStyleWakeWordEngine @Inject constructor(
     @Volatile
     private var isRecording = false
 
+    private var lastTriggerTimestamp = 0L
+    private val cooldownMs = 2000L // 2 секунды антиспам cooldown после срабатывания
+
     private val sampleRate = 16000
     private val channelConfig = AudioFormat.CHANNEL_IN_MONO
     private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
@@ -58,6 +60,17 @@ class AlisaStyleWakeWordEngine @Inject constructor(
     override fun startListening() {
         if (isRecording) return
         stopListening()
+
+        val now = System.currentTimeMillis()
+        if (now - lastTriggerTimestamp < cooldownMs) {
+            scope.launch {
+                delay(cooldownMs - (now - lastTriggerTimestamp))
+                if (!isRecording) {
+                    startListening()
+                }
+            }
+            return
+        }
 
         try {
             audioRecord = AudioRecord(
@@ -96,6 +109,9 @@ class AlisaStyleWakeWordEngine @Inject constructor(
                         voiceStreak++
                         if (voiceStreak >= 2) {
                             voiceStreak = 0
+                            lastTriggerTimestamp = System.currentTimeMillis()
+                            // Синхронно освобождаем AudioRecord перед активацией SpeechRecognizer
+                            stopListening()
                             _events.emit(WakeWordEvent.VoiceActivityDetected)
                             break
                         }

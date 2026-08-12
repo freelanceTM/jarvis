@@ -30,7 +30,7 @@ import javax.inject.Singleton
 
 enum class OrchestratorMode {
     STANDBY_WAKE_WORD,        // Ожидание «Джарвис»
-    VERIFYING_KEYWORD,        // Анализ
+    VERIFYING_KEYWORD,        // Верификация ключевого слова (anti-false-trigger)
     LISTENING_USER_QUERY,     // Запись голоса
     CONTINUOUS_CONVERSATION,  // Диалоговое окно (без повтора «Джарвис»)
     AI_THINKING,              // Запрос AI / Fast Router
@@ -145,7 +145,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
             wakeWordDetector.events.collectLatest { event ->
                 if (event is WakeWordEvent.VoiceActivityDetected && _currentMode.value == OrchestratorMode.STANDBY_WAKE_WORD) {
                     if (bluetoothAudioRouter.isHeadsetConnected()) {
-                        switchToSpeechRecognition()
+                        startKeywordVerification()
                     }
                 }
             }
@@ -173,6 +173,23 @@ class VoiceInteractionOrchestrator @Inject constructor(
         wakeWordDetector.startListening()
     }
 
+    private fun startKeywordVerification() {
+        wakeWordDetector.stopListening()
+        _currentMode.value = OrchestratorMode.VERIFYING_KEYWORD
+        _assistantState.value = VoiceAssistantState.Listening
+        speechRecognizerManager.startListening()
+
+        // 2.5 секунды таймаут на распознавание ключевого слова
+        silenceJob?.cancel()
+        silenceJob = scope.launch {
+            delay(2500)
+            if (_currentMode.value == OrchestratorMode.VERIFYING_KEYWORD) {
+                // Если за 2.5 секунды ключевое слово не произнесено -> тихо возвращаемся в Standby
+                startStandbyMode()
+            }
+        }
+    }
+
     private fun switchToSpeechRecognition() {
         wakeWordDetector.stopListening()
         _currentMode.value = OrchestratorMode.LISTENING_USER_QUERY
@@ -185,7 +202,34 @@ class VoiceInteractionOrchestrator @Inject constructor(
             speechRecognizerManager.speechState.collectLatest { event ->
                 when (event) {
                     is SpeechRecognitionEvent.PartialResult -> {
-                        if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY ||
+                        val partial = event.partialText.lowercase().trim()
+
+                        if (_currentMode.value == OrchestratorMode.VERIFYING_KEYWORD) {
+                            // Быстрая проверка частичного распознавания на ключевое слово
+                            if (containsWakeWord(partial)) {
+                                silenceJob?.cancel()
+                                playWakeChime()
+                                val clean = cleanWakeWord(event.partialText)
+                                if (clean.isNotBlank()) {
+                                    // Пользователь произнёс всю команду сразу ("Джарвис включи свет")
+                                    _currentMode.value = OrchestratorMode.LISTENING_USER_QUERY
+                                    _assistantState.value = VoiceAssistantState.Recognizing(clean)
+                                    _lastQuery.value = clean
+
+                                    silenceJob = scope.launch {
+                                        delay(800)
+                                        if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY) {
+                                            speechRecognizerManager.stopListening()
+                                            processUserQuery(clean)
+                                        }
+                                    }
+                                } else {
+                                    // Сказали только "Джарвис" -> переходим в режим записи запроса
+                                    _currentMode.value = OrchestratorMode.LISTENING_USER_QUERY
+                                    _assistantState.value = VoiceAssistantState.Listening
+                                }
+                            }
+                        } else if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY ||
                             _currentMode.value == OrchestratorMode.CONTINUOUS_CONVERSATION) {
                             _assistantState.value = VoiceAssistantState.Recognizing(event.partialText)
                             _lastQuery.value = cleanWakeWord(event.partialText)
@@ -217,6 +261,23 @@ class VoiceInteractionOrchestrator @Inject constructor(
                             return@collectLatest
                         }
 
+                        // Если находимся на этапе верификации ключевого слова
+                        if (_currentMode.value == OrchestratorMode.VERIFYING_KEYWORD) {
+                            if (containsWakeWord(text)) {
+                                playWakeChime()
+                                val clean = cleanWakeWord(text)
+                                if (clean.isNotBlank()) {
+                                    processUserQuery(clean)
+                                } else {
+                                    switchToSpeechRecognition()
+                                }
+                            } else {
+                                // Ключевого слова нет (фоновый разговор / шум) -> тихо возвращаемся в Standby
+                                startStandbyMode()
+                            }
+                            return@collectLatest
+                        }
+
                         val clean = cleanWakeWord(text)
                         if (clean.isNotBlank()) {
                             processUserQuery(clean)
@@ -226,9 +287,10 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     }
                     is SpeechRecognitionEvent.RecognitionError -> {
                         silenceJob?.cancel()
-                        if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY ||
+                        if (_currentMode.value == OrchestratorMode.VERIFYING_KEYWORD ||
+                            _currentMode.value == OrchestratorMode.LISTENING_USER_QUERY ||
                             _currentMode.value == OrchestratorMode.CONTINUOUS_CONVERSATION) {
-                            delay(400)
+                            delay(300)
                             startStandbyMode()
                         }
                     }
@@ -236,6 +298,11 @@ class VoiceInteractionOrchestrator @Inject constructor(
                 }
             }
         }
+    }
+
+    private fun containsWakeWord(text: String): Boolean {
+        val lower = text.lowercase().trim()
+        return wakeKeywords.any { kw -> lower.contains(kw) }
     }
 
     private fun cleanWakeWord(raw: String): String {
@@ -252,7 +319,6 @@ class VoiceInteractionOrchestrator @Inject constructor(
             return
         }
 
-        playWakeChime()
         followUpWindowJob?.cancel()
         confirmationTimeoutJob?.cancel()
         _currentMode.value = OrchestratorMode.AI_THINKING
