@@ -5,6 +5,8 @@ import androidx.room.Room
 import com.jarvis.assistant.agent.automation.dao.AutomationDao
 import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.memory.dao.*
+import com.jarvis.assistant.agent.tools.accessibility.ScreenReaderTool
+import com.jarvis.assistant.agent.tools.accessibility.UiClickTool
 import com.jarvis.assistant.agent.tools.communication.*
 import com.jarvis.assistant.agent.tools.device.*
 import com.jarvis.assistant.agent.tools.intelligence.ForgetMemoryTool
@@ -119,6 +121,10 @@ abstract class SecurityAndNetworkBindingModule {
     @Binds @IntoSet abstract fun bindRecallMemoryTool(tool: RecallMemoryTool): JarvisTool
     @Binds @IntoSet abstract fun bindForgetMemoryTool(tool: ForgetMemoryTool): JarvisTool
     @Binds @IntoSet abstract fun bindWebSearchTool(tool: WebSearchTool): JarvisTool
+
+    // 7. Спец. возможности и UI управление (Accessibility)
+    @Binds @IntoSet abstract fun bindScreenReaderTool(tool: ScreenReaderTool): JarvisTool
+    @Binds @IntoSet abstract fun bindUiClickTool(tool: UiClickTool): JarvisTool
 }
 
 @Module

@@ -8,8 +8,8 @@ import android.view.accessibility.AccessibilityNodeInfo
 
 /**
  * JarvisAccessibilityService
- * Позволяет JARVIS взаимодействовать с экранными элементами, делать системные скриншоты
- * и считывать UI-контекст без касания экрана.
+ * Позволяет JARVIS взаимодействовать с экранными элементами, делать системные скриншоты,
+ * считывать UI-контекст и нажимать кнопки без касания экрана.
  */
 class JarvisAccessibilityService : AccessibilityService() {
 
@@ -34,13 +34,50 @@ class JarvisAccessibilityService : AccessibilityService() {
         }
 
         /**
-         * Извлекает видимый текстовый контент текущего экрана
+         * Считывает весь текстовый контент со всех AccessibilityNodeInfo текущего экрана
          */
-        fun extractScreenText(): String {
-            val rootNode = instance?.rootInActiveWindow ?: return ""
+        fun getScreenContent(): String {
+            val rootNode = instance?.rootInActiveWindow ?: return "Экран недоступен или заблокирован."
             val sb = StringBuilder()
             traverseNode(rootNode, sb)
-            return sb.toString().trim()
+            val fullText = sb.toString().trim()
+            return if (fullText.isNotBlank()) fullText else "На экране нет текстового содержимого."
+        }
+
+        /**
+         * Находит кнопку/элемент по тексту и выполняет нажатие (ACTION_CLICK)
+         */
+        fun clickByText(targetText: String): Boolean {
+            val rootNode = instance?.rootInActiveWindow ?: return false
+            val cleanTarget = targetText.lowercase().trim()
+
+            val nodeToClick = findClickableNodeByText(rootNode, cleanTarget)
+            if (nodeToClick != null) {
+                val success = nodeToClick.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                Log.d(TAG, "clickByText '$targetText' result: $success")
+                return success
+            }
+
+            Log.w(TAG, "clickByText '$targetText': element not found")
+            return false
+        }
+
+        /**
+         * Прокрутка экрана вниз (Scroll Down)
+         */
+        fun scrollDown(): Boolean {
+            val rootNode = instance?.rootInActiveWindow ?: return false
+            val scrollableNode = findScrollableNode(rootNode)
+            return scrollableNode?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) ?: false
+        }
+
+        /**
+         * Прокрутка экрана вверх (Scroll Up)
+         */
+        fun scrollUp(): Boolean {
+            val rootNode = instance?.rootInActiveWindow ?: return false
+            val scrollableNode = findScrollableNode(rootNode)
+            return scrollableNode?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) ?: false
         }
 
         private fun traverseNode(node: AccessibilityNodeInfo?, sb: StringBuilder) {
@@ -48,13 +85,52 @@ class JarvisAccessibilityService : AccessibilityService() {
             val text = node.text?.toString()?.trim()
             val desc = node.contentDescription?.toString()?.trim()
             if (!text.isNullOrEmpty()) {
-                sb.append(text).append(" ")
+                sb.append(text).append(". ")
             } else if (!desc.isNullOrEmpty()) {
-                sb.append(desc).append(" ")
+                sb.append(desc).append(". ")
             }
             for (i in 0 until node.childCount) {
                 traverseNode(node.getChild(i), sb)
             }
+        }
+
+        private fun findClickableNodeByText(node: AccessibilityNodeInfo?, target: String): AccessibilityNodeInfo? {
+            if (node == null) return null
+
+            val text = node.text?.toString()?.lowercase()?.trim().orEmpty()
+            val desc = node.contentDescription?.toString()?.lowercase()?.trim().orEmpty()
+
+            if (text.contains(target) || desc.contains(target) || (target.contains(text) && text.length >= 3)) {
+                // Если сам узел кликабелен -> возвращаем его
+                if (node.isClickable) return node
+
+                // Если узел не кликабелен, ищем ближайшего кликабельного родителя
+                var parent = node.parent
+                while (parent != null) {
+                    if (parent.isClickable) return parent
+                    parent = parent.parent
+                }
+                return node
+            }
+
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i)
+                val found = findClickableNodeByText(child, target)
+                if (found != null) return found
+            }
+
+            return null
+        }
+
+        private fun findScrollableNode(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+            if (node == null) return null
+            if (node.isScrollable) return node
+
+            for (i in 0 until node.childCount) {
+                val found = findScrollableNode(node.getChild(i))
+                if (found != null) return found
+            }
+            return null
         }
     }
 

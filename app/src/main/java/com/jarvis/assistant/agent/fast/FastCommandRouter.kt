@@ -210,6 +210,49 @@ class FastCommandRouter @Inject constructor() {
             )
         }
 
+        // 8.1 Считывание контента экрана ("Джарвис, что на экране?", "Прочитай экран")
+        if (q.contains("что на экране") || q.contains("прочитай экран") || q.contains("что написано") || q.contains("что тут написано") || q == "экран") {
+            return FastRouteResult.HandledLocally(
+                toolCall = ToolCall(toolId = "accessibility.screen_reader", arguments = JsonObject(emptyMap())),
+                immediateVoiceResponse = "Считываю информацию с экрана, сэр."
+            )
+        }
+
+        // 8.2 Нажатие на кнопки и UI навигация ("Нажми на Отправить", "Кликни Войти", "Прокрути вниз")
+        if (q.startsWith("нажми на") || q.startsWith("кликни на") || q.startsWith("нажми") || q.startsWith("тапни по") || q.startsWith("кликни")) {
+            val target = q.replace(Regex("^(нажми на|кликни на|нажми|тапни по|кликни)\\s*"), "").trim()
+            if (target.isNotEmpty()) {
+                return FastRouteResult.HandledLocally(
+                    toolCall = ToolCall(
+                        toolId = "accessibility.ui_click",
+                        arguments = buildJsonObject {
+                            put("action", "click")
+                            put("target", target)
+                        }
+                    ),
+                    immediateVoiceResponse = "Нажимаю на \"$target\", сэр."
+                )
+            }
+        }
+        if (q.contains("прокрути вниз") || q.contains("листай вниз") || q.contains("вниз страницу") || q == "скролл вниз") {
+            return FastRouteResult.HandledLocally(
+                toolCall = ToolCall(
+                    toolId = "accessibility.ui_click",
+                    arguments = buildJsonObject { put("action", "scroll_down") }
+                ),
+                immediateVoiceResponse = "Прокручиваю вниз, сэр."
+            )
+        }
+        if (q.contains("прокрути вверх") || q.contains("листай вверх") || q.contains("вверх страницу") || q == "скролл вверх") {
+            return FastRouteResult.HandledLocally(
+                toolCall = ToolCall(
+                    toolId = "accessibility.ui_click",
+                    arguments = buildJsonObject { put("action", "scroll_up") }
+                ),
+                immediateVoiceResponse = "Прокручиваю вверх, сэр."
+            )
+        }
+
         // 9. Режим «Не беспокоить» (DND)
         if (q.contains("не беспокоить") || q.contains("режим тишины") || q.contains("без уведомлений")) {
             val isOff = q.contains("выключ") || q.contains("отключ")
