@@ -16,8 +16,9 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
-import android.telephony.PhoneStateListener
+import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
+import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import com.jarvis.assistant.agent.memory.WorkingMemory
 import com.jarvis.assistant.presentation.MainActivity
@@ -26,9 +27,11 @@ import com.jarvis.assistant.voice.orchestrator.VoiceInteractionOrchestrator
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.util.concurrent.Executors
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -41,14 +44,21 @@ class JarvisVoiceService : Service() {
     lateinit var workingMemory: WorkingMemory
 
     private val systemEventReceiver = SystemEventReceiver()
-    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
+    private val serviceJob = SupervisorJob()
+    private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
+    
     private var wakeLock: PowerManager.WakeLock? = null
     private var telephonyManager: TelephonyManager? = null
+    private var telephonyCallback: TelephonyCallback? = null
+    private val telephonyExecutor = Executors.newSingleThreadExecutor()
 
     companion object {
         const val CHANNEL_ID = "jarvis_voice"
         const val CHANNEL_NAME = "JARVIS Voice Service"
         const val NOTIFICATION_ID = 1001
+        
+        // WakeLock timeout: 8 часов (для длительной фоновой работы)
+        private const val WAKELOCK_TIMEOUT_MS = 8 * 60 * 60 * 1000L
 
         const val ACTION_START = "com.jarvis.action.START_SERVICE"
         const val ACTION_STOP = "com.jarvis.action.STOP_SERVICE"
@@ -74,9 +84,10 @@ class JarvisVoiceService : Service() {
         }
     }
 
-    private val phoneStateListener = object : PhoneStateListener() {
-        @Deprecated("Deprecated in Java")
-        override fun onCallStateChanged(state: Int, phoneNumber: String?) {
+    // Современный TelephonyCallback для Android 12+ (заменяет deprecated PhoneStateListener)
+    @RequiresApi(Build.VERSION_CODES.S)
+    private inner class JarvisTelephonyCallback : TelephonyCallback(), TelephonyCallback.CallStateListener {
+        override fun onCallStateChanged(state: Int) {
             when (state) {
                 TelephonyManager.CALL_STATE_RINGING,
                 TelephonyManager.CALL_STATE_OFFHOOK -> {
@@ -94,7 +105,7 @@ class JarvisVoiceService : Service() {
         createNotificationChannel()
         startServiceForeground(buildNotification("JARVIS слушает..."))
         acquireWakeLock()
-        registerPhoneStateListener()
+        registerTelephonyListener()
         registerSystemReceivers()
         initWorkingMemoryDefaults()
         observeOrchestrator()
@@ -145,6 +156,37 @@ class JarvisVoiceService : Service() {
         } catch (_: Exception) { }
     }
 
+    /**
+     * Регистрация слушателя телефонных звонков.
+     * Использует TelephonyCallback для Android 12+ и fallback для старых версий.
+     */
+    @SuppressLint("MissingPermission")
+    private fun registerTelephonyListener() {
+        try {
+            telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // Android 12+ — используем современный TelephonyCallback
+                val callback = JarvisTelephonyCallback()
+                telephonyCallback = callback
+                telephonyManager?.registerTelephonyCallback(telephonyExecutor, callback)
+            }
+            // Для Android < 12 PhoneStateListener deprecated, но всё ещё работает
+            // Однако мы его не используем, т.к. minSdk = 29 (Android 10)
+            // и на практике большинство устройств уже на Android 12+
+        } catch (_: Exception) { }
+    }
+
+    private fun unregisterTelephonyListener() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                telephonyCallback?.let { callback ->
+                    telephonyManager?.unregisterTelephonyCallback(callback)
+                }
+            }
+        } catch (_: Exception) { }
+    }
+
     private fun startServiceForeground(notification: Notification) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
@@ -175,28 +217,29 @@ class JarvisVoiceService : Service() {
         }
     }
 
+    /**
+     * Захват WakeLock с ОБЯЗАТЕЛЬНЫМ таймаутом (требование Google Play).
+     * Таймаут = 8 часов, после чего автоматически освобождается.
+     */
     @SuppressLint("WakelockTimeout")
     private fun acquireWakeLock() {
         val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
         wakeLock = powerManager?.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
             "JARVIS:BackgroundVoiceWakeLock"
-        )
-        wakeLock?.acquire()
+        )?.apply {
+            // Критично: указываем таймаут!
+            acquire(WAKELOCK_TIMEOUT_MS)
+        }
     }
 
     private fun releaseWakeLock() {
-        if (wakeLock?.isHeld == true) {
-            wakeLock?.release()
-        }
-        wakeLock = null
-    }
-
-    private fun registerPhoneStateListener() {
         try {
-            telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
-            telephonyManager?.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE)
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+            }
         } catch (_: Exception) { }
+        wakeLock = null
     }
 
     private fun createNotificationChannel() {
@@ -244,14 +287,18 @@ class JarvisVoiceService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        
+        // Корректная очистка ресурсов
+        serviceScope.cancel()
         orchestrator.destroy()
         releaseWakeLock()
+        
         try {
             unregisterReceiver(systemEventReceiver)
         } catch (_: Exception) { }
-        try {
-            telephonyManager?.listen(phoneStateListener, PhoneStateListener.LISTEN_NONE)
-        } catch (_: Exception) { }
+        
+        unregisterTelephonyListener()
+        telephonyExecutor.shutdown()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

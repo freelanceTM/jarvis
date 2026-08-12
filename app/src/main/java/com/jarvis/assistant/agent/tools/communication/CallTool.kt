@@ -45,52 +45,111 @@ class CallTool @Inject constructor(
             return ToolExecutionResult.failure("Не указан номер или имя контакта", "MISSING_RECIPIENT")
         }
 
+        // Проверка разрешений
+        val hasCallPermission = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.CALL_PHONE
+        ) == PackageManager.PERMISSION_GRANTED
+        
+        val hasContactsPermission = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.READ_CONTACTS
+        ) == PackageManager.PERMISSION_GRANTED
+
         // 1. Если переданы цифры -> прямой номер
         val phoneNumber = if (recipient.any { it.isDigit() } && recipient.length >= 4) {
             recipient.replace(Regex("[^0-9+]"), "")
         } else {
-            // 2. Ищем номер по имени в контактах
-            findContactNumber(recipient) ?: recipient
+            // 2. Ищем номер по имени в контактах (если есть разрешение)
+            if (hasContactsPermission) {
+                findContactNumber(recipient) ?: recipient
+            } else {
+                // Нет разрешения на контакты — пробуем использовать имя напрямую
+                recipient
+            }
         }
 
+        // Проверяем, есть ли у нас номер для звонка
+        val hasValidNumber = phoneNumber.any { it.isDigit() } && phoneNumber.length >= 4
+        
         return try {
-            val hasCallPermission = ContextCompat.checkSelfPermission(
-                context, Manifest.permission.CALL_PHONE
-            ) == PackageManager.PERMISSION_GRANTED
-
-            val intent = if (hasCallPermission && phoneNumber.any { it.isDigit() }) {
+            val intent = if (hasCallPermission && hasValidNumber) {
+                // Есть разрешение и валидный номер — звоним напрямую
                 Intent(Intent.ACTION_CALL, Uri.parse("tel:$phoneNumber"))
             } else {
+                // Нет разрешения или нет номера — открываем dialer
                 Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phoneNumber"))
             }.apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
 
             context.startActivity(intent)
-            ToolExecutionResult.success("Набираю номер $recipient ($phoneNumber)", actionRequiresUser = !hasCallPermission)
+            
+            val summary = when {
+                hasCallPermission && hasValidNumber -> "Звоню $recipient ($phoneNumber)"
+                !hasCallPermission -> "Открываю номеронабиратель для $recipient. Для прямых звонков разрешите доступ к телефону в настройках."
+                !hasValidNumber && !hasContactsPermission -> "Открываю номеронабиратель. Для поиска по имени разрешите доступ к контактам."
+                else -> "Открываю номеронабиратель для $recipient"
+            }
+            
+            ToolExecutionResult.success(
+                summary = summary,
+                actionRequiresUser = !hasCallPermission || !hasValidNumber,
+                data = buildJsonObject {
+                    put("recipient", recipient)
+                    put("phone_number", phoneNumber)
+                    put("direct_call", hasCallPermission && hasValidNumber)
+                    put("needs_call_permission", !hasCallPermission)
+                    put("needs_contacts_permission", !hasContactsPermission)
+                }
+            )
         } catch (e: Exception) {
             ToolExecutionResult.failure("Не удалось совершить звонок: ${e.localizedMessage}", "CALL_ERROR")
         }
     }
 
     private fun findContactNumber(contactName: String): String? {
-        val cr = context.contentResolver
-        val cursor = cr.query(
-            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-            arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME),
-            "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?",
-            arrayOf("%$contactName%"),
-            null
-        )
+        return try {
+            val cr = context.contentResolver
+            val cursor = cr.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                arrayOf(
+                    ContactsContract.CommonDataKinds.Phone.NUMBER, 
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME
+                ),
+                "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?",
+                arrayOf("%$contactName%"),
+                null
+            )
 
-        cursor?.use {
-            if (it.moveToFirst()) {
-                val numIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
-                if (numIdx != -1) {
-                    return it.getString(numIdx)
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val numIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                    if (numIdx != -1) {
+                        return it.getString(numIdx)
+                    }
                 }
             }
+            null
+        } catch (_: Exception) {
+            null
         }
-        return null
+    }
+
+    /**
+     * Возвращает список отсутствующих разрешений для полноценной работы
+     */
+    fun getMissingPermissions(): List<String> {
+        val missing = mutableListOf<String>()
+        
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) 
+            != PackageManager.PERMISSION_GRANTED) {
+            missing.add(Manifest.permission.CALL_PHONE)
+        }
+        
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) 
+            != PackageManager.PERMISSION_GRANTED) {
+            missing.add(Manifest.permission.READ_CONTACTS)
+        }
+        
+        return missing
     }
 }

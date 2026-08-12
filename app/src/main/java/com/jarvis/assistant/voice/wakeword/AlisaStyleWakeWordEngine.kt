@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.abs
 import kotlin.math.sqrt
 
 sealed interface WakeWordEvent {
@@ -26,16 +25,21 @@ interface WakeWordDetector {
     fun stopListening()
     fun isRunning(): Boolean
     fun setSensitivity(sensitivity: Float)
+    fun destroy()
 }
 
 /**
  * Low-Power Acoustic Speech Activity & Formant Detector (Front-End для Wake Word)
+ * 
  * Реализует:
  * 1. RMS Energy Threshold с регулируемой чувствительностью (setSensitivity)
  * 2. Zero-Crossing Rate (ZCR) анализ формант человеческой речи (отсекает стуки, шум кулера и клики)
  * 3. Temporal Continuity Filter (требует 3 последовательных речевых фрейма ~100 мс)
  * 4. Защитный Cooldown (2000 мс) от дребезга микрофона
+ * 
  * Время отклика: < 100 мс, потребление: < 1% CPU.
+ * 
+ * v2.0: Исправлена утечка памяти (CoroutineScope корректно отменяется)
  */
 @Singleton
 class AlisaStyleWakeWordEngine @Inject constructor(
@@ -47,7 +51,10 @@ class AlisaStyleWakeWordEngine @Inject constructor(
 
     private var audioRecord: AudioRecord? = null
     private var workerJob: Job? = null
-    private val scope = CoroutineScope(Dispatchers.Default + Job())
+    
+    // SupervisorJob позволяет дочерним корутинам падать независимо
+    private val supervisorJob = SupervisorJob()
+    private val scope = CoroutineScope(Dispatchers.Default + supervisorJob)
 
     @Volatile
     private var isRecording = false
@@ -188,5 +195,13 @@ class AlisaStyleWakeWordEngine @Inject constructor(
             audioRecord?.release()
         } catch (_: Exception) { }
         audioRecord = null
+    }
+
+    /**
+     * Полное освобождение ресурсов. Вызывать при уничтожении сервиса.
+     */
+    override fun destroy() {
+        stopListening()
+        supervisorJob.cancel()
     }
 }
