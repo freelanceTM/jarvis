@@ -46,7 +46,11 @@ class SendPromptUseCase @Inject constructor(
             return Resource.Error(IllegalArgumentException("Пустой запрос"), "Запрос не может быть пустым")
         }
 
-        // 1. Слой 2 (Episodic Memory): Сохранение входящего запроса в Room
+        // 1. Разрешение анафоры и контекста местоимений (Multi-Turn Context Memory)
+        // Пример: "Кто президент Франции?" ➔ "Эмманюэль Макрон". След.: "Сколько ему лет?" ➔ "Сколько лет Эмманюэль Макрон"
+        val resolvedPrompt = memoryManager.workingMemory.resolveContextualQuery(trimmedPrompt)
+
+        // 2. Слой 2 (Episodic Memory): Сохранение входящего запроса в Room
         val userMessage = Message(
             role = MessageRole.USER,
             text = trimmedPrompt,
@@ -54,13 +58,14 @@ class SendPromptUseCase @Inject constructor(
         )
         messageRepository.insertMessage(userMessage)
 
-        // 2. Memory 2.0 Governance: Извлечение фактов, дедупликация и обработка команд "Забудь..."
-        memoryManager.processTurnGovernance(trimmedPrompt)
+        // 3. Memory 2.0 Governance: Извлечение фактов, дедупликация и обработка команд "Забудь..."
+        memoryManager.processTurnGovernance(resolvedPrompt)
+        memoryManager.workingMemory.updateEntityFromResponse(trimmedPrompt)
 
         // =========================================================================
         // ⚡ ЭТАП 1: TIER 0 FAST BRAIN (Локальный NLU - < 10мс, 100% ОФЛАЙН)
         // =========================================================================
-        val fastResult = fastCommandRouter.route(trimmedPrompt)
+        val fastResult = fastCommandRouter.route(resolvedPrompt)
         if (fastResult is FastRouteResult.HandledLocally) {
             var voiceAnswer = fastResult.immediateVoiceResponse
 
@@ -82,16 +87,18 @@ class SendPromptUseCase @Inject constructor(
             }
 
             saveAssistantMessage(voiceAnswer)
+            memoryManager.workingMemory.updateEntityFromResponse(voiceAnswer)
             return Resource.Success(PromptExecutionResult.DirectAnswer(voiceAnswer))
         }
 
         // =========================================================================
         // 🧠 ЭТАП 2: ДИНАМИЧЕСКИЙ ПЛАНИРОВЩИК (Intent ──► Plan ──► Execute ──► Observe)
         // =========================================================================
-        val dynamicPlan = cognitivePlanner.planForGoal(trimmedPrompt)
+        val dynamicPlan = cognitivePlanner.planForGoal(resolvedPrompt)
         if (dynamicPlan != null) {
             val planSummary = agentCognitiveLoop.runPlan(dynamicPlan)
             saveAssistantMessage(planSummary.finalVoiceSummary)
+            memoryManager.workingMemory.updateEntityFromResponse(planSummary.finalVoiceSummary)
 
             if (planSummary.pendingConfirmation != null) {
                 val (call, promptMsg) = planSummary.pendingConfirmation
@@ -109,13 +116,14 @@ class SendPromptUseCase @Inject constructor(
         // =========================================================================
         // ⚡ ЭТАП 3: PROCEDURAL MEMORY (Проверка сохраненных пользовательских макросов)
         // =========================================================================
-        val workflowResult = workflowExecutor.tryExecuteWorkflow(trimmedPrompt)
+        val workflowResult = workflowExecutor.tryExecuteWorkflow(resolvedPrompt)
         if (workflowResult != null) {
             val voiceResponse = when {
                 workflowResult.isSuccess -> "${workflowResult.summary}, сэр."
                 else -> workflowResult.summary
             }
             saveAssistantMessage(voiceResponse)
+            memoryManager.workingMemory.updateEntityFromResponse(voiceResponse)
             return Resource.Success(PromptExecutionResult.DirectAnswer(voiceResponse))
         }
 
@@ -131,14 +139,14 @@ class SendPromptUseCase @Inject constructor(
         // =========================================================================
         // 🔍 ЭТАП 4: TOOL DISCOVERY 2.0 + СЕМАНТИЧЕСКАЯ ПАМЯТЬ 2.0 + AI BRAIN
         // =========================================================================
-        val routingDecision = taskRouter.routeTask(trimmedPrompt)
+        val routingDecision = taskRouter.routeTask(resolvedPrompt)
         val baseSystemPrompt = settingsRepository.systemPromptFlow.first()
 
         // ДИНАМИЧЕСКИЙ TOOL DISCOVERY: Отбираем ТОЛЬКО 2-4 нужных инструмента
-        val targetedToolsPrompt = toolRegistry.buildTargetedSystemPrompt(trimmedPrompt)
+        val targetedToolsPrompt = toolRegistry.buildTargetedSystemPrompt(resolvedPrompt)
         
         // Извлекаем только 3-4 релевантных факта по векторному сходству
-        val memoryContextPrompt = memoryManager.buildPromptMemoryContext(trimmedPrompt)
+        val memoryContextPrompt = memoryManager.buildPromptMemoryContext(resolvedPrompt)
 
         val fullSystemPrompt = buildString {
             append(baseSystemPrompt)
@@ -150,10 +158,11 @@ class SendPromptUseCase @Inject constructor(
             append(targetedToolsPrompt)
         }
 
-        val history = messageRepository.getRecentMessages(limit = 4)
+        // Увеличенное окно контекста: 10 последних реплик (5 раундов диалога)
+        val history = messageRepository.getRecentMessages(limit = 10)
 
         val aiResult = aiRepository.generateResponse(
-            prompt = trimmedPrompt,
+            prompt = resolvedPrompt,
             systemPrompt = fullSystemPrompt,
             history = history
         )
@@ -161,10 +170,11 @@ class SendPromptUseCase @Inject constructor(
         if (aiResult is Resource.Success) {
             val rawOutput = aiResult.data.trim()
 
-            val llmPlan = cognitivePlanner.planForGoal(trimmedPrompt, rawOutput)
+            val llmPlan = cognitivePlanner.planForGoal(resolvedPrompt, rawOutput)
             if (llmPlan != null && llmPlan.steps.isNotEmpty()) {
                 val loopSummary = agentCognitiveLoop.runPlan(llmPlan)
                 saveAssistantMessage(loopSummary.finalVoiceSummary)
+                memoryManager.workingMemory.updateEntityFromResponse(loopSummary.finalVoiceSummary)
 
                 if (loopSummary.pendingConfirmation != null) {
                     val (call, promptMsg) = loopSummary.pendingConfirmation
@@ -179,13 +189,14 @@ class SendPromptUseCase @Inject constructor(
                 return Resource.Success(PromptExecutionResult.DirectAnswer(loopSummary.finalVoiceSummary))
             } else {
                 saveAssistantMessage(rawOutput)
+                memoryManager.workingMemory.updateEntityFromResponse(rawOutput)
                 return Resource.Success(PromptExecutionResult.DirectAnswer(rawOutput))
             }
         } else if (aiResult is Resource.Error) {
             // RETRY ЛОГИКА: при сбое связи пробуем 1 автоматический повтор через 2 секунды
             delay(2000)
             val retryResult = aiRepository.generateResponse(
-                prompt = trimmedPrompt,
+                prompt = resolvedPrompt,
                 systemPrompt = fullSystemPrompt,
                 history = history
             )
@@ -193,6 +204,7 @@ class SendPromptUseCase @Inject constructor(
             if (retryResult is Resource.Success) {
                 val rawOutput = retryResult.data.trim()
                 saveAssistantMessage(rawOutput)
+                memoryManager.workingMemory.updateEntityFromResponse(rawOutput)
                 return Resource.Success(PromptExecutionResult.DirectAnswer(rawOutput))
             }
 

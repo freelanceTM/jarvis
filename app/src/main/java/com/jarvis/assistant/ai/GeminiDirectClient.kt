@@ -159,7 +159,7 @@ class UniversalAIClient @Inject constructor(
         modelOverride: String? = null
     ): Resource<String> {
         val contents = mutableListOf<GeminiContentDto>()
-        history.takeLast(4).forEach { msg ->
+        history.takeLast(10).forEach { msg ->
             contents.add(
                 GeminiContentDto(
                     role = if (msg.role == MessageRole.ASSISTANT) "model" else "user",
@@ -247,7 +247,7 @@ class UniversalAIClient @Inject constructor(
         val effectiveSystem = if (systemPrompt.isNotBlank()) "$systemPrompt\n$voiceConstraint" else voiceConstraint
         messages.add(OpenAiMessageDto("system", effectiveSystem))
 
-        history.takeLast(4).forEach { msg ->
+        history.takeLast(10).forEach { msg ->
             messages.add(OpenAiMessageDto(if (msg.role == MessageRole.ASSISTANT) "assistant" else "user", msg.text))
         }
         if (messages.lastOrNull()?.content != prompt) {
