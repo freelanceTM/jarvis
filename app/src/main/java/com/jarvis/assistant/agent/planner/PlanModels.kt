@@ -14,10 +14,12 @@ sealed interface PlanCondition {
 data class PlanStep(
     val stepId: String = UUID.randomUUID().toString(),
     val toolCall: ToolCall,
-    val description: String,
+    val description: String = "",
     val condition: PlanCondition = PlanCondition.Always,
     val isCritical: Boolean = true
 )
+
+typealias ExecutionStep = PlanStep
 
 data class ExecutionPlan(
     val planId: String = UUID.randomUUID().toString(),
