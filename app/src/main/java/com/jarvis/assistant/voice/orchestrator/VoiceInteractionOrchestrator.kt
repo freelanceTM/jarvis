@@ -400,9 +400,10 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     is Resource.Error -> {
                         val errorMsg = result.message ?: "Ошибка связи с AI"
                         _lastAnswer.value = "Ошибка: $errorMsg"
+                        _currentMode.value = OrchestratorMode.STANDBY_WAKE_WORD
                         _assistantState.value = VoiceAssistantState.Error(errorMsg)
-                        textToSpeechManager.speak(errorMsg, speechRate, speechPitch)
-                        delay(2000)
+                        textToSpeechManager.speak("Ошибка: $errorMsg", speechRate, speechPitch)
+                        delay(2500)
                         startStandbyMode()
                     }
                     is Resource.Loading -> Unit

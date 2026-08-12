@@ -19,7 +19,9 @@ import com.jarvis.assistant.domain.models.MessageRole
 import com.jarvis.assistant.domain.repository.AIRepository
 import com.jarvis.assistant.domain.repository.MessageRepository
 import com.jarvis.assistant.domain.repository.SettingsRepository
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import java.io.IOException
 import javax.inject.Inject
 
 class SendPromptUseCase @Inject constructor(
@@ -40,7 +42,7 @@ class SendPromptUseCase @Inject constructor(
     suspend operator fun invoke(userPrompt: String): Resource<String> {
         val trimmedPrompt = userPrompt.trim()
         if (trimmedPrompt.isEmpty()) {
-            return Resource.Error(IllegalArgumentException("Пустой запрос"))
+            return Resource.Error(IllegalArgumentException("Пустой запрос"), "Запрос не может быть пустым")
         }
 
         // 1. Слой 2 (Episodic Memory): Сохранение входящего запроса в Room
@@ -110,9 +112,9 @@ class SendPromptUseCase @Inject constructor(
         // 🛡️ ПРОВЕРКА СЕТИ ДЛЯ СЛОЖНЫХ ЗАДАЧ
         // =========================================================================
         if (!networkMonitor.isCurrentlyOnline()) {
-            val offlineMsg = "Нет подключения к интернету. Локальные команды (фонарик, звук, батарея, приложения, память) работают офлайн."
+            val offlineMsg = "Нет подключения к интернету. Локальные команды работают офлайн."
             saveAssistantMessage(offlineMsg)
-            return Resource.Success(offlineMsg)
+            return Resource.Error(IOException("Network offline"), offlineMsg)
         }
 
         // =========================================================================
@@ -164,9 +166,26 @@ class SendPromptUseCase @Inject constructor(
             saveAssistantMessage(textToSave)
             return Resource.Success(finalVoiceAnswer)
         } else if (aiResult is Resource.Error) {
-            val errorMsg = aiResult.message ?: "Не удалось связаться с сервером AI. Проверьте ключ в настройках."
-            saveAssistantMessage(errorMsg)
-            return Resource.Success(errorMsg)
+            // RETRY ЛОГИКА: при сбое связи пробуем 1 автоматический повтор через 2 секунды
+            delay(2000)
+            val retryResult = aiRepository.generateResponse(
+                prompt = trimmedPrompt,
+                systemPrompt = fullSystemPrompt,
+                history = history
+            )
+
+            if (retryResult is Resource.Success) {
+                val rawOutput = retryResult.data.trim()
+                saveAssistantMessage(rawOutput)
+                return Resource.Success(rawOutput)
+            }
+
+            val errorMsg = retryResult.message ?: aiResult.message ?: "Не удалось связаться с сервером AI. Проверьте ключ в настройках."
+            saveAssistantMessage("Ошибка: $errorMsg")
+            return Resource.Error(
+                retryResult.cause ?: aiResult.cause ?: Exception(errorMsg),
+                errorMsg
+            )
         }
 
         return aiResult
