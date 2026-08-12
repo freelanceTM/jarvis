@@ -339,7 +339,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                 when (state) {
                     TtsState.Speaking -> {
                         _currentMode.value = OrchestratorMode.TTS_SPEAKING
-                        _assistantState.value = VoiceAssistantState.Speaking
+                        _assistantState.value = VoiceAssistantState.Speaking(_lastAnswer.value)
                     }
                     TtsState.Done, TtsState.Error -> {
                         if (_currentMode.value == OrchestratorMode.TTS_SPEAKING) {
@@ -374,7 +374,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
         followUpWindowJob?.cancel()
         _currentMode.value = OrchestratorMode.AI_THINKING
-        _assistantState.value = VoiceAssistantState.Processing
+        _assistantState.value = VoiceAssistantState.Thinking
         _lastQuery.value = query
 
         aiJob?.cancel()
@@ -417,7 +417,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
     private fun enterConfirmationMode(prompt: String) {
         _currentMode.value = OrchestratorMode.AWAITING_CONFIRMATION
-        _assistantState.value = VoiceAssistantState.AwaitingConfirmation(prompt)
+        _assistantState.value = VoiceAssistantState.Speaking(prompt)
         textToSpeechManager.speak(prompt, speechRate, speechPitch)
 
         confirmationTimeoutJob?.cancel()
@@ -446,7 +446,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
         if (isConfirmed && pendingToolCall != null) {
             scope.launch {
                 _currentMode.value = OrchestratorMode.AI_THINKING
-                _assistantState.value = VoiceAssistantState.Processing
+                _assistantState.value = VoiceAssistantState.Thinking
                 val execResult = toolExecutor.executeWithBypass(pendingToolCall!!)
                 pendingToolCall = null
 
@@ -467,6 +467,8 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
     private fun speakAndReturn(text: String) {
         _lastAnswer.value = text
+        _currentMode.value = OrchestratorMode.TTS_SPEAKING
+        _assistantState.value = VoiceAssistantState.Speaking(text)
         textToSpeechManager.speak(text, speechRate, speechPitch)
     }
 
@@ -489,7 +491,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
         } catch (_: Exception) { }
     }
 
-    private fun stopAll() {
+    fun stopAll() {
         aiJob?.cancel()
         silenceJob?.cancel()
         followUpWindowJob?.cancel()

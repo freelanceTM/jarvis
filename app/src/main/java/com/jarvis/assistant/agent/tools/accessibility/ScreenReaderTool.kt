@@ -19,7 +19,7 @@ class ScreenReaderTool @Inject constructor(
 
     override val toolId: String = "accessibility.screen_reader"
     override val description: String = "Считывает текстовое содержимое текущего экрана (требует включения Accessibility Service)"
-    override val category: ToolCategory = ToolCategory.ACCESSIBILITY
+    override val category: ToolCategory = ToolCategory.SYSTEM
     override val riskLevel: ToolRisk = ToolRisk.LOW
     override val isOffline: Boolean = true
     override val requiresForeground: Boolean = true

@@ -208,10 +208,15 @@ class SendPromptUseCase @Inject constructor(
                 return Resource.Success(PromptExecutionResult.DirectAnswer(rawOutput))
             }
 
-            val errorMsg = retryResult.message ?: aiResult.message ?: "Не удалось связаться с сервером AI. Проверьте ключ в настройках."
+            val errorMsg = if (retryResult is Resource.Error) {
+                retryResult.message ?: aiResult.message ?: "Не удалось связаться с сервером AI. Проверьте ключ в настройках."
+            } else {
+                aiResult.message ?: "Не удалось связаться с сервером AI. Проверьте ключ в настройках."
+            }
             saveAssistantMessage("Ошибка: $errorMsg")
+            val errorException = if (retryResult is Resource.Error) retryResult.exception else aiResult.exception
             return Resource.Error(
-                retryResult.cause ?: aiResult.cause ?: Exception(errorMsg),
+                errorException,
                 errorMsg
             )
         }

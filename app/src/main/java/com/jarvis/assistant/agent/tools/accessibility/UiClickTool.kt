@@ -19,7 +19,7 @@ class UiClickTool @Inject constructor(
 
     override val toolId: String = "accessibility.ui_click"
     override val description: String = "Нажимает на элемент интерфейса по его тексту или описанию (требует включения Accessibility Service)"
-    override val category: ToolCategory = ToolCategory.ACCESSIBILITY
+    override val category: ToolCategory = ToolCategory.DEVICE
     override val riskLevel: ToolRisk = ToolRisk.CONFIRMATION_REQUIRED
     override val isOffline: Boolean = true
     override val requiresForeground: Boolean = true
