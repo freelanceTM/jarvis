@@ -16,11 +16,12 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.exp
+import kotlin.math.ln
 
 /**
  * Memory Governance Engine 2.0 (JARVIS v0.5)
  * Реализует полный цикл управления памятью:
- * Extractor ──► Deduplication ──► Multi-Type Storage ──► Vector Scored Retrieval ──► Semantic Forget/Deletion.
+ * Extractor ──► Deduplication ──► Multi-Type Storage ──► Vector + TF-IDF Retrieval ──► Semantic Forget/Deletion.
  */
 @Singleton
 class JarvisMemoryManager @Inject constructor(
@@ -51,7 +52,20 @@ class JarvisMemoryManager @Inject constructor(
         val vector = vectorEngine.createEmbedding(cleanContent)
         val vectorStr = vectorEngine.serializeVector(vector)
 
-        // 2. Дедупликация и обновление в специализированных таблицах (Facts / Preferences)
+        // 2. Дедупликация: поиск и удаление семантических дубликатов (>85% overlap слов или >0.88 векторное сходство)
+        val allExisting = memoryDao.getAllMemoriesForVectorSearch()
+        for (existing in allExisting) {
+            val overlap = calculateWordOverlap(existing.content, cleanContent)
+            val existingVector = vectorEngine.deserializeVector(existing.embeddingVector)
+            val vectorSim = vectorEngine.computeCosineSimilarity(vector, existingVector)
+
+            if (overlap >= 0.85f || vectorSim >= 0.88f || (!cleanKey.isNullOrBlank() && existing.keyName == cleanKey)) {
+                // Удаляем старый дубликат в пользу новейшей записи
+                memoryDao.deleteMemoryById(existing.id)
+            }
+        }
+
+        // 3. Сохранение в специализированных таблицах (Facts / Preferences)
         if (!cleanKey.isNullOrBlank()) {
             when (type) {
                 MemoryType.FACT -> {
@@ -75,11 +89,9 @@ class JarvisMemoryManager @Inject constructor(
                 }
                 else -> Unit
             }
-            // Удаляем устаревшее воспоминание по этому же ключу в общей таблице для исключения дубликатов
-            memoryDao.deleteMemoryByKey(cleanKey)
         }
 
-        // 3. Сохранение в общую таблицу воспоминаний с важностью и уверенностью
+        // 4. Сохранение в общую таблицу воспоминаний с важностью и уверенностью
         val entity = MemoryEntity(
             type = type.name,
             keyName = cleanKey,
@@ -97,32 +109,53 @@ class JarvisMemoryManager @Inject constructor(
     }
 
     /**
-     * Семантический поиск воспоминаний по формуле взвешенного ранжирования:
-     * Score = (CosineSim * 0.40) + (Importance * 0.25) + (Recency * 0.20) + (Frequency * 0.15)
+     * Семантический поиск воспоминаний по гибридной формуле (Cosine Vector + TF-IDF + Importance + Recency + Frequency):
+     * Score = (CosineSim * 0.35) + (TfIdf * 0.25) + (Importance * 0.20) + (Recency * 0.10) + (Frequency * 0.10)
      */
-    suspend fun recall(query: String, limit: Int = 4): List<MemoryItem> = withContext(Dispatchers.IO) {
-        val queryVector = vectorEngine.createEmbedding(query)
+    suspend fun recall(query: String, limit: Int = 3): List<MemoryItem> = withContext(Dispatchers.IO) {
+        val q = query.lowercase().trim()
+        val queryVector = vectorEngine.createEmbedding(q)
+        val queryTokens = q.split(Regex("[\\s,?.!]+")).filter { it.length >= 2 }
         val allMemories = memoryDao.getAllMemoriesForVectorSearch()
 
         if (allMemories.isEmpty()) return@withContext emptyList()
 
         val now = System.currentTimeMillis()
+        val totalDocs = allMemories.size.toDouble()
         val scoredList = mutableListOf<Pair<MemoryEntity, Float>>()
 
         for (mem in allMemories) {
+            val memText = "${mem.keyName.orEmpty()} ${mem.content}".lowercase()
+            val memTokens = memText.split(Regex("[\\s,?.!]+")).filter { it.length >= 2 }
+
+            // 1. Vector Cosine Similarity
             val memVector = vectorEngine.deserializeVector(mem.embeddingVector)
             val cosineSim = vectorEngine.computeCosineSimilarity(queryVector, memVector)
 
+            // 2. TF-IDF Lexical Match
+            var tfIdfScore = 0f
+            for (token in queryTokens) {
+                if (memTokens.any { it.contains(token) || token.contains(it) }) {
+                    val docFrequency = allMemories.count { it.content.contains(token, ignoreCase = true) }.coerceAtLeast(1)
+                    val idf = ln(1.0 + (totalDocs / docFrequency.toDouble()))
+                    tfIdfScore += idf.toFloat()
+                }
+            }
+            val normalizedTfIdf = (tfIdfScore / 2.5f).coerceAtMost(1.0f)
+
+            // 3. Временные и частотные факторы
             val daysAgo = (now - mem.lastAccessedAt) / (1000f * 60 * 60 * 24)
             val recencyFactor = exp(-daysAgo / 30.0f)
             val frequencyFactor = (mem.accessCount / 10.0f).coerceAtMost(1.0f)
 
-            val totalScore = (cosineSim * 0.40f) +
-                    (mem.importance * 0.25f) +
-                    (recencyFactor * 0.20f) +
-                    (frequencyFactor * 0.15f)
+            // 4. Итоговый скор
+            val totalScore = (cosineSim * 0.35f) +
+                    (normalizedTfIdf * 0.25f) +
+                    (mem.importance * 0.20f) +
+                    (recencyFactor * 0.10f) +
+                    (frequencyFactor * 0.10f)
 
-            if (cosineSim > 0.20f || mem.importance >= 0.8f) {
+            if (cosineSim > 0.18f || normalizedTfIdf > 0.20f || mem.importance >= 0.85f) {
                 scoredList.add(mem to totalScore)
             }
         }
@@ -219,10 +252,11 @@ class JarvisMemoryManager @Inject constructor(
     }
 
     /**
-     * Формирует сжатый контекст из 3-4 самых релевантных фактов для системного промпта
+     * Формирует сжатый контекст из top-3 самых релевантных фактов для системного промпта
+     * Лимит: максимум 200 токенов (не более ~800 символов), чтобы не раздувать промпт AI.
      */
     suspend fun buildPromptMemoryContext(userQuery: String): String = withContext(Dispatchers.IO) {
-        val relevant = recall(userQuery, limit = 4)
+        val relevant = recall(userQuery, limit = 3)
         val sb = StringBuilder()
 
         val working = workingMemory.getWorkingContextSummary()
@@ -231,12 +265,29 @@ class JarvisMemoryManager @Inject constructor(
         }
 
         if (relevant.isNotEmpty()) {
-            sb.append("Долговременная память о пользователе:\n")
-            relevant.forEach { item ->
-                sb.append("• ${item.content}\n")
+            sb.append("Память о пользователе:\n")
+            var tokenBudget = 180 // ~180 слов/токенов
+            for (item in relevant) {
+                val wordsCount = item.content.split(Regex("\\s+")).size
+                if (tokenBudget - wordsCount >= 0) {
+                    sb.append("• ${item.content}\n")
+                    tokenBudget -= wordsCount
+                } else {
+                    break
+                }
             }
         }
 
-        return@withContext sb.toString().trim()
+        val result = sb.toString().trim()
+        return@withContext if (result.length > 800) result.take(800) + "..." else result
+    }
+
+    private fun calculateWordOverlap(s1: String, s2: String): Float {
+        val w1 = s1.lowercase().split(Regex("[\\s,?.!]+")).filter { it.length >= 3 }.toSet()
+        val w2 = s2.lowercase().split(Regex("[\\s,?.!]+")).filter { it.length >= 3 }.toSet()
+        if (w1.isEmpty() || w2.isEmpty()) return 0f
+        val intersection = w1.intersect(w2).size
+        val union = w1.union(w2).size
+        return intersection.toFloat() / union.toFloat()
     }
 }

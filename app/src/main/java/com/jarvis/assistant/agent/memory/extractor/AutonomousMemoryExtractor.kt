@@ -43,7 +43,64 @@ class AutonomousMemoryExtractor @Inject constructor() {
         }
 
         // =========================================================================
-        // 👤 3. Классификация: FACT (Имя, машина, город, работа, семья, контакты)
+        // 👨‍👩‍👧 3. Семья и близкие (Мама, папа, жена, муж, дети, друзья)
+        // =========================================================================
+        if (lower.contains("маму зовут") || lower.contains("мою маму зовут") || lower.contains("имя мамы") || lower.contains("мама —")) {
+            val name = q.replace(Regex("(?i)^(мою маму зовут|маму зовут|имя мамы|мама —|мама:)\\s*"), "").trim()
+                .replace(Regex("[.!?,]"), "").capitalizeFirst()
+            if (name.isNotEmpty() && name.length in 2..30) {
+                return ExtractedMemory(
+                    shouldRemember = true,
+                    type = "FACT",
+                    key = "family.mother",
+                    value = name,
+                    content = "Маму пользователя зовут $name",
+                    importance = 0.95f,
+                    confidence = 1.0f,
+                    governanceAction = "UPDATE_EXISTING"
+                )
+            }
+        }
+
+        if (lower.contains("папу зовут") || lower.contains("моего папу зовут") || lower.contains("имя папы") || lower.contains("отец —")) {
+            val name = q.replace(Regex("(?i)^(моего папу зовут|папу зовут|имя папы|отец —|папа:)\\s*"), "").trim()
+                .replace(Regex("[.!?,]"), "").capitalizeFirst()
+            if (name.isNotEmpty() && name.length in 2..30) {
+                return ExtractedMemory(
+                    shouldRemember = true,
+                    type = "FACT",
+                    key = "family.father",
+                    value = name,
+                    content = "Папу пользователя зовут $name",
+                    importance = 0.95f,
+                    confidence = 1.0f,
+                    governanceAction = "UPDATE_EXISTING"
+                )
+            }
+        }
+
+        if (lower.contains("жену зовут") || lower.contains("мою жену зовут") || lower.contains("мужа зовут") || lower.contains("моего мужа зовут")) {
+            val isWife = lower.contains("жен")
+            val relation = if (isWife) "Жену" else "Мужа"
+            val key = if (isWife) "family.wife" else "family.husband"
+            val name = q.replace(Regex("(?i)^(мою жену зовут|жену зовут|моего мужа зовут|мужа зовут)\\s*"), "").trim()
+                .replace(Regex("[.!?,]"), "").capitalizeFirst()
+            if (name.isNotEmpty() && name.length in 2..30) {
+                return ExtractedMemory(
+                    shouldRemember = true,
+                    type = "FACT",
+                    key = key,
+                    value = name,
+                    content = "$relation пользователя зовут $name",
+                    importance = 0.95f,
+                    confidence = 1.0f,
+                    governanceAction = "UPDATE_EXISTING"
+                )
+            }
+        }
+
+        // =========================================================================
+        // 👤 4. Классификация: FACT (Имя, машина, город, работа, контакты)
         // =========================================================================
         if (lower.contains("меня зовут") || lower.contains("мое имя") || lower.contains("называй меня")) {
             val name = q.replace(Regex("(?i)^(меня зовут|мое имя|называй меня|зови меня)\\s*"), "").trim()
@@ -109,7 +166,7 @@ class AutonomousMemoryExtractor @Inject constructor() {
         }
 
         // =========================================================================
-        // ☕ 4. Классификация: PREFERENCE (Привычки, время сна, предпочтения)
+        // ☕ 5. Классификация: PREFERENCE (Привычки, время сна, предпочтения)
         // =========================================================================
         if (lower.contains("ложусь спать в") || lower.contains("просыпаюсь в") || lower.contains("мой режим")) {
             val timeMatch = Regex("""\d{1,2}(:\d{2})?""").find(lower)
@@ -142,7 +199,7 @@ class AutonomousMemoryExtractor @Inject constructor() {
         }
 
         // =========================================================================
-        // ⚙️ 5. Классификация: PROCEDURAL (Сценарии "когда я говорю... делай...")
+        // ⚙️ 6. Классификация: PROCEDURAL (Сценарии "когда я говорю... делай...")
         // =========================================================================
         if (lower.contains("когда я говорю") || lower.contains("по команде") || lower.contains("запомни сценарий")) {
             return ExtractedMemory(
