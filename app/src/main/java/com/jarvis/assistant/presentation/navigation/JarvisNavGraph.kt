@@ -11,9 +11,11 @@ import com.jarvis.assistant.presentation.chat.ChatScreen
 import com.jarvis.assistant.presentation.main.MainScreen
 import com.jarvis.assistant.presentation.settings.SettingsScreen
 
+import androidx.navigation.compose.rememberNavController
+
 @Composable
 fun JarvisNavGraph(
-    navController: NavHostController,
+    navController: NavHostController = rememberNavController(),
     modifier: Modifier = Modifier
 ) {
     NavHost(

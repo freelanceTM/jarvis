@@ -49,3 +49,8 @@ fun JarvisTheme(
         content = content
     )
 }
+
+@Composable
+fun JarvisAssistantTheme(
+    content: @Composable () -> Unit
+) = JarvisTheme(content)
