@@ -11,7 +11,7 @@ import javax.inject.Singleton
  * 2. Извлекает главные именованные сущности (Subject/Entity) из предыдущих реплик пользователя и ассистента.
  * 3. Переписывает запрос для WebSearchTool, ToolDiscovery и LLM (Query Rewriting):
  *    "Кто президент Франции?" ➔ Ответ: "Эмманюэль Макрон"
- *    След. вопрос: "Сколько ему лет?" ➔ Разрешенный запрос: "Сколько лет Эмманюэль Макрон"
+ *    След. вопрос: "Сколько ему лет?" ➔ Разрешенный запрос: "Сколько Эмманюэль Макрон лет?"
  */
 @Singleton
 class AnaphoraContextEngine @Inject constructor() {
@@ -36,41 +36,26 @@ class AnaphoraContextEngine @Inject constructor() {
      * Разрешает местоимения в запросе, подставляя актуальную сущность из контекста
      */
     fun resolveQuery(query: String, lastEntity: String?): String {
-        if (lastEntity.isNullOrBlank() || !hasContextualPronoun(query)) {
+        if (lastEntity.isNullOrBlank()) {
             return query
         }
 
         var resolved = query.trim()
 
-        // 1. Замена составных конструкций "сколько ему/ей лет" -> "сколько лет [Сущность]"
-        val ageMatch = Regex("(?i)сколько\\s+(ему|ей|им)\\s+лет").find(resolved)
-        if (ageMatch != null) {
-            return resolved.replace(ageMatch.value, "сколько лет $lastEntity").trim()
-        }
+        // 1. Предложные конструкции "про него / о нем"
+        resolved = resolved.replace(Regex("(?i)\\b(про него|про неё|про нее|про них|о нем|о нём|о ней|о них)\\b"), "о $lastEntity")
 
-        // 2. Замена "про него / о нем" -> "о [Сущность]"
-        val aboutMatch = Regex("(?i)\\b(про него|про неё|про нее|про них|о нем|о нём|о ней|о них)\\b").find(resolved)
-        if (aboutMatch != null) {
-            return resolved.replace(aboutMatch.value, "о $lastEntity").trim()
-        }
+        // 2. Предложные конструкции "у него / у неё"
+        resolved = resolved.replace(Regex("(?i)\\b(у него|у неё|у нее|у них)\\b"), "у $lastEntity")
 
-        // 3. Замена "у него / у неё" -> "у $lastEntity"
-        val hasMatch = Regex("(?i)\\b(у него|у неё|у нее|у них)\\b").find(resolved)
-        if (hasMatch != null) {
-            return resolved.replace(hasMatch.value, "у $lastEntity").trim()
-        }
+        // 3. Местоимения "ему / ей / их / его / её"
+        resolved = resolved.replace(Regex("(?i)\\b(ему|ей|их|его|её|ее)\\b"), lastEntity)
 
-        // 4. Замена локационных отсылок "там / туда / оттуда"
-        val locMatch = Regex("(?i)\\b(там|туда|оттуда)\\b").find(resolved)
-        if (locMatch != null) {
-            return resolved.replace(locMatch.value, "в $lastEntity").trim()
-        }
-
-        // 5. Замена местоимений третьего лица "он / она / оно / они"
+        // 4. Местоимения "он / она / оно / они"
         resolved = resolved.replace(Regex("(?i)\\b(он|она|оно|они)\\b"), lastEntity)
 
-        // 6. Замена дательных/родительных местоимений "ему / ей / его / её"
-        resolved = resolved.replace(Regex("(?i)\\b(ему|ей|его|её|ее|их)\\b"), lastEntity)
+        // 5. Локационные отсылки "там / туда / оттуда"
+        resolved = resolved.replace(Regex("(?i)\\b(там|туда|оттуда)\\b"), "в $lastEntity")
 
         return resolved.trim()
     }
