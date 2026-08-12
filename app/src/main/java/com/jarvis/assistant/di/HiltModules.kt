@@ -2,6 +2,7 @@ package com.jarvis.assistant.di
 
 import android.content.Context
 import androidx.room.Room
+import com.jarvis.assistant.BuildConfig
 import com.jarvis.assistant.agent.automation.dao.AutomationDao
 import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.memory.dao.*
@@ -185,7 +186,15 @@ object NetworkModule {
     @Singleton
     fun provideLoggingInterceptor(): HttpLoggingInterceptor {
         return HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
+            level = if (BuildConfig.DEBUG) {
+                HttpLoggingInterceptor.Level.BASIC
+            } else {
+                HttpLoggingInterceptor.Level.NONE
+            }
+            redactHeader("Authorization")
+            redactHeader("x-goog-api-key")
+            redactHeader("api-key")
+            redactHeader("X-Api-Key")
         }
     }
 

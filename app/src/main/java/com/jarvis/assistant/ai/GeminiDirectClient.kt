@@ -187,7 +187,7 @@ class UniversalAIClient @Inject constructor(
             "gemini-flash-latest"
         }
 
-        val requestUrl = "https://generativelanguage.googleapis.com/v1beta/models/$geminiModel:generateContent?key=$apiKey"
+        val requestUrl = "https://generativelanguage.googleapis.com/v1beta/models/$geminiModel:generateContent"
 
         val request = Request.Builder()
             .url(requestUrl)
