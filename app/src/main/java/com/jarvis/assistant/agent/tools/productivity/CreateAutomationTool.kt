@@ -9,11 +9,12 @@ import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
 import kotlinx.serialization.json.*
 import javax.inject.Inject
+import javax.inject.Provider
 import javax.inject.Singleton
 
 @Singleton
 class CreateAutomationTool @Inject constructor(
-    private val automationEngine: PersonalAutomationEngine
+    private val automationEngineProvider: Provider<PersonalAutomationEngine>
 ) : JarvisTool {
 
     override val toolId: String = "productivity.create_automation"
@@ -69,7 +70,8 @@ class CreateAutomationTool @Inject constructor(
 
         return try {
             val call = ToolCall(toolId = toolAction, arguments = actionParams)
-            automationEngine.createAutomationRule(
+            val engine = automationEngineProvider.get()
+            engine.createAutomationRule(
                 name = name,
                 triggerType = triggerType,
                 actions = listOf(call),
