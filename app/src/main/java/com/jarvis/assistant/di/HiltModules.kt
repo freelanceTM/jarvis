@@ -16,6 +16,7 @@ import com.jarvis.assistant.agent.tools.media.MediaControlTool
 import com.jarvis.assistant.agent.tools.productivity.AlarmTimerTool
 import com.jarvis.assistant.agent.tools.productivity.CalendarTool
 import com.jarvis.assistant.agent.tools.productivity.ClipboardTool
+import com.jarvis.assistant.agent.tools.productivity.CreateAutomationTool
 import com.jarvis.assistant.agent.tools.system.*
 import com.jarvis.assistant.ai.AIClient
 import com.jarvis.assistant.ai.UniversalAIClient
@@ -108,6 +109,7 @@ abstract class SecurityAndNetworkBindingModule {
     @Binds @IntoSet abstract fun bindAlarmTimerTool(tool: AlarmTimerTool): JarvisTool
     @Binds @IntoSet abstract fun bindCalendarTool(tool: CalendarTool): JarvisTool
     @Binds @IntoSet abstract fun bindClipboardTool(tool: ClipboardTool): JarvisTool
+    @Binds @IntoSet abstract fun bindCreateAutomationTool(tool: CreateAutomationTool): JarvisTool
 
     // 5. Локация и навигация (Location)
     @Binds @IntoSet abstract fun bindLocationNavigationTool(tool: LocationNavigationTool): JarvisTool

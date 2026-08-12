@@ -2,6 +2,8 @@ package com.jarvis.assistant.presentation.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jarvis.assistant.agent.automation.dao.AutomationDao
+import com.jarvis.assistant.agent.automation.entity.AutomationEntity
 import com.jarvis.assistant.core.security.SecurityManager
 import com.jarvis.assistant.domain.models.VoiceSettings
 import com.jarvis.assistant.domain.usecases.GetSettingsUseCase
@@ -23,6 +25,7 @@ data class SettingsUiState(
     val speechRate: Float = 1.0f,
     val speechPitch: Float = 1.0f,
     val selectedModel: String = "gpt-4o-mini",
+    val automations: List<AutomationEntity> = emptyList(),
     val isSavedSuccess: Boolean = false
 )
 
@@ -30,7 +33,8 @@ data class SettingsUiState(
 class SettingsViewModel @Inject constructor(
     private val getSettingsUseCase: GetSettingsUseCase,
     private val saveSettingsUseCase: SaveSettingsUseCase,
-    private val securityManager: SecurityManager
+    private val securityManager: SecurityManager,
+    private val automationDao: AutomationDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -38,6 +42,7 @@ class SettingsViewModel @Inject constructor(
 
     init {
         loadSettings()
+        loadAutomations()
     }
 
     private fun loadSettings() {
@@ -56,6 +61,26 @@ class SettingsViewModel @Inject constructor(
                     )
                 }
             }
+        }
+    }
+
+    private fun loadAutomations() {
+        viewModelScope.launch {
+            automationDao.getAllAutomationsStream().collectLatest { rules ->
+                _uiState.update { it.copy(automations = rules) }
+            }
+        }
+    }
+
+    fun toggleAutomation(ruleId: String, isEnabled: Boolean) {
+        viewModelScope.launch {
+            automationDao.toggleEnabled(ruleId, isEnabled)
+        }
+    }
+
+    fun deleteAutomation(ruleId: String) {
+        viewModelScope.launch {
+            automationDao.deleteAutomation(ruleId)
         }
     }
 

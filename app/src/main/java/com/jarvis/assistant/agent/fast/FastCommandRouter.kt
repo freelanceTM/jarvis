@@ -17,7 +17,7 @@ sealed interface FastRouteResult {
 }
 
 /**
- * Fast Command Router v0.5 (Локальный NLU-движок с поддержкой Memory Governance)
+ * Fast Command Router v0.5 (Локальный NLU-движок с поддержкой Memory & Automation Governance)
  * Время срабатывания: < 10 миллисекунд.
  */
 @Singleton
@@ -41,6 +41,61 @@ class FastCommandRouter @Inject constructor() {
                         arguments = buildJsonObject { put("target", target) }
                     ),
                     immediateVoiceResponse = "Удаляю информацию о \"$target\" из памяти, сэр."
+                )
+            }
+        }
+
+        // 1.1 Создание голосовых сценариев автоматизации ("Когда подключатся наушники — включи музыку")
+        if (q.startsWith("когда") || q.startsWith("при подключении") || q.startsWith("если")) {
+            val isHeadphones = q.contains("наушник") || q.contains("гарнитур")
+            val isWifi = q.contains("вайфай") || q.contains("wifi") || q.contains("интернет")
+            val isBattery = q.contains("батаре") || q.contains("заряд") || q.contains("разрядит")
+
+            if (isHeadphones || isWifi || isBattery) {
+                val triggerType = when {
+                    isHeadphones && (q.contains("отключ") || q.contains("сниму")) -> "HEADPHONES_DISCONNECTED"
+                    isHeadphones -> "HEADPHONES_CONNECTED"
+                    isBattery -> "BATTERY_LOW"
+                    isWifi -> "WIFI_CONNECTED"
+                    else -> "HEADPHONES_CONNECTED"
+                }
+
+                val actionTool = when {
+                    q.contains("музык") || q.contains("трек") || q.contains("песн") || q.contains("плей") -> "media.control"
+                    q.contains("фонарик") -> "device.flashlight"
+                    q.contains("тише") || q.contains("громче") || q.contains("звук") -> "device.volume"
+                    q.contains("телеграм") || q.contains("тг") -> "device.open_app"
+                    else -> "media.control"
+                }
+
+                val actionParams = when (actionTool) {
+                    "media.control" -> buildJsonObject { put("action", "next") }
+                    "device.flashlight" -> buildJsonObject { put("enabled", !q.contains("выключ")) }
+                    "device.volume" -> buildJsonObject { put("action", if (q.contains("тише")) "down" else "up") }
+                    "device.open_app" -> buildJsonObject { put("app_name", "telegram") }
+                    else -> buildJsonObject { }
+                }
+
+                val ruleName = when (triggerType) {
+                    "HEADPHONES_CONNECTED" -> "Режим подключения наушников"
+                    "HEADPHONES_DISCONNECTED" -> "Режим отключения наушников"
+                    "BATTERY_LOW" -> "Режим низкого заряда"
+                    "WIFI_CONNECTED" -> "Режим Wi-Fi"
+                    else -> "Пользовательское правило"
+                }
+
+                return FastRouteResult.HandledLocally(
+                    toolCall = ToolCall(
+                        toolId = "productivity.create_automation",
+                        arguments = buildJsonObject {
+                            put("name", ruleName)
+                            put("trigger_type", triggerType)
+                            put("tool_action", actionTool)
+                            put("action_params", actionParams)
+                            put("voice_announcement", "Автоматизация '$ruleName' успешно сработала, сэр.")
+                        }
+                    ),
+                    immediateVoiceResponse = "Создаю автоматизацию: при событии '$ruleName' выполнить $actionTool, сэр."
                 )
             }
         }

@@ -1,5 +1,6 @@
 package com.jarvis.assistant.presentation.settings
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -13,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -20,8 +22,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.jarvis.assistant.domain.models.AIModel
+import com.jarvis.assistant.agent.automation.entity.AutomationEntity
 import com.jarvis.assistant.presentation.theme.*
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,7 +35,6 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
-    var modelDropdownExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.isSavedSuccess) {
         if (uiState.isSavedSuccess) {
@@ -146,7 +149,61 @@ fun SettingsScreen(
                 }
             }
 
-            // 3. Voice Customization (JARVIS Male Baritone & Pitch presets)
+            // 3. Automations Management Section
+            Card(
+                colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, JarvisCyanPrimary.copy(alpha = 0.3f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Автоматизации (Trigger ➔ Action)",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = JarvisCyanPrimary
+                        )
+                        Icon(
+                            imageVector = Icons.Default.AutoMode,
+                            contentDescription = null,
+                            tint = JarvisCyanPrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    Text(
+                        text = "Сценарии выполняются автоматически при наступлении аппаратных событий.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextTertiary
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (uiState.automations.isEmpty()) {
+                        Text(
+                            text = "Нет активных автоматизаций. Скажите: «Джарвис, когда подключатся наушники — включи музыку».",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextSecondary,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            uiState.automations.forEach { rule ->
+                                AutomationItemCard(
+                                    rule = rule,
+                                    onToggle = { isChecked -> viewModel.toggleAutomation(rule.ruleId, isChecked) },
+                                    onDelete = { viewModel.deleteAutomation(rule.ruleId) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4. Voice Customization (JARVIS Male Baritone & Pitch presets)
             Card(
                 colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
                 shape = RoundedCornerShape(16.dp)
@@ -234,7 +291,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Text(
-                        text = "Высота тона (Pitch): ${String.format("%.2f", uiState.speechPitch)}x (Ниже = глубже голос)",
+                        text = "Высота тона (Pitch): ${String.format(Locale.US, "%.2f", uiState.speechPitch)}x (Ниже = глубже голос)",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary
                     )
@@ -249,7 +306,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "Скорость речи: ${String.format("%.2f", uiState.speechRate)}x",
+                        text = "Скорость речи: ${String.format(Locale.US, "%.2f", uiState.speechRate)}x",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary
                     )
@@ -263,7 +320,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 4. System Prompt Configuration
+            // 5. System Prompt Configuration
             Card(
                 colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
                 shape = RoundedCornerShape(16.dp)
@@ -287,7 +344,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 5. Save Button
+            // 6. Save Button
             Button(
                 onClick = { viewModel.saveAllSettings() },
                 modifier = Modifier
@@ -302,6 +359,77 @@ fun SettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+fun AutomationItemCard(
+    rule: AutomationEntity,
+    onToggle: (Boolean) -> Unit,
+    onDelete: () -> Unit
+) {
+    val triggerTitle = when (rule.triggerType) {
+        "HEADPHONES_CONNECTED" -> "🎧 Подключение наушников"
+        "HEADPHONES_DISCONNECTED" -> "🔌 Отключение наушников"
+        "BATTERY_LOW" -> "🔋 Низкий заряд батареи"
+        "WIFI_CONNECTED" -> "📶 Подключение к Wi-Fi"
+        else -> rule.triggerType
+    }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = JarvisSurface,
+        border = BorderStroke(1.dp, if (rule.isEnabled) JarvisCyanPrimary.copy(alpha = 0.4f) else TextTertiary.copy(alpha = 0.2f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = rule.name,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = if (rule.isEnabled) TextPrimary else TextTertiary
+                )
+                Text(
+                    text = triggerTitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = JarvisCyanSecondary
+                )
+                if (rule.triggerCount > 0) {
+                    Text(
+                        text = "Сработало: ${rule.triggerCount} раз",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextTertiary
+                    )
+                }
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = rule.isEnabled,
+                    onCheckedChange = onToggle,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = JarvisCyanPrimary,
+                        checkedTrackColor = JarvisCyanPrimary.copy(alpha = 0.4f),
+                        uncheckedThumbColor = TextTertiary,
+                        uncheckedTrackColor = JarvisSurface
+                    )
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Удалить",
+                        tint = JarvisRed.copy(alpha = 0.8f)
+                    )
+                }
+            }
         }
     }
 }
