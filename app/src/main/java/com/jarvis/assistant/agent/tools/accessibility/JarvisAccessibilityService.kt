@@ -5,11 +5,12 @@ import android.os.Build
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import kotlinx.coroutines.delay
 
 /**
  * JarvisAccessibilityService
  * Позволяет JARVIS взаимодействовать с экранными элементами, делать системные скриншоты,
- * считывать UI-контекст и нажимать кнопки без касания экрана.
+ * автономно переключать плитки быстрых настроек (Quick Settings), считывать UI-контекст и нажимать кнопки без касания экрана.
  */
 class JarvisAccessibilityService : AccessibilityService() {
 
@@ -31,6 +32,41 @@ class JarvisAccessibilityService : AccessibilityService() {
             } else {
                 false
             }
+        }
+
+        /**
+         * Автономное переключение плитки в шторке быстрых настроек (Quick Settings) без касания экрана:
+         * 1. Раскрывает шторку быстрых настроек
+         * 2. Ищет плитку по ключевым словам ("Wi-Fi", "Bluetooth", "Фонарик")
+         * 3. Нажимает ACTION_CLICK
+         * 4. Закрывает шторку обратно (GLOBAL_ACTION_BACK)
+         */
+        suspend fun toggleQuickSettingTile(tileKeywords: List<String>): Boolean {
+            val service = instance ?: return false
+
+            // 1. Открываем Quick Settings
+            service.performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
+            delay(250)
+
+            val rootNode = service.rootInActiveWindow
+            var clicked = false
+
+            if (rootNode != null) {
+                for (kw in tileKeywords) {
+                    val target = kw.lowercase().trim()
+                    val node = findClickableNodeByText(rootNode, target)
+                    if (node != null) {
+                        clicked = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        Log.d(TAG, "Quick setting tile '$kw' clicked: $clicked")
+                        break
+                    }
+                }
+            }
+
+            // 2. Закрываем шторку обратно
+            delay(150)
+            service.performGlobalAction(GLOBAL_ACTION_BACK)
+            return clicked
         }
 
         /**
@@ -101,10 +137,8 @@ class JarvisAccessibilityService : AccessibilityService() {
             val desc = node.contentDescription?.toString()?.lowercase()?.trim().orEmpty()
 
             if (text.contains(target) || desc.contains(target) || (target.contains(text) && text.length >= 3)) {
-                // Если сам узел кликабелен -> возвращаем его
                 if (node.isClickable) return node
 
-                // Если узел не кликабелен, ищем ближайшего кликабельного родителя
                 var parent = node.parent
                 while (parent != null) {
                     if (parent.isClickable) return parent

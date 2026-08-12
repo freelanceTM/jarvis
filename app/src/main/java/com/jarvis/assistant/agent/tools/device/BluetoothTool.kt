@@ -1,6 +1,5 @@
 package com.jarvis.assistant.agent.tools.device
 
-import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
@@ -10,22 +9,18 @@ import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.core.ToolCategory
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
+import com.jarvis.assistant.agent.tools.accessibility.JarvisAccessibilityService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.*
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Bluetooth Tool v2.0
+ * Bluetooth Tool v2.1 (Ear-First Quick Settings Support)
  * 
- * Ограничения Android 13+:
- * - Программное включение/выключение Bluetooth ЗАПРЕЩЕНО
- * - Можно только открыть настройки или Quick Settings
- * 
- * Функционал:
- * - Проверка статуса Bluetooth
- * - Открытие настроек Bluetooth (если нужно включить/выключить)
- * - Информирование пользователя о текущем состоянии
+ * - Автономно переключает Bluetooth через Accessibility Quick Settings Clicker без касания экрана
+ * - Проверяет статус и сопряжённые устройства
+ * - Отказоустойчивый fallback на настройки Bluetooth
  */
 @Singleton
 class BluetoothTool @Inject constructor(
@@ -33,7 +28,7 @@ class BluetoothTool @Inject constructor(
 ) : JarvisTool {
 
     override val toolId: String = "device.bluetooth"
-    override val description: String = "Проверяет статус Bluetooth и открывает настройки для включения/выключения"
+    override val description: String = "Проверяет статус Bluetooth, переключает состояние и открывает настройки сопряжения"
     override val category: ToolCategory = ToolCategory.DEVICE
     override val riskLevel: ToolRisk = ToolRisk.LOW
     override val isOffline: Boolean = true
@@ -44,11 +39,12 @@ class BluetoothTool @Inject constructor(
         putJsonObject("properties") {
             putJsonObject("action") {
                 put("type", "string")
-                put("description", "Действие: 'status' - проверить статус, 'enable' - включить, 'disable' - выключить, 'settings' - открыть настройки")
+                put("description", "Действие: 'status' - проверить статус, 'enable' - включить, 'disable' - выключить, 'toggle' - переключить, 'settings' - открыть настройки")
                 put("enum", buildJsonArray { 
                     add("status")
                     add("enable")
                     add("disable")
+                    add("toggle")
                     add("settings")
                 })
             }
@@ -78,7 +74,6 @@ class BluetoothTool @Inject constructor(
                     "Bluetooth выключен"
                 }
                 
-                // Дополнительная информация о подключённых устройствах
                 val connectedInfo = if (isEnabled) {
                     try {
                         val bondedDevices = bluetoothAdapter.bondedDevices
@@ -101,53 +96,41 @@ class BluetoothTool @Inject constructor(
                 )
             }
             
-            "enable" -> {
-                if (isEnabled) {
-                    ToolExecutionResult.success(
-                        summary = "Bluetooth уже включён",
-                        data = buildJsonObject {
-                            put("enabled", true)
-                            put("action", "enable")
-                            put("already_enabled", true)
-                        }
-                    )
-                } else {
-                    // Android 13+ не позволяет включать Bluetooth программно
-                    openBluetoothSettings()
-                    ToolExecutionResult.success(
-                        summary = "Открываю настройки Bluetooth. Пожалуйста, включите его вручную, сэр.",
-                        actionRequiresUser = true,
-                        data = buildJsonObject {
-                            put("enabled", false)
-                            put("action", "enable")
-                            put("opened_settings", true)
-                        }
+            "enable", "disable", "toggle" -> {
+                val wantsEnable = action == "enable" || (action == "toggle" && !isEnabled)
+                if (wantsEnable && isEnabled) {
+                    return ToolExecutionResult.success(
+                        summary = "Bluetooth уже включён, сэр.",
+                        data = buildJsonObject { put("enabled", true) }
                     )
                 }
-            }
-            
-            "disable" -> {
-                if (!isEnabled) {
-                    ToolExecutionResult.success(
-                        summary = "Bluetooth уже выключен",
-                        data = buildJsonObject {
-                            put("enabled", false)
-                            put("action", "disable")
-                            put("already_disabled", true)
-                        }
-                    )
-                } else {
-                    openBluetoothSettings()
-                    ToolExecutionResult.success(
-                        summary = "Открываю настройки Bluetooth. Пожалуйста, выключите его вручную, сэр.",
-                        actionRequiresUser = true,
-                        data = buildJsonObject {
-                            put("enabled", true)
-                            put("action", "disable")
-                            put("opened_settings", true)
-                        }
+                if (!wantsEnable && !isEnabled) {
+                    return ToolExecutionResult.success(
+                        summary = "Bluetooth уже выключен, сэр.",
+                        data = buildJsonObject { put("enabled", false) }
                     )
                 }
+
+                // Способ 1 (Ear-First в кармане): Автономный клик по плитке Quick Settings через Accessibility
+                if (JarvisAccessibilityService.isServiceRunning()) {
+                    val clicked = JarvisAccessibilityService.toggleQuickSettingTile(listOf("Bluetooth", "блютуз"))
+                    if (clicked) {
+                        val stateWord = if (wantsEnable) "включён" else "выключен"
+                        return ToolExecutionResult.success("Bluetooth $stateWord через шторку быстрых настроек, сэр.")
+                    }
+                }
+
+                // Способ 2 (Fallback): Открытие настроек Bluetooth
+                openBluetoothSettings()
+                ToolExecutionResult.success(
+                    summary = "Открываю настройки Bluetooth для переключения, сэр.",
+                    actionRequiresUser = true,
+                    data = buildJsonObject {
+                        put("enabled", isEnabled)
+                        put("action", action)
+                        put("opened_settings", true)
+                    }
+                )
             }
             
             "settings" -> {
@@ -174,13 +157,11 @@ class BluetoothTool @Inject constructor(
     
     private fun openBluetoothSettings() {
         try {
-            // Пробуем открыть Quick Settings панель Bluetooth
             val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
         } catch (_: Exception) {
-            // Fallback на обычные настройки
             try {
                 val intent = Intent(Settings.ACTION_WIRELESS_SETTINGS).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

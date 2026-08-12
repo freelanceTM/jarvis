@@ -1,5 +1,6 @@
 package com.jarvis.assistant.ai
 
+import android.util.Log
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.core.security.SecurityManager
 import com.jarvis.assistant.domain.models.Message
@@ -23,7 +24,7 @@ data class OpenAiChatRequest(
     @SerialName("model") val model: String,
     @SerialName("messages") val messages: List<OpenAiMessageDto>,
     @SerialName("temperature") val temperature: Double = 0.5,
-    @SerialName("max_tokens") val maxTokens: Int = 90 // Короткие голосовые ответы (до 25 слов) для молниеносной скорости
+    @SerialName("max_tokens") val maxTokens: Int = 90
 )
 
 @Serializable
@@ -209,12 +210,26 @@ class UniversalAIClient @Inject constructor(
             }
         } else {
             val code = response.code
-            val userMsg = when (code) {
-                400, 403 -> "Google заблокировал запрос (403). Включите VPN или используйте ключ OpenRouter (sk-or-...)."
-                429 -> "Лимит запросов Gemini исчерпан. Подождите 30 сек."
-                else -> "Ошибка сервера AI ($code)."
+            Log.w("UniversalAIClient", "Google Gemini HTTP $code. Attempting transparent geo-fallback...")
+
+            // Transparent Fallback to OpenRouter free tier upon regional Geo-blocking
+            return try {
+                callOpenAiCompatible(
+                    endpointUrl = "https://openrouter.ai/api/v1/chat/completions",
+                    model = "meta-llama/llama-3.3-70b-instruct:free",
+                    apiKey = apiKey, // OpenRouter or current key
+                    prompt = prompt,
+                    systemPrompt = systemPrompt,
+                    history = history
+                )
+            } catch (_: Exception) {
+                val userMsg = when (code) {
+                    400, 403 -> "Google Gemini заблокирован в вашем регионе (HTTP $code). Рекомендуется использовать бесплатный ключ OpenRouter (sk-or-...) или Groq (gsk_...) в настройках."
+                    429 -> "Лимит запросов Gemini исчерпан. Пожалуйста, подождите 30 секунд."
+                    else -> "Ошибка сервера AI ($code)."
+                }
+                Resource.Error(IllegalStateException("HTTP $code: $responseBody"), userMsg)
             }
-            return Resource.Error(IllegalStateException("HTTP $code: $responseBody"), userMsg)
         }
     }
 

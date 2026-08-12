@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jarvis.assistant.agent.automation.entity.AutomationEntity
+import com.jarvis.assistant.core.battery.BatteryOptimizationHelper
 import com.jarvis.assistant.presentation.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -261,6 +262,91 @@ fun SettingsScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("Включить в настройках Android", fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+
+            // 3.2 Battery Optimization & OEM Autostart (Samsung / Xiaomi / Huawei 24/7 Mode)
+            val context = androidx.compose.ui.platform.LocalContext.current
+            var isBatteryIgnoring by remember { mutableStateOf(BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)) }
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, if (isBatteryIgnoring) JarvisGreen.copy(alpha = 0.3f) else JarvisAmber.copy(alpha = 0.3f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.BatteryChargingFull,
+                                contentDescription = null,
+                                tint = if (isBatteryIgnoring) JarvisGreen else JarvisAmber,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Фоновая работа 24/7 (${BatteryOptimizationHelper.getDeviceManufacturerName()})",
+                                style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
+                                color = TextPrimary
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isBatteryIgnoring) JarvisGreen.copy(alpha = 0.2f) else JarvisAmber.copy(alpha = 0.2f)
+                        ) {
+                            Text(
+                                text = if (isBatteryIgnoring) "БЕЗ ОГРАНИЧЕНИЙ" else "ОГРАНИЧЕНО",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (isBatteryIgnoring) JarvisGreen else JarvisAmber,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Предотвращает принудительное усыпление ассистента оболочками Samsung OneUI, Xiaomi MIUI, Huawei при выключенном экране.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextTertiary
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (!isBatteryIgnoring) {
+                            Button(
+                                onClick = {
+                                    BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(context)
+                                    isBatteryIgnoring = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = JarvisSurface, contentColor = JarvisCyanPrimary),
+                                border = BorderStroke(1.dp, JarvisCyanPrimary.copy(alpha = 0.5f)),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Снять лимит батареи", fontSize = 12.sp)
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                BatteryOptimizationHelper.openOemAutostartSettings(context)
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = JarvisSurface, contentColor = JarvisCyanSecondary),
+                            border = BorderStroke(1.dp, JarvisCyanSecondary.copy(alpha = 0.5f)),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Автозапуск ${BatteryOptimizationHelper.getDeviceManufacturerName()}", fontSize = 12.sp)
                         }
                     }
                 }

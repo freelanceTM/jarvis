@@ -11,22 +11,18 @@ import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.core.ToolCategory
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
+import com.jarvis.assistant.agent.tools.accessibility.JarvisAccessibilityService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.*
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * WiFi Tool v2.0
+ * WiFi Tool v2.1 (Ear-First Quick Settings Support)
  * 
- * Ограничения Android 10+:
- * - Программное включение/выключение WiFi ЗАПРЕЩЕНО (с Android Q)
- * - Можно только открыть панель настроек WiFi
- * 
- * Функционал:
- * - Проверка статуса WiFi и подключения
- * - Информация о текущей сети (SSID, уровень сигнала)
- * - Открытие настроек WiFi
+ * - Автономно переключает Wi-Fi через Accessibility Quick Settings Clicker без касания экрана
+ * - Показывает информацию о подключении (SSID, уровень сигнала)
+ * - Отказоустойчивый fallback на панель Settings.Panel.ACTION_WIFI
  */
 @Singleton
 class WifiTool @Inject constructor(
@@ -34,7 +30,7 @@ class WifiTool @Inject constructor(
 ) : JarvisTool {
 
     override val toolId: String = "device.wifi"
-    override val description: String = "Проверяет статус WiFi, показывает информацию о сети и открывает настройки"
+    override val description: String = "Проверяет статус Wi-Fi, переключает состояние и показывает информацию о сети"
     override val category: ToolCategory = ToolCategory.DEVICE
     override val riskLevel: ToolRisk = ToolRisk.LOW
     override val isOffline: Boolean = true
@@ -45,11 +41,12 @@ class WifiTool @Inject constructor(
         putJsonObject("properties") {
             putJsonObject("action") {
                 put("type", "string")
-                put("description", "Действие: 'status' - проверить статус, 'enable' - включить, 'disable' - выключить, 'settings' - открыть настройки")
+                put("description", "Действие: 'status' - проверить статус, 'enable' - включить, 'disable' - выключить, 'toggle' - переключить, 'settings' - открыть настройки")
                 put("enum", buildJsonArray {
                     add("status")
                     add("enable")
                     add("disable")
+                    add("toggle")
                     add("settings")
                 })
             }
@@ -64,7 +61,7 @@ class WifiTool @Inject constructor(
         
         if (wifiManager == null) {
             return ToolExecutionResult.failure(
-                summary = "WiFi не поддерживается на этом устройстве",
+                summary = "Wi-Fi не поддерживается на этом устройстве",
                 error = "WIFI_NOT_SUPPORTED"
             )
         }
@@ -76,7 +73,7 @@ class WifiTool @Inject constructor(
             "status" -> {
                 val statusText = buildString {
                     if (isWifiEnabled) {
-                        append("WiFi включён")
+                        append("Wi-Fi включён")
                         if (connectionInfo.isConnected) {
                             append(". Подключён к сети")
                             if (connectionInfo.ssid.isNotBlank()) {
@@ -89,7 +86,7 @@ class WifiTool @Inject constructor(
                             append(", но не подключён к сети")
                         }
                     } else {
-                        append("WiFi выключен")
+                        append("Wi-Fi выключен")
                     }
                 }
                 
@@ -105,61 +102,46 @@ class WifiTool @Inject constructor(
                 )
             }
             
-            "enable" -> {
-                if (isWifiEnabled) {
-                    val connText = if (connectionInfo.isConnected && connectionInfo.ssid.isNotBlank()) {
-                        " Подключён к \"${connectionInfo.ssid}\""
-                    } else ""
-                    
-                    ToolExecutionResult.success(
-                        summary = "WiFi уже включён.$connText",
-                        data = buildJsonObject {
-                            put("wifi_enabled", true)
-                            put("already_enabled", true)
-                        }
-                    )
-                } else {
-                    // Android 10+ не позволяет включать WiFi программно
-                    openWifiSettings()
-                    ToolExecutionResult.success(
-                        summary = "Открываю настройки WiFi. Пожалуйста, включите его вручную, сэр.",
-                        actionRequiresUser = true,
-                        data = buildJsonObject {
-                            put("wifi_enabled", false)
-                            put("action", "enable")
-                            put("opened_settings", true)
-                        }
+            "enable", "disable", "toggle" -> {
+                val wantsEnable = action == "enable" || (action == "toggle" && !isWifiEnabled)
+                if (wantsEnable && isWifiEnabled) {
+                    return ToolExecutionResult.success(
+                        summary = "Wi-Fi уже включён" + if (connectionInfo.isConnected) ". Сеть: ${connectionInfo.ssid}" else "",
+                        data = buildJsonObject { put("wifi_enabled", true) }
                     )
                 }
-            }
-            
-            "disable" -> {
-                if (!isWifiEnabled) {
-                    ToolExecutionResult.success(
-                        summary = "WiFi уже выключен",
-                        data = buildJsonObject {
-                            put("wifi_enabled", false)
-                            put("already_disabled", true)
-                        }
-                    )
-                } else {
-                    openWifiSettings()
-                    ToolExecutionResult.success(
-                        summary = "Открываю настройки WiFi. Пожалуйста, выключите его вручную, сэр.",
-                        actionRequiresUser = true,
-                        data = buildJsonObject {
-                            put("wifi_enabled", true)
-                            put("action", "disable")
-                            put("opened_settings", true)
-                        }
+                if (!wantsEnable && !isWifiEnabled) {
+                    return ToolExecutionResult.success(
+                        summary = "Wi-Fi уже выключен, сэр.",
+                        data = buildJsonObject { put("wifi_enabled", false) }
                     )
                 }
+
+                // Способ 1 (Ear-First в кармане): Автономный клик по плитке Quick Settings через Accessibility
+                if (JarvisAccessibilityService.isServiceRunning()) {
+                    val clicked = JarvisAccessibilityService.toggleQuickSettingTile(listOf("Wi-Fi", "вайфай", "интернет", "сеть"))
+                    if (clicked) {
+                        val stateWord = if (wantsEnable) "включён" else "выключен"
+                        return ToolExecutionResult.success("Wi-Fi $stateWord через шторку быстрых настроек, сэр.")
+                    }
+                }
+
+                // Способ 2 (Fallback): Открытие системной панели
+                openWifiSettings()
+                ToolExecutionResult.success(
+                    summary = "Открываю панель Wi-Fi для переключения, сэр.",
+                    actionRequiresUser = true,
+                    data = buildJsonObject {
+                        put("wifi_enabled", isWifiEnabled)
+                        put("opened_settings", true)
+                    }
+                )
             }
             
             "settings" -> {
                 openWifiSettings()
                 ToolExecutionResult.success(
-                    summary = "Открываю настройки WiFi",
+                    summary = "Открываю настройки Wi-Fi",
                     actionRequiresUser = true,
                     data = buildJsonObject {
                         put("wifi_enabled", isWifiEnabled)
@@ -201,7 +183,6 @@ class WifiTool @Inject constructor(
             return WifiConnectionInfo(false, "", "")
         }
         
-        // Получаем информацию о WiFi
         return try {
             val wifiInfo = wifiManager.connectionInfo
             val ssid = wifiInfo?.ssid?.replace("\"", "") ?: ""
@@ -226,7 +207,6 @@ class WifiTool @Inject constructor(
     
     private fun openWifiSettings() {
         try {
-            // Пробуем открыть WiFi picker panel (Android 10+)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val intent = Intent(Settings.Panel.ACTION_WIFI).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -239,7 +219,6 @@ class WifiTool @Inject constructor(
                 context.startActivity(intent)
             }
         } catch (_: Exception) {
-            // Fallback
             try {
                 val intent = Intent(Settings.ACTION_WIRELESS_SETTINGS).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
