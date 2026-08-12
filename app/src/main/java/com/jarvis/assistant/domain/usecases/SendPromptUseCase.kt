@@ -16,6 +16,7 @@ import com.jarvis.assistant.core.network.NetworkMonitor
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.domain.models.Message
 import com.jarvis.assistant.domain.models.MessageRole
+import com.jarvis.assistant.domain.models.PromptExecutionResult
 import com.jarvis.assistant.domain.repository.AIRepository
 import com.jarvis.assistant.domain.repository.MessageRepository
 import com.jarvis.assistant.domain.repository.SettingsRepository
@@ -39,7 +40,7 @@ class SendPromptUseCase @Inject constructor(
     private val cognitivePlanner: CognitivePlanner,
     private val agentCognitiveLoop: AgentCognitiveLoop
 ) {
-    suspend operator fun invoke(userPrompt: String): Resource<String> {
+    suspend operator fun invoke(userPrompt: String): Resource<PromptExecutionResult> {
         val trimmedPrompt = userPrompt.trim()
         if (trimmedPrompt.isEmpty()) {
             return Resource.Error(IllegalArgumentException("Пустой запрос"), "Запрос не может быть пустым")
@@ -66,9 +67,13 @@ class SendPromptUseCase @Inject constructor(
             if (fastResult.toolCall != null) {
                 val executionResult = toolExecutor.execute(fastResult.toolCall)
                 if (executionResult.status == ToolExecutionStatus.REQUIRES_USER_CONFIRMATION) {
-                    val confirmMsg = "CONFIRM:${fastResult.toolCall.toolId}:${executionResult.summary}"
                     saveAssistantMessage(executionResult.summary)
-                    return Resource.Success(confirmMsg)
+                    return Resource.Success(
+                        PromptExecutionResult.ConfirmationRequired(
+                            toolCall = fastResult.toolCall,
+                            promptMessage = executionResult.summary
+                        )
+                    )
                 }
                 if (executionResult.isSuccess) {
                     voiceAnswer = "${executionResult.summary}, сэр."
@@ -77,7 +82,7 @@ class SendPromptUseCase @Inject constructor(
             }
 
             saveAssistantMessage(voiceAnswer)
-            return Resource.Success(voiceAnswer)
+            return Resource.Success(PromptExecutionResult.DirectAnswer(voiceAnswer))
         }
 
         // =========================================================================
@@ -86,13 +91,19 @@ class SendPromptUseCase @Inject constructor(
         val dynamicPlan = cognitivePlanner.planForGoal(trimmedPrompt)
         if (dynamicPlan != null) {
             val planSummary = agentCognitiveLoop.runPlan(dynamicPlan)
-            val textToSave = if (planSummary.finalVoiceSummary.startsWith("CONFIRM:")) {
-                planSummary.finalVoiceSummary.substringAfter("CONFIRM:").substringAfter(":")
-            } else {
-                planSummary.finalVoiceSummary
+            saveAssistantMessage(planSummary.finalVoiceSummary)
+
+            if (planSummary.pendingConfirmation != null) {
+                val (call, promptMsg) = planSummary.pendingConfirmation
+                return Resource.Success(
+                    PromptExecutionResult.ConfirmationRequired(
+                        toolCall = call,
+                        promptMessage = promptMsg
+                    )
+                )
             }
-            saveAssistantMessage(textToSave)
-            return Resource.Success(planSummary.finalVoiceSummary)
+
+            return Resource.Success(PromptExecutionResult.DirectAnswer(planSummary.finalVoiceSummary))
         }
 
         // =========================================================================
@@ -105,14 +116,14 @@ class SendPromptUseCase @Inject constructor(
                 else -> workflowResult.summary
             }
             saveAssistantMessage(voiceResponse)
-            return Resource.Success(voiceResponse)
+            return Resource.Success(PromptExecutionResult.DirectAnswer(voiceResponse))
         }
 
         // =========================================================================
-        // 🛡️ ПРОВЕРКА СЕТИ ДЛЯ СЛОЖНЫХ ЗАДАЧ
+        // 🛡️ УПРЕЖДАЮЩАЯ ПРОВЕРКА СЕТИ ДО AI ЗАПРОСА
         // =========================================================================
         if (!networkMonitor.isCurrentlyOnline()) {
-            val offlineMsg = "Нет подключения к интернету. Локальные команды работают офлайн."
+            val offlineMsg = "Нет подключения к интернету. Локальные команды (фонарик, звук, батарея, приложения, память) работают офлайн."
             saveAssistantMessage(offlineMsg)
             return Resource.Error(IOException("Network offline"), offlineMsg)
         }
@@ -151,20 +162,25 @@ class SendPromptUseCase @Inject constructor(
             val rawOutput = aiResult.data.trim()
 
             val llmPlan = cognitivePlanner.planForGoal(trimmedPrompt, rawOutput)
-            val finalVoiceAnswer = if (llmPlan != null && llmPlan.steps.isNotEmpty()) {
+            if (llmPlan != null && llmPlan.steps.isNotEmpty()) {
                 val loopSummary = agentCognitiveLoop.runPlan(llmPlan)
-                loopSummary.finalVoiceSummary
-            } else {
-                rawOutput
-            }
+                saveAssistantMessage(loopSummary.finalVoiceSummary)
 
-            val textToSave = if (finalVoiceAnswer.startsWith("CONFIRM:")) {
-                finalVoiceAnswer.substringAfter("CONFIRM:").substringAfter(":")
+                if (loopSummary.pendingConfirmation != null) {
+                    val (call, promptMsg) = loopSummary.pendingConfirmation
+                    return Resource.Success(
+                        PromptExecutionResult.ConfirmationRequired(
+                            toolCall = call,
+                            promptMessage = promptMsg
+                        )
+                    )
+                }
+
+                return Resource.Success(PromptExecutionResult.DirectAnswer(loopSummary.finalVoiceSummary))
             } else {
-                finalVoiceAnswer
+                saveAssistantMessage(rawOutput)
+                return Resource.Success(PromptExecutionResult.DirectAnswer(rawOutput))
             }
-            saveAssistantMessage(textToSave)
-            return Resource.Success(finalVoiceAnswer)
         } else if (aiResult is Resource.Error) {
             // RETRY ЛОГИКА: при сбое связи пробуем 1 автоматический повтор через 2 секунды
             delay(2000)
@@ -177,7 +193,7 @@ class SendPromptUseCase @Inject constructor(
             if (retryResult is Resource.Success) {
                 val rawOutput = retryResult.data.trim()
                 saveAssistantMessage(rawOutput)
-                return Resource.Success(rawOutput)
+                return Resource.Success(PromptExecutionResult.DirectAnswer(rawOutput))
             }
 
             val errorMsg = retryResult.message ?: aiResult.message ?: "Не удалось связаться с сервером AI. Проверьте ключ в настройках."
@@ -188,7 +204,7 @@ class SendPromptUseCase @Inject constructor(
             )
         }
 
-        return aiResult
+        return Resource.Error(Exception("Неизвестная ошибка выполнения"), "Неизвестная ошибка выполнения")
     }
 
     private suspend fun saveAssistantMessage(text: String) {

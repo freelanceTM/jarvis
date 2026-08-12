@@ -52,8 +52,9 @@ class AgentCognitiveLoop @Inject constructor(
                 return@withContext PlanExecutionSummary(
                     plan = currentPlan,
                     observations = observations,
-                    finalVoiceSummary = "CONFIRM:${step.toolCall.toolId}:${result.summary}",
-                    isAllSuccessful = false
+                    finalVoiceSummary = result.summary,
+                    isAllSuccessful = false,
+                    pendingConfirmation = step.toolCall to result.summary
                 )
             }
 
@@ -93,7 +94,6 @@ class AgentCognitiveLoop @Inject constructor(
 
                 summaries.add("Не удалось: ${result.summary}")
                 if (step.isCritical) {
-                    // При падении критического шага без возможности перепланирования прерываем выполнение
                     Log.e(TAG, "Critical step failed without viable re-plan. Halting plan execution.")
                     break
                 } else {
@@ -113,7 +113,8 @@ class AgentCognitiveLoop @Inject constructor(
             plan = currentPlan,
             observations = observations,
             finalVoiceSummary = finalVoiceSummary,
-            isAllSuccessful = isAllSuccessful
+            isAllSuccessful = isAllSuccessful,
+            pendingConfirmation = null
         )
     }
 }

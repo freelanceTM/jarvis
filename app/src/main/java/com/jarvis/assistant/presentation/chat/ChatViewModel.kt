@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.domain.models.Message
+import com.jarvis.assistant.domain.models.PromptExecutionResult
 import com.jarvis.assistant.domain.usecases.ClearChatHistoryUseCase
 import com.jarvis.assistant.domain.usecases.GetChatHistoryUseCase
 import com.jarvis.assistant.domain.usecases.GetSettingsUseCase
@@ -98,11 +99,9 @@ class ChatViewModel @Inject constructor(
 
             when (result) {
                 is Resource.Success -> {
-                    val voiceText = if (result.data.contains("CONFIRM:")) {
-                        val parts = result.data.split(":")
-                        if (parts.size >= 3) parts.subList(2, parts.size).joinToString(":") else parts.getOrNull(1) ?: result.data
-                    } else {
-                        result.data
+                    val voiceText = when (val exec = result.data) {
+                        is PromptExecutionResult.ConfirmationRequired -> exec.promptMessage
+                        is PromptExecutionResult.DirectAnswer -> exec.text
                     }
                     textToSpeechManager.speak(voiceText, speechRate, speechPitch)
                 }

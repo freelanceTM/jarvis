@@ -38,5 +38,6 @@ data class PlanExecutionSummary(
     val plan: ExecutionPlan,
     val observations: List<StepObservation>,
     val finalVoiceSummary: String,
-    val isAllSuccessful: Boolean
+    val isAllSuccessful: Boolean,
+    val pendingConfirmation: Pair<ToolCall, String>? = null
 )

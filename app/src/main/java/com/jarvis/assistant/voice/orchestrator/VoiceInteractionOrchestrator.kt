@@ -8,6 +8,7 @@ import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.model.ToolCall
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.core.security.SecurityManager
+import com.jarvis.assistant.domain.models.PromptExecutionResult
 import com.jarvis.assistant.domain.models.VoiceAssistantState
 import com.jarvis.assistant.domain.usecases.GetSettingsUseCase
 import com.jarvis.assistant.domain.usecases.SendPromptUseCase
@@ -365,46 +366,39 @@ class VoiceInteractionOrchestrator @Inject constructor(
                 val result = sendPromptUseCase(clean)
                 when (result) {
                     is Resource.Success -> {
-                        val answer = result.data.trim()
+                        when (val execution = result.data) {
+                            is PromptExecutionResult.ConfirmationRequired -> {
+                                pendingToolCall = execution.toolCall
+                                pendingConfirmationPrompt = execution.promptMessage
 
-                        if (answer.contains("CONFIRM:")) {
-                            val parts = answer.split(":")
-                            val toolId = parts.getOrNull(1)?.trim().orEmpty()
-                            pendingConfirmationPrompt = if (parts.size >= 3) {
-                                parts.subList(2, parts.size).joinToString(":")
-                            } else {
-                                parts.getOrNull(1) ?: "Подтвердите действие, сэр."
-                            }
+                                _lastAnswer.value = pendingConfirmationPrompt
+                                _currentMode.value = OrchestratorMode.AWAITING_CONFIRMATION
+                                _assistantState.value = VoiceAssistantState.Speaking(pendingConfirmationPrompt)
 
-                            pendingToolCall = toolExecutor.pendingConfirmationCall ?: run {
-                                if (toolId.isNotBlank()) ToolCall(toolId, JsonObject(emptyMap())) else null
-                            }
+                                textToSpeechManager.speak(pendingConfirmationPrompt, speechRate, speechPitch)
 
-                            _lastAnswer.value = pendingConfirmationPrompt
-                            _currentMode.value = OrchestratorMode.AWAITING_CONFIRMATION
-                            _assistantState.value = VoiceAssistantState.Speaking(pendingConfirmationPrompt)
-
-                            textToSpeechManager.speak(pendingConfirmationPrompt, speechRate, speechPitch)
-
-                            confirmationTimeoutJob?.cancel()
-                            confirmationTimeoutJob = scope.launch {
-                                delay(10_000)
-                                if (_currentMode.value == OrchestratorMode.AWAITING_CONFIRMATION) {
-                                    val timeoutMsg = "Время ожидания истекло. Операция отменена, сэр."
-                                    _lastAnswer.value = timeoutMsg
-                                    _assistantState.value = VoiceAssistantState.Speaking(timeoutMsg)
-                                    textToSpeechManager.speak(timeoutMsg, speechRate, speechPitch)
-                                    pendingToolCall = null
-                                    toolExecutor.clearPendingConfirmation()
-                                    delay(2000)
-                                    startStandbyMode()
+                                confirmationTimeoutJob?.cancel()
+                                confirmationTimeoutJob = scope.launch {
+                                    delay(10_000)
+                                    if (_currentMode.value == OrchestratorMode.AWAITING_CONFIRMATION) {
+                                        val timeoutMsg = "Время ожидания истекло. Операция отменена, сэр."
+                                        _lastAnswer.value = timeoutMsg
+                                        _assistantState.value = VoiceAssistantState.Speaking(timeoutMsg)
+                                        textToSpeechManager.speak(timeoutMsg, speechRate, speechPitch)
+                                        pendingToolCall = null
+                                        toolExecutor.clearPendingConfirmation()
+                                        delay(2000)
+                                        startStandbyMode()
+                                    }
                                 }
                             }
-                        } else {
-                            _lastAnswer.value = answer
-                            _currentMode.value = OrchestratorMode.TTS_SPEAKING
-                            _assistantState.value = VoiceAssistantState.Speaking(answer)
-                            textToSpeechManager.speak(answer, speechRate, speechPitch)
+                            is PromptExecutionResult.DirectAnswer -> {
+                                val answer = execution.text
+                                _lastAnswer.value = answer
+                                _currentMode.value = OrchestratorMode.TTS_SPEAKING
+                                _assistantState.value = VoiceAssistantState.Speaking(answer)
+                                textToSpeechManager.speak(answer, speechRate, speechPitch)
+                            }
                         }
                     }
                     is Resource.Error -> {
@@ -416,7 +410,9 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         delay(2500)
                         startStandbyMode()
                     }
-                    is Resource.Loading -> Unit
+                    is Resource.Loading -> {
+                        _assistantState.value = VoiceAssistantState.Thinking
+                    }
                 }
             } finally {
                 isProcessingQuery.set(false)
