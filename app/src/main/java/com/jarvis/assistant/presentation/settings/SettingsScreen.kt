@@ -198,6 +198,74 @@ fun SettingsScreen(
                 }
             }
 
+            // 3.1 Accessibility Service Status & Activation Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, JarvisCyanSecondary.copy(alpha = 0.3f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.AccessibilityNew,
+                                contentDescription = null,
+                                tint = JarvisCyanSecondary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Спец. возможности (Screen & Click)",
+                                style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
+                                color = TextPrimary
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (com.jarvis.assistant.agent.tools.accessibility.JarvisAccessibilityService.isServiceRunning()) JarvisGreen.copy(alpha = 0.2f) else JarvisAmber.copy(alpha = 0.2f)
+                        ) {
+                            Text(
+                                text = if (com.jarvis.assistant.agent.tools.accessibility.JarvisAccessibilityService.isServiceRunning()) "АКТИВНО" else "ВЫКЛЮЧЕНО",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (com.jarvis.assistant.agent.tools.accessibility.JarvisAccessibilityService.isServiceRunning()) JarvisGreen else JarvisAmber,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Требуется для создания скриншотов, чтения экрана («Что на экране?») и нажатия кнопок без касания.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextTertiary
+                    )
+
+                    if (!com.jarvis.assistant.agent.tools.accessibility.JarvisAccessibilityService.isServiceRunning()) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        val context = androidx.compose.ui.platform.LocalContext.current
+                        Button(
+                            onClick = {
+                                val intent = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = JarvisSurface, contentColor = JarvisCyanPrimary),
+                            border = BorderStroke(1.dp, JarvisCyanPrimary.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Включить в настройках Android", fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+
             // 4. Automations Management Section
             Card(
                 colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),

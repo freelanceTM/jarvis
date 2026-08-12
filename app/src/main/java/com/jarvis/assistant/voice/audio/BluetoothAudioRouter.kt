@@ -118,7 +118,8 @@ class BluetoothAudioRouter @Inject constructor(
 
     init {
         try {
-            val adapter = BluetoothAdapter.getDefaultAdapter()
+            val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager
+            val adapter = bluetoothManager?.adapter
             adapter?.getProfileProxy(context, profileListener, BluetoothProfile.HEADSET)
 
             val filter = IntentFilter().apply {

@@ -184,7 +184,7 @@ class UniversalAIClient @Inject constructor(
         val geminiModel = if (modelOverride != null && (modelOverride.startsWith("gemini-") || !modelOverride.contains("/"))) {
             modelOverride
         } else {
-            "gemini-flash-latest"
+            "gemini-1.5-flash"
         }
 
         val requestUrl = "https://generativelanguage.googleapis.com/v1beta/models/$geminiModel:generateContent"

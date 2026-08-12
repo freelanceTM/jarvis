@@ -11,13 +11,15 @@ class AuthInterceptor @Inject constructor(
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
-        val apiKey = securityManager.getApiKey()
+        val apiKey = securityManager.getApiKey().trim()
+        val url = originalRequest.url.toString()
 
         val requestBuilder = originalRequest.newBuilder()
             .header("Content-Type", "application/json")
-            .header("User-Agent", "JARVIS-Android/0.1")
+            .header("User-Agent", "JARVIS-Android/0.2")
 
-        if (apiKey.isNotEmpty()) {
+        // Добавляем Authorization Bearer только для OpenAI/OpenRouter/Groq, исключая Google Gemini (использует x-goog-api-key)
+        if (apiKey.isNotEmpty() && !url.contains("googleapis.com") && originalRequest.header("Authorization") == null) {
             requestBuilder.header("Authorization", "Bearer $apiKey")
         }
 
