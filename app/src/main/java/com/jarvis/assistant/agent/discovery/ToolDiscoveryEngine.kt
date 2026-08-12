@@ -141,7 +141,9 @@ class ToolDiscoveryEngine @Inject constructor(
                 q.contains("зажги") || q.contains("открой") || q.contains("запусти") ||
                 q.contains("позвони") || q.contains("набери") || q.contains("отправь") ||
                 q.contains("напиши") || q.contains("поставь") || q.contains("громк") ||
-                q.contains("звук") || q.contains("фонарик") || q.contains("батаре") ||
+                q.contains("звук") || q.contains("тиш") || q.contains("тише") || q.contains("потише") ||
+                q.contains("громче") || q.contains("погромче") || q.contains("убав") || q.contains("прибав") ||
+                q.contains("фонарик") || q.contains("батаре") ||
                 q.contains("заряд") || q.contains("скриншот") || q.contains("блютуз") ||
                 q.contains("вайфай") || q.contains("маршрут") || q.contains("навигатор") ||
                 q.contains("экран") || q.contains("кликни") || q.contains("нажми") ||

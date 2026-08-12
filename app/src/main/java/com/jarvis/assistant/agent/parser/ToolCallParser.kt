@@ -14,48 +14,43 @@ class ToolCallParser @Inject constructor(
      */
     fun parse(rawLlmOutput: String, userPrompt: String = ""): List<ToolCall> {
         val toolCalls = mutableListOf<ToolCall>()
+        val trimmed = rawLlmOutput.trim()
 
-        // 1. Поиск JSON блоков в ответе LLM
-        val jsonPattern = Regex("""\{[\s\S]*?"tool_calls"[\s\S]*?\}""")
-        val match = jsonPattern.find(rawLlmOutput)
-
-        if (match != null) {
+        val firstBrace = trimmed.indexOf('{')
+        val lastBrace = trimmed.lastIndexOf('}')
+        if (firstBrace != -1 && lastBrace > firstBrace) {
+            val jsonCandidate = trimmed.substring(firstBrace, lastBrace + 1)
             try {
-                val jsonText = match.value.trim()
-                val parsedElement = json.parseToJsonElement(jsonText).jsonObject
-                val callsArray = parsedElement["tool_calls"]?.jsonArray
+                val element = json.parseToJsonElement(jsonCandidate)
+                if (element is JsonObject) {
+                    val callsArray = element["tool_calls"]?.jsonArray
+                    if (callsArray != null) {
+                        callsArray.forEach { callElement ->
+                            if (callElement is JsonObject) {
+                                val toolId = callElement["tool"]?.jsonPrimitive?.contentOrNull
+                                    ?: callElement["toolId"]?.jsonPrimitive?.contentOrNull
+                                    ?: callElement["name"]?.jsonPrimitive?.contentOrNull
 
-                callsArray?.forEach { callElement ->
-                    val callObj = callElement.jsonObject
-                    val toolId = callObj["tool"]?.jsonPrimitive?.contentOrNull
-                        ?: callObj["toolId"]?.jsonPrimitive?.contentOrNull
-                        ?: callObj["name"]?.jsonPrimitive?.contentOrNull
+                                val argsObj = callElement["arguments"]?.jsonObject
+                                    ?: callElement["params"]?.jsonObject
+                                    ?: JsonObject(emptyMap())
 
-                    val argsObj = callObj["arguments"]?.jsonObject
-                        ?: callObj["params"]?.jsonObject
-                        ?: JsonObject(emptyMap())
-
-                    if (!toolId.isNullOrBlank()) {
-                        toolCalls.add(ToolCall(toolId = toolId.trim(), arguments = argsObj))
+                                if (!toolId.isNullOrBlank()) {
+                                    toolCalls.add(ToolCall(toolId = toolId.trim(), arguments = argsObj))
+                                }
+                            }
+                        }
+                        if (toolCalls.isNotEmpty()) return toolCalls
                     }
-                }
-                if (toolCalls.isNotEmpty()) return toolCalls
-            } catch (_: Exception) { }
-        }
 
-        // 2. Поиск одиночного JSON вызова формата {"tool": "...", "arguments": {...}}
-        val singlePattern = Regex("""\{[\s\S]*?"tool"[\s\S]*?\}""")
-        val singleMatch = singlePattern.find(rawLlmOutput)
-        if (singleMatch != null) {
-            try {
-                val singleObj = json.parseToJsonElement(singleMatch.value.trim()).jsonObject
-                val toolId = singleObj["tool"]?.jsonPrimitive?.contentOrNull
-                val argsObj = singleObj["arguments"]?.jsonObject
-                    ?: singleObj["params"]?.jsonObject
-                    ?: JsonObject(emptyMap())
-
-                if (!toolId.isNullOrBlank() && toolId != "tool_name") {
-                    return listOf(ToolCall(toolId = toolId.trim(), arguments = argsObj))
+                    // Single tool call format: {"tool": "...", "arguments": {...}}
+                    val toolId = element["tool"]?.jsonPrimitive?.contentOrNull
+                    if (!toolId.isNullOrBlank() && toolId != "tool_name") {
+                        val argsObj = element["arguments"]?.jsonObject
+                            ?: element["params"]?.jsonObject
+                            ?: JsonObject(emptyMap())
+                        return listOf(ToolCall(toolId = toolId.trim(), arguments = argsObj))
+                    }
                 }
             } catch (_: Exception) { }
         }

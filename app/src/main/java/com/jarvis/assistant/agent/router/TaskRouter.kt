@@ -88,7 +88,9 @@ class TaskRouter @Inject constructor() {
                 q.contains("ночной режим") ||
                 q.contains("подготовь ко сну") ||
                 q.contains("проанализируй") ||
-                q.contains("составь бизнес-план") ||
+                q.contains("бизнес-план") ||
+                q.contains("бизнес план") ||
+                q.contains("бизнес") ||
                 q.contains("напиши код") ||
                 q.contains("сравни") ||
                 q.contains("почему") && q.length > 40 ||

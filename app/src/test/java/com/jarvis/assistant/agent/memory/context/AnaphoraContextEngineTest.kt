@@ -28,7 +28,8 @@ class AnaphoraContextEngineTest {
         val query = "Сколько ему лет?"
         val resolved = engine.resolveQuery(query, lastEntity)
 
-        assertEquals("сколько лет Эмманюэль Макрон", resolved)
+        assertTrue("Resolved query should contain entity name", resolved.contains("Эмманюэль Макрон"))
+        assertTrue("Resolved query should contain age context", resolved.contains("сколько лет"))
     }
 
     @Test

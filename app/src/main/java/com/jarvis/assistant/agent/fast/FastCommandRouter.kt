@@ -145,7 +145,7 @@ class FastCommandRouter @Inject constructor() {
         }
 
         // 5. Громкость
-        if (q.contains("громк") || q.contains("звук") || q.contains("тише") || q.contains("погромче") || q.contains("прибавь") || q.contains("убавь")) {
+        if (q.contains("громк") || q.contains("звук") || q.contains("тише") || q.contains("тиш") || q.contains("громче") || q.contains("громч") || q.contains("погромче") || q.contains("прибавь") || q.contains("убавь") || q.contains("прибав") || q.contains("убав")) {
             val percentMatch = Regex("""(\d+)\s*(%|процент)""").find(q)
             if (percentMatch != null) {
                 val percent = percentMatch.groupValues[1].toIntOrNull() ?: 50
