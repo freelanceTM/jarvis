@@ -25,7 +25,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jarvis.assistant.agent.automation.entity.AutomationEntity
 import com.jarvis.assistant.core.battery.BatteryOptimizationHelper
 import com.jarvis.assistant.presentation.theme.*
-import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -150,7 +149,55 @@ fun SettingsScreen(
                 }
             }
 
-            // 3. Headset-Only / Ear-First Mode Switch
+            // 3. Wake Word Sensitivity & Acoustic Filter Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, JarvisCyanPrimary.copy(alpha = 0.4f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Акустический Wake Word (Слово «Джарвис»)",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = JarvisCyanPrimary
+                        )
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = null,
+                            tint = JarvisCyanPrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    Text(
+                        text = "Двухэтапный каскад: ZCR-фильтр формант речи (Stage 1) ➔ верификация ключевого слова (Stage 2).",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextTertiary
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "Чувствительность микрофона: ${String.format(Locale.US, "%.2f", uiState.wakeWordSensitivity)}x",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary
+                    )
+                    Slider(
+                        value = uiState.wakeWordSensitivity,
+                        onValueChange = { viewModel.onWakeWordSensitivityChanged(it) },
+                        valueRange = 0.1f..1.0f,
+                        steps = 18,
+                        colors = SliderDefaults.colors(thumbColor = JarvisCyanPrimary, activeTrackColor = JarvisCyanPrimary)
+                    )
+                }
+            }
+
+            // 4. Headset-Only / Ear-First Mode Switch
             Card(
                 colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
                 shape = RoundedCornerShape(16.dp),
@@ -199,7 +246,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 3.1 Accessibility Service Status & Activation Card
+            // 5. Accessibility Service Status & Activation Card
             Card(
                 colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
                 shape = RoundedCornerShape(16.dp),
@@ -267,7 +314,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 3.2 Battery Optimization & OEM Autostart (Samsung / Xiaomi / Huawei 24/7 Mode)
+            // 6. Battery Optimization & OEM Autostart (Samsung / Xiaomi / Huawei 24/7 Mode)
             val context = androidx.compose.ui.platform.LocalContext.current
             var isBatteryIgnoring by remember { mutableStateOf(BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)) }
 
@@ -352,7 +399,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 4. Automations Management Section
+            // 7. Automations Management Section
             Card(
                 colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
                 shape = RoundedCornerShape(16.dp),
@@ -406,7 +453,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 5. Voice Customization (JARVIS Male Baritone & Pitch presets)
+            // 8. Voice Customization (JARVIS Male Baritone & Pitch presets)
             Card(
                 colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
                 shape = RoundedCornerShape(16.dp)
@@ -440,7 +487,6 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    // Voice Preset Buttons
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -523,7 +569,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 6. System Prompt Configuration
+            // 9. System Prompt Configuration
             Card(
                 colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
                 shape = RoundedCornerShape(16.dp)
@@ -547,7 +593,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 7. Save Button
+            // 10. Save Button
             Button(
                 onClick = { viewModel.saveAllSettings() },
                 modifier = Modifier

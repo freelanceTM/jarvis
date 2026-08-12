@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.abs
 import kotlin.math.sqrt
 
 sealed interface WakeWordEvent {
@@ -30,18 +29,19 @@ interface WakeWordDetector {
 }
 
 /**
- * Intelligent Acoustic Keyword Contour & Speech Detector (KWS Front-End)
+ * Acoustic Speech Activity & Formant Filter (Front-End для Wake Word)
  * 
- * Реализует:
- * 1. RMS Energy Dynamic Threshold с плавной регулировкой чувствительности
- * 2. Zero-Crossing Rate (ZCR) формантный анализ речи (300-3400 Гц)
- * 3. Two-Syllable Phonetic Envelope Matcher (отслеживает огибающую слова «ДЖАР-ВИС»):
- *    - Слог 1: сильный гласный формант [a/r] (ZCR: 0.04-0.15)
- *    - Плавный спад энергии между слогами
- *    - Слог 2: сибилянтное высокочастотное окончание [s] (ZCR: 0.20-0.45)
- * 4. Защитный 2000 мс антиспам кулдаун и SupervisorJob для устранения утечек памяти.
+ * Принцип работы:
+ * 1. Низкопотребляющий VAD по RMS-энергии сигнала (16 кГц 16-бит моно PCM через AudioRecord).
+ * 2. Фильтрация неречевых шумов через Zero-Crossing Rate (ZCR):
+ *    - Человеческая речь: ZCR в диапазоне 0.02 .. 0.48.
+ *    - Стуки, хлопки, щелчки: ZCR > 0.55.
+ *    - Низкочастотный гул: ZCR < 0.015.
+ * 3. Временной фильтр непрерывности (требует 3 последовательных речевых фрейма ~100 мс).
+ * 4. Защитный 2000 мс антиспам кулдаун.
+ * 5. При обнаружении речи передаёт управление на Stage-2 (Keyword Spotting через SpeechRecognizer).
  * 
- * Потребление CPU: < 1%, отклик: < 80 мс.
+ * Потребление CPU: < 1%, 0 МБ оверхеда.
  */
 @Singleton
 class AlisaStyleWakeWordEngine @Inject constructor(
@@ -61,13 +61,13 @@ class AlisaStyleWakeWordEngine @Inject constructor(
     private var isRecording = false
 
     @Volatile
-    private var currentSensitivity = 0.70f
+    private var currentSensitivity = 0.65f
 
     @Volatile
-    private var effectiveRmsThreshold = 750f
+    private var effectiveRmsThreshold = 850f
 
     private var lastTriggerTimestamp = 0L
-    private val cooldownMs = 2000L // 2 секунды антиспам кулдаун
+    private val cooldownMs = 2000L
 
     private val sampleRate = 16000
     private val channelConfig = AudioFormat.CHANNEL_IN_MONO
@@ -75,17 +75,12 @@ class AlisaStyleWakeWordEngine @Inject constructor(
     private val frameSizeSamples = 512 // 32 мс при 16 кГц
     private val minBufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat).coerceAtLeast(4096)
 
-    // Кольцевой буфер признаков последних 12 фреймов (~384 мс — типичная длительность слова «Джарвис»)
-    private val recentRms = FloatArray(12)
-    private val recentZcr = FloatArray(12)
-    private var frameIndex = 0
-
     init {
         updateThreshold()
     }
 
     /**
-     * Настройка чувствительности (0.0 - низкая/для улицы, 1.0 - высокая/для тихой комнаты)
+     * Настройка чувствительности (0.0 - только громкий голос вблизи, 1.0 - высокая чувствительность)
      */
     override fun setSensitivity(sensitivity: Float) {
         currentSensitivity = sensitivity.coerceIn(0.1f, 1.0f)
@@ -93,7 +88,7 @@ class AlisaStyleWakeWordEngine @Inject constructor(
     }
 
     private fun updateThreshold() {
-        effectiveRmsThreshold = 1500f - (currentSensitivity * 1000f)
+        effectiveRmsThreshold = 1600f - (currentSensitivity * 1050f)
     }
 
     override fun isRunning(): Boolean = isRecording
@@ -132,7 +127,6 @@ class AlisaStyleWakeWordEngine @Inject constructor(
 
             audioRecord?.startRecording()
             isRecording = true
-            frameIndex = 0
 
             workerJob = scope.launch {
                 val pcmBuffer = ShortArray(frameSizeSamples)
@@ -142,7 +136,7 @@ class AlisaStyleWakeWordEngine @Inject constructor(
                     val read = audioRecord?.read(pcmBuffer, 0, frameSizeSamples) ?: 0
                     if (read <= 0 || !isRecording) break
 
-                    // 1. Вычисление энергии (RMS) и частоты пересечения нуля (ZCR)
+                    // 1. Вычисление энергии (RMS) и частоты перехода через ноль (ZCR)
                     var sumSquares = 0.0
                     var zeroCrossings = 0
                     for (i in 0 until read) {
@@ -160,29 +154,19 @@ class AlisaStyleWakeWordEngine @Inject constructor(
                     val rms = sqrt(sumSquares / read).toFloat()
                     val zcr = zeroCrossings.toFloat() / read.toFloat()
 
-                    // Сохраняем в кольцевой буфер признаков
-                    val idx = frameIndex % recentRms.size
-                    recentRms[idx] = rms
-                    recentZcr[idx] = zcr
-                    frameIndex++
-
                     _events.tryEmit(WakeWordEvent.VoiceLevelChanged(rms))
 
-                    // 2. Базовая проверка речевого диапазона
+                    // 2. Спектральная верификация речи
                     val isSpeechFormant = zcr in 0.02f..0.48f
                     val isAboveThreshold = rms > effectiveRmsThreshold
 
                     if (isAboveThreshold && isSpeechFormant) {
                         speechFrames++
-
-                        // 3. Акустическое сопоставление профиля слова (двухсложный паттерн с сибилянтом)
-                        val matchesKeywordContour = checkKeywordEnvelopePattern()
-
-                        if (speechFrames >= 3 && matchesKeywordContour) {
+                        if (speechFrames >= 3) {
                             speechFrames = 0
                             lastTriggerTimestamp = System.currentTimeMillis()
 
-                            // Синхронно освобождаем AudioRecord перед активацией SpeechRecognizer
+                            // Синхронно освобождаем AudioRecord перед передачей микрофона SpeechRecognizer
                             stopListening()
                             _events.emit(WakeWordEvent.VoiceActivityDetected)
                             break
@@ -195,30 +179,6 @@ class AlisaStyleWakeWordEngine @Inject constructor(
         } catch (_: Exception) {
             stopListening()
         }
-    }
-
-    /**
-     * Проверяет динамику энергии и частот:
-     * Наличие характерного подъема ZCR в хвостовой части слова (звук [с] в конце «Джарвис»)
-     */
-    private fun checkKeywordEnvelopePattern(): Boolean {
-        if (frameIndex < 4) return true // В начале даем шанс речи
-
-        val count = minOf(frameIndex, recentRms.size)
-        var maxRms = 0f
-        var hasSibilantTail = false
-
-        for (i in 0 until count) {
-            val r = recentRms[i]
-            val z = recentZcr[i]
-            if (r > maxRms) maxRms = r
-            // Хвостовой согласный [с/з] даёт повышенный ZCR
-            if (z > 0.15f && r > (effectiveRmsThreshold * 0.6f)) {
-                hasSibilantTail = true
-            }
-        }
-
-        return maxRms > effectiveRmsThreshold && hasSibilantTail
     }
 
     @Synchronized

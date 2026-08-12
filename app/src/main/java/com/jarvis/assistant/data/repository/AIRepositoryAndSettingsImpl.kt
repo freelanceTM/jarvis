@@ -70,6 +70,7 @@ class SettingsRepositoryImpl @Inject constructor(
     override val userNameFlow: Flow<String> = settingsDataStore.userNameFlow
     override val selectedModelFlow: Flow<String> = settingsDataStore.selectedModelFlow
     override val isHeadsetOnlyModeFlow: Flow<Boolean> = settingsDataStore.isHeadsetOnlyModeFlow
+    override val wakeWordSensitivityFlow: Flow<Float> = settingsDataStore.wakeWordSensitivityFlow
 
     override suspend fun setSystemPrompt(prompt: String) {
         withContext(dispatchers.io) {
@@ -104,6 +105,12 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun setHeadsetOnlyMode(enabled: Boolean) {
         withContext(dispatchers.io) {
             settingsDataStore.setHeadsetOnlyMode(enabled)
+        }
+    }
+
+    override suspend fun setWakeWordSensitivity(sensitivity: Float) {
+        withContext(dispatchers.io) {
+            settingsDataStore.setWakeWordSensitivity(sensitivity)
         }
     }
 

@@ -31,15 +31,17 @@ class GetSettingsUseCase @Inject constructor(
             settingsRepository.speechRateFlow,
             settingsRepository.speechPitchFlow,
             settingsRepository.selectedModelFlow,
-            settingsRepository.isHeadsetOnlyModeFlow
-        ) { userName, systemPrompt, rate, pitch, model, headsetOnly ->
+            settingsRepository.isHeadsetOnlyModeFlow,
+            settingsRepository.wakeWordSensitivityFlow
+        ) { args: Array<Any?> ->
             VoiceSettings(
-                userName = userName,
-                systemPrompt = systemPrompt,
-                speechRate = rate,
-                speechPitch = pitch,
-                selectedModel = model,
-                isHeadsetOnlyMode = headsetOnly
+                userName = args[0] as String,
+                systemPrompt = args[1] as String,
+                speechRate = args[2] as Float,
+                speechPitch = args[3] as Float,
+                selectedModel = args[4] as String,
+                isHeadsetOnlyMode = args[5] as Boolean,
+                wakeWordSensitivity = args[6] as Float
             )
         }
     }
@@ -54,6 +56,7 @@ class SaveSettingsUseCase @Inject constructor(
     suspend fun saveSpeechPitch(pitch: Float) = settingsRepository.setSpeechPitch(pitch)
     suspend fun saveModel(model: String) = settingsRepository.setSelectedModel(model)
     suspend fun saveHeadsetOnlyMode(enabled: Boolean) = settingsRepository.setHeadsetOnlyMode(enabled)
+    suspend fun saveWakeWordSensitivity(sensitivity: Float) = settingsRepository.setWakeWordSensitivity(sensitivity)
 }
 
 class ObserveNetworkStateUseCase @Inject constructor(

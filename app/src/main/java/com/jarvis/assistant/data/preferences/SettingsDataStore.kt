@@ -26,6 +26,7 @@ class SettingsDataStore @Inject constructor(
         val SPEECH_PITCH = floatPreferencesKey("speech_pitch")
         val SELECTED_MODEL = stringPreferencesKey("selected_model")
         val HEADSET_ONLY_MODE = booleanPreferencesKey("headset_only_mode")
+        val WAKE_WORD_SENSITIVITY = floatPreferencesKey("wake_word_sensitivity")
     }
 
     val userNameFlow: Flow<String> = context.dataStore.data
@@ -76,6 +77,14 @@ class SettingsDataStore @Inject constructor(
             preferences[PreferencesKeys.HEADSET_ONLY_MODE] ?: false
         }
 
+    val wakeWordSensitivityFlow: Flow<Float> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) emit(emptyPreferences()) else throw exception
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.WAKE_WORD_SENSITIVITY] ?: 0.65f
+        }
+
     suspend fun setUserName(name: String) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.USER_NAME] = name
@@ -112,6 +121,12 @@ class SettingsDataStore @Inject constructor(
         }
     }
 
+    suspend fun setWakeWordSensitivity(sensitivity: Float) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.WAKE_WORD_SENSITIVITY] = sensitivity
+        }
+    }
+
     suspend fun resetDefaults() {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.USER_NAME] = "Сэр"
@@ -120,6 +135,7 @@ class SettingsDataStore @Inject constructor(
             preferences[PreferencesKeys.SPEECH_PITCH] = AppConstants.DEFAULT_SPEECH_PITCH
             preferences[PreferencesKeys.SELECTED_MODEL] = AppConstants.DEFAULT_MODEL
             preferences[PreferencesKeys.HEADSET_ONLY_MODE] = false
+            preferences[PreferencesKeys.WAKE_WORD_SENSITIVITY] = 0.65f
         }
     }
 }

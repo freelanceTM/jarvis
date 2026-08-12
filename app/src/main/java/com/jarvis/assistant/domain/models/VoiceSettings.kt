@@ -7,7 +7,8 @@ data class VoiceSettings(
     val speechPitch: Float = 1.0f,
     val voiceLocale: String = "ru-RU",
     val selectedModel: String = "gpt-4o-mini",
-    val isHeadsetOnlyMode: Boolean = false
+    val isHeadsetOnlyMode: Boolean = false,
+    val wakeWordSensitivity: Float = 0.65f
 )
 
 enum class AIModel(val modelId: String, val displayName: String) {

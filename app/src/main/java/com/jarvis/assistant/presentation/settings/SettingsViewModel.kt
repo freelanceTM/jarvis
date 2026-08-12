@@ -26,6 +26,7 @@ data class SettingsUiState(
     val speechPitch: Float = 1.0f,
     val selectedModel: String = "gpt-4o-mini",
     val isHeadsetOnlyMode: Boolean = false,
+    val wakeWordSensitivity: Float = 0.65f,
     val automations: List<AutomationEntity> = emptyList(),
     val isSavedSuccess: Boolean = false
 )
@@ -59,7 +60,8 @@ class SettingsViewModel @Inject constructor(
                         speechRate = settings.speechRate,
                         speechPitch = settings.speechPitch,
                         selectedModel = settings.selectedModel,
-                        isHeadsetOnlyMode = settings.isHeadsetOnlyMode
+                        isHeadsetOnlyMode = settings.isHeadsetOnlyMode,
+                        wakeWordSensitivity = settings.wakeWordSensitivity
                     )
                 }
             }
@@ -121,6 +123,13 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun onWakeWordSensitivityChanged(sensitivity: Float) {
+        _uiState.update { it.copy(wakeWordSensitivity = sensitivity) }
+        viewModelScope.launch {
+            saveSettingsUseCase.saveWakeWordSensitivity(sensitivity)
+        }
+    }
+
     fun saveAllSettings() {
         viewModelScope.launch {
             val state = _uiState.value
@@ -131,6 +140,7 @@ class SettingsViewModel @Inject constructor(
             saveSettingsUseCase.saveSpeechPitch(state.speechPitch)
             saveSettingsUseCase.saveModel(state.selectedModel)
             saveSettingsUseCase.saveHeadsetOnlyMode(state.isHeadsetOnlyMode)
+            saveSettingsUseCase.saveWakeWordSensitivity(state.wakeWordSensitivity)
             _uiState.update { it.copy(isSavedSuccess = true) }
         }
     }
