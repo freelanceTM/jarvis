@@ -10,13 +10,13 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Tool Discovery Engine 2.0 (Гибридный семантический фильтр)
+ * Tool Discovery Engine 2.0 (Высокоточный гибридный семантический фильтр)
  * Использует:
- * 1. 64-D On-Device Cosine Vector Similarity
- * 2. BM25 / TF-IDF частотное ранжирование с весами терминов
- * 3. Расширенный SynonymDictionary (RU + EN)
- * 4. Fuzzy Levenshtein Matching для устойчивости к ошибкам распознавания речи
- * Время выполнения: < 10 мс.
+ * 1. BM25 / TF-IDF частотное взвешивание с обратной документной частотой (IDF) — 45% веса
+ * 2. Расширенный SynonymDictionary (RU + EN) — 35% веса
+ * 3. Fuzzy Levenshtein Matching для устойчивости к опечаткам — 15% веса
+ * 4. Концептуальный Cosine Similarity — 5% веса
+ * Время выполнения: < 5 мс.
  */
 @Singleton
 class ToolDiscoveryEngine @Inject constructor(
@@ -33,13 +33,8 @@ class ToolDiscoveryEngine @Inject constructor(
         val q = userQuery.lowercase().trim()
         if (q.isEmpty() || allTools.isEmpty()) return emptyList()
 
-        // 1. Проверяем, является ли запрос чистым теоретическим вопросом (без действий с телефоном)
-        val isPureConversation = q.startsWith("почему") ||
-                q.startsWith("объясни") ||
-                q.startsWith("расскажи о") ||
-                q.startsWith("что такое") && !q.contains("телефон") && !q.contains("батаре") ||
-                q.startsWith("кто такой") ||
-                q.startsWith("как работает")
+        // 1. Глубокий анализ: является ли запрос чистой беседой/теорией (без действий с телефоном)
+        val isPureConversation = isConversationalQuery(q)
 
         // 2. Векторный семантический поиск
         val queryVector = vectorEngine.createEmbedding(q)
@@ -60,11 +55,7 @@ class ToolDiscoveryEngine @Inject constructor(
         for ((tool, docTokens) in toolCorpus) {
             val toolText = docTokens.joinToString(" ")
 
-            // A. Vector Cosine Similarity
-            val toolVector = vectorEngine.createEmbedding(toolText)
-            val semanticScore = vectorEngine.computeCosineSimilarity(queryVector, toolVector)
-
-            // B. BM25 / TF-IDF Scoring
+            // A. BM25 / TF-IDF Scoring (Основной статистический компонент)
             var bm25Score = 0f
             val docLen = docTokens.size.toDouble()
             val k1 = 1.2
@@ -81,7 +72,7 @@ class ToolDiscoveryEngine @Inject constructor(
                 }
             }
 
-            // C. Synonym Boost
+            // B. Synonym Boost (Семантическое попадание по словарю действий)
             var synonymBoost = 0f
             for (word in queryWords) {
                 val synonyms = SynonymDictionary.getSynonyms(word)
@@ -93,7 +84,7 @@ class ToolDiscoveryEngine @Inject constructor(
                 }
             }
 
-            // D. Fuzzy Levenshtein Matching (для опечаток голосового ввода)
+            // C. Fuzzy Levenshtein Matching (Устойчивость к голосовым опечаткам)
             var fuzzyBoost = 0f
             for (word in queryWords) {
                 if (word.length >= 4) {
@@ -108,18 +99,31 @@ class ToolDiscoveryEngine @Inject constructor(
                 }
             }
 
-            // E. Гибридный итоговый балл
-            val normalizedBm25 = (bm25Score / 3.0f).coerceAtMost(0.5f)
-            val totalScore = (semanticScore * 0.35f) +
-                    (normalizedBm25 * 0.30f) +
-                    (synonymBoost.coerceAtMost(0.40f) * 0.25f) +
-                    (fuzzyBoost * 0.10f)
+            // D. Vector Cosine Similarity (Фоновый семантический компонент)
+            val toolVector = vectorEngine.createEmbedding(toolText)
+            val semanticScore = vectorEngine.computeCosineSimilarity(queryVector, toolVector)
+
+            // Защита от ложных срабатываний: если нет ни одного лексического/синонимического/fuzzy совпадения -> скор 0
+            val hasExplicitMatch = (bm25Score > 0f || synonymBoost > 0f || fuzzyBoost > 0f)
+            if (!hasExplicitMatch) {
+                continue
+            }
+
+            // E. Взвешенный итоговый балл (BM25: 45%, Синонимы: 35%, Fuzzy: 15%, Вектор: 5%)
+            val normalizedBm25 = (bm25Score / 2.5f).coerceAtMost(1.0f)
+            val normalizedSynonym = (synonymBoost / 0.70f).coerceAtMost(1.0f)
+            val normalizedFuzzy = (fuzzyBoost / 0.25f).coerceAtMost(1.0f)
+
+            val totalScore = (normalizedBm25 * 0.45f) +
+                    (normalizedSynonym * 0.35f) +
+                    (normalizedFuzzy * 0.15f) +
+                    (semanticScore * 0.05f)
 
             scoredTools.add(tool to totalScore)
         }
 
-        // 4. Отбираем инструменты, преодолевшие порог релевантности
-        val threshold = if (isPureConversation) 0.45f else 0.22f
+        // 4. Отбираем инструменты, преодолевшие строгий порог релевантности
+        val threshold = if (isPureConversation) 0.60f else 0.32f
         val filtered = scoredTools
             .filter { it.second >= threshold }
             .sortedByDescending { it.second }
@@ -127,6 +131,41 @@ class ToolDiscoveryEngine @Inject constructor(
             .take(maxTools)
 
         return filtered
+    }
+
+    private fun isConversationalQuery(query: String): Boolean {
+        val q = query.lowercase().trim()
+
+        // Если запрос содержит глаголы/команды управления устройством -> это НЕ чистая беседа
+        val hasDeviceAction = q.contains("включи") || q.contains("выключи") || q.contains("погаси") ||
+                q.contains("зажги") || q.contains("открой") || q.contains("запусти") ||
+                q.contains("позвони") || q.contains("набери") || q.contains("отправь") ||
+                q.contains("напиши") || q.contains("поставь") || q.contains("громк") ||
+                q.contains("звук") || q.contains("фонарик") || q.contains("батаре") ||
+                q.contains("заряд") || q.contains("скриншот") || q.contains("блютуз") ||
+                q.contains("вайфай") || q.contains("маршрут") || q.contains("навигатор") ||
+                q.contains("экран") || q.contains("кликни") || q.contains("нажми") ||
+                q.contains("запомни") || q.contains("забудь")
+
+        if (hasDeviceAction) return false
+
+        // Вопросительные/энциклопедические/генеративные запросы
+        return q.startsWith("почему") ||
+                q.startsWith("зачем") ||
+                q.startsWith("объясни") ||
+                q.startsWith("расскажи") ||
+                q.startsWith("что такое") ||
+                q.startsWith("кто такой") ||
+                q.startsWith("кто такая") ||
+                q.startsWith("в чем разница") ||
+                q.startsWith("как работает") ||
+                q.startsWith("как приготовить") ||
+                q.startsWith("переведи") ||
+                q.startsWith("напиши стих") ||
+                q.startsWith("придумай") ||
+                q.startsWith("посоветуй фильм") ||
+                q.startsWith("скажи") ||
+                q.contains("смысл жизни")
     }
 
     /**
