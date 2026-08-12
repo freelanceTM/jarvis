@@ -27,11 +27,13 @@ interface SettingsRepository {
     val speechPitchFlow: Flow<Float>
     val userNameFlow: Flow<String>
     val selectedModelFlow: Flow<String>
+    val isHeadsetOnlyModeFlow: Flow<Boolean>
     
     suspend fun setSystemPrompt(prompt: String)
     suspend fun setSpeechRate(rate: Float)
     suspend fun setSpeechPitch(pitch: Float)
     suspend fun setUserName(name: String)
     suspend fun setSelectedModel(model: String)
+    suspend fun setHeadsetOnlyMode(enabled: Boolean)
     suspend fun resetDefaults()
 }

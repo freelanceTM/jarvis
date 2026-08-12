@@ -84,6 +84,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
     private var speechRate = 1.05f
     private var speechPitch = 0.90f
+    private var isHeadsetOnlyMode = false
 
     private val wakeKeywords = listOf("джарвис", "jarvis", "жарвис", "дарвис", "джей", "диджей", "джар")
 
@@ -116,13 +117,17 @@ class VoiceInteractionOrchestrator @Inject constructor(
         isServiceActive = true
         bluetoothAudioRouter.checkHeadsetConnection()
 
-        if (!bluetoothAudioRouter.isHeadsetConnected()) {
+        if (isHeadsetOnlyMode && !bluetoothAudioRouter.isHeadsetConnected()) {
             _currentMode.value = OrchestratorMode.PAUSED_CALL_OR_SLEEP
             _assistantState.value = VoiceAssistantState.Error("Подключите наушники для работы")
             return
         }
 
-        bluetoothAudioRouter.routeAudioToEarbud()
+        if (bluetoothAudioRouter.isHeadsetConnected()) {
+            bluetoothAudioRouter.routeAudioToEarbud()
+        } else {
+            bluetoothAudioRouter.routeAudioToSpeaker()
+        }
         startStandbyMode()
     }
 
@@ -142,9 +147,14 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         playWakeChime()
                         startStandbyMode()
                     } else {
-                        stopAll()
-                        _currentMode.value = OrchestratorMode.PAUSED_CALL_OR_SLEEP
-                        _assistantState.value = VoiceAssistantState.Error("Наушники отключены. Ожидание...")
+                        bluetoothAudioRouter.routeAudioToSpeaker()
+                        if (isHeadsetOnlyMode) {
+                            stopAll()
+                            _currentMode.value = OrchestratorMode.PAUSED_CALL_OR_SLEEP
+                            _assistantState.value = VoiceAssistantState.Error("Наушники отключены. Ожидание...")
+                        } else {
+                            startStandbyMode()
+                        }
                     }
                 }
             }
@@ -156,6 +166,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
             getSettingsUseCase().collectLatest { settings ->
                 speechRate = settings.speechRate
                 speechPitch = settings.speechPitch
+                isHeadsetOnlyMode = settings.isHeadsetOnlyMode
             }
         }
     }
@@ -164,7 +175,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
         scope.launch {
             wakeWordDetector.events.collectLatest { event ->
                 if (event is WakeWordEvent.VoiceActivityDetected && _currentMode.value == OrchestratorMode.STANDBY_WAKE_WORD) {
-                    if (bluetoothAudioRouter.isHeadsetConnected()) {
+                    if (!isHeadsetOnlyMode || bluetoothAudioRouter.isHeadsetConnected()) {
                         startKeywordVerification()
                     }
                 }
@@ -175,7 +186,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private fun startStandbyMode() {
         if (!isServiceActive) return
 
-        if (!bluetoothAudioRouter.isHeadsetConnected()) {
+        if (isHeadsetOnlyMode && !bluetoothAudioRouter.isHeadsetConnected()) {
             _currentMode.value = OrchestratorMode.PAUSED_CALL_OR_SLEEP
             _assistantState.value = VoiceAssistantState.Error("Подключите наушники")
             return
@@ -335,7 +346,6 @@ class VoiceInteractionOrchestrator @Inject constructor(
             return
         }
 
-        // Предотвращение race condition при двойном вызове
         if (!isProcessingQuery.compareAndSet(false, true)) {
             Log.d(TAG, "Query '$clean' already processing, skipping duplicate dispatch.")
             return

@@ -12,6 +12,7 @@ import android.content.IntentFilter
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
+import android.util.Log
 import com.jarvis.assistant.agent.automation.engine.PersonalAutomationEngine
 import com.jarvis.assistant.agent.automation.model.AutomationTriggerType
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -35,6 +36,10 @@ class BluetoothAudioRouter @Inject constructor(
     @ApplicationContext private val context: Context,
     private val automationEngine: PersonalAutomationEngine
 ) {
+    companion object {
+        private const val TAG = "BluetoothAudioRouter"
+    }
+
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     private var bluetoothHeadset: BluetoothHeadset? = null
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -55,6 +60,7 @@ class BluetoothAudioRouter @Inject constructor(
                     val name = connectedDevices.first().name ?: "Bluetooth Гарнитура"
                     _audioState.value = BluetoothAudioState.Connected(name, isSingleEarbud = true)
                     _isHeadsetPlugged.value = true
+                    routeAudioToEarbud()
                     triggerHeadphoneAutomation()
                 }
             }
@@ -64,6 +70,7 @@ class BluetoothAudioRouter @Inject constructor(
             if (profile == BluetoothProfile.HEADSET) {
                 bluetoothHeadset = null
                 _audioState.value = BluetoothAudioState.Disconnected
+                routeAudioToSpeaker()
                 checkHeadsetConnection()
             }
         }
@@ -83,16 +90,20 @@ class BluetoothAudioRouter @Inject constructor(
                 }
                 BluetoothDevice.ACTION_ACL_DISCONNECTED,
                 AudioManager.ACTION_AUDIO_BECOMING_NOISY -> {
+                    routeAudioToSpeaker()
                     checkHeadsetConnection()
                 }
                 Intent.ACTION_HEADSET_PLUG -> {
                     val state = intent.getIntExtra("state", 0)
-                    _isHeadsetPlugged.value = (state == 1) || isBluetoothConnected()
+                    val isPlugged = (state == 1) || isBluetoothConnected()
+                    _isHeadsetPlugged.value = isPlugged
                     if (state == 1) {
                         _audioState.value = BluetoothAudioState.Connected("Проводные наушники")
+                        routeAudioToEarbud()
                         triggerHeadphoneAutomation()
                     } else if (!isBluetoothConnected()) {
                         _audioState.value = BluetoothAudioState.Disconnected
+                        routeAudioToSpeaker()
                     }
                 }
                 AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED -> {
@@ -152,6 +163,9 @@ class BluetoothAudioRouter @Inject constructor(
 
     private fun isBluetoothConnected(): Boolean = _audioState.value is BluetoothAudioState.Connected
 
+    /**
+     * Маршрутизация звука и микрофона на гарнитуру / наушник (Bluetooth SCO 16kHz)
+     */
     fun routeAudioToEarbud() {
         try {
             audioManager?.let { am ->
@@ -165,6 +179,7 @@ class BluetoothAudioRouter @Inject constructor(
                     if (headset != null) {
                         am.setCommunicationDevice(headset)
                         am.mode = AudioManager.MODE_IN_COMMUNICATION
+                        Log.d(TAG, "Communication device routed to headset: ${headset.productName}")
                         return
                     }
                 }
@@ -172,7 +187,32 @@ class BluetoothAudioRouter @Inject constructor(
                 am.mode = AudioManager.MODE_IN_COMMUNICATION
                 am.startBluetoothSco()
                 am.isBluetoothScoOn = true
+                Log.d(TAG, "Bluetooth SCO started")
             }
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to route to earbud: ${e.localizedMessage}")
+        }
+    }
+
+    /**
+     * Возврат звука и микрофона на стандартный динамик смартфона
+     */
+    fun routeAudioToSpeaker() {
+        try {
+            audioManager?.let { am ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    am.clearCommunicationDevice()
+                }
+                if (am.isBluetoothScoOn) {
+                    am.isBluetoothScoOn = false
+                    am.stopBluetoothSco()
+                }
+                am.mode = AudioManager.MODE_NORMAL
+                am.isSpeakerphoneOn = false
+                Log.d(TAG, "Audio routed back to normal speaker/mic")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to route to speaker: ${e.localizedMessage}")
+        }
     }
 }

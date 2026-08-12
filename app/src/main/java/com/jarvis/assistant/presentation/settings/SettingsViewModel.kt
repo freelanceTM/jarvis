@@ -25,6 +25,7 @@ data class SettingsUiState(
     val speechRate: Float = 1.0f,
     val speechPitch: Float = 1.0f,
     val selectedModel: String = "gpt-4o-mini",
+    val isHeadsetOnlyMode: Boolean = false,
     val automations: List<AutomationEntity> = emptyList(),
     val isSavedSuccess: Boolean = false
 )
@@ -57,7 +58,8 @@ class SettingsViewModel @Inject constructor(
                         systemPrompt = settings.systemPrompt,
                         speechRate = settings.speechRate,
                         speechPitch = settings.speechPitch,
-                        selectedModel = settings.selectedModel
+                        selectedModel = settings.selectedModel,
+                        isHeadsetOnlyMode = settings.isHeadsetOnlyMode
                     )
                 }
             }
@@ -112,6 +114,13 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(selectedModel = modelId) }
     }
 
+    fun onHeadsetOnlyModeChanged(enabled: Boolean) {
+        _uiState.update { it.copy(isHeadsetOnlyMode = enabled) }
+        viewModelScope.launch {
+            saveSettingsUseCase.saveHeadsetOnlyMode(enabled)
+        }
+    }
+
     fun saveAllSettings() {
         viewModelScope.launch {
             val state = _uiState.value
@@ -121,6 +130,7 @@ class SettingsViewModel @Inject constructor(
             saveSettingsUseCase.saveSpeechRate(state.speechRate)
             saveSettingsUseCase.saveSpeechPitch(state.speechPitch)
             saveSettingsUseCase.saveModel(state.selectedModel)
+            saveSettingsUseCase.saveHeadsetOnlyMode(state.isHeadsetOnlyMode)
             _uiState.update { it.copy(isSavedSuccess = true) }
         }
     }

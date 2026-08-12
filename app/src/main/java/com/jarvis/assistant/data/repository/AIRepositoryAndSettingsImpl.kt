@@ -31,11 +31,9 @@ class AIRepositoryImpl @Inject constructor(
         history: List<Message>
     ): Resource<String> {
         return withContext(dispatchers.io) {
-            // Определяем оптимальный уровень модели (Tier 1 Fast / Tier 2 Reasoning / Tier 3 Search)
             val routingDecision = taskRouter.routeTask(prompt)
             Log.d("AIRepository", "TaskRouter: tier=${routingDecision.tier}, model=${routingDecision.targetModelId}, requiresWebSearch=${routingDecision.requiresWebSearch}")
 
-            // Если нужен веб-поиск — выполняем WebSearchTool и обогащаем системный промпт
             var enrichedSystemPrompt = systemPrompt
             if (routingDecision.requiresWebSearch) {
                 try {
@@ -71,6 +69,7 @@ class SettingsRepositoryImpl @Inject constructor(
     override val speechPitchFlow: Flow<Float> = settingsDataStore.speechPitchFlow
     override val userNameFlow: Flow<String> = settingsDataStore.userNameFlow
     override val selectedModelFlow: Flow<String> = settingsDataStore.selectedModelFlow
+    override val isHeadsetOnlyModeFlow: Flow<Boolean> = settingsDataStore.isHeadsetOnlyModeFlow
 
     override suspend fun setSystemPrompt(prompt: String) {
         withContext(dispatchers.io) {
@@ -99,6 +98,12 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun setSelectedModel(model: String) {
         withContext(dispatchers.io) {
             settingsDataStore.setSelectedModel(model)
+        }
+    }
+
+    override suspend fun setHeadsetOnlyMode(enabled: Boolean) {
+        withContext(dispatchers.io) {
+            settingsDataStore.setHeadsetOnlyMode(enabled)
         }
     }
 

@@ -149,7 +149,56 @@ fun SettingsScreen(
                 }
             }
 
-            // 3. Automations Management Section
+            // 3. Headset-Only / Ear-First Mode Switch
+            Card(
+                colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, if (uiState.isHeadsetOnlyMode) JarvisCyanPrimary.copy(alpha = 0.4f) else JarvisSurface)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Headset,
+                                contentDescription = null,
+                                tint = JarvisCyanPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Работать только в наушниках",
+                                style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
+                                color = TextPrimary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Фоновый микрофон и Wake Word активны только при подключенной Bluetooth-гарнитуре (Ear-First режим для экономии батареи).",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextTertiary
+                        )
+                    }
+
+                    Switch(
+                        checked = uiState.isHeadsetOnlyMode,
+                        onCheckedChange = { viewModel.onHeadsetOnlyModeChanged(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = JarvisCyanPrimary,
+                            checkedTrackColor = JarvisCyanPrimary.copy(alpha = 0.4f),
+                            uncheckedThumbColor = TextTertiary,
+                            uncheckedTrackColor = JarvisSurface
+                        )
+                    )
+                }
+            }
+
+            // 4. Automations Management Section
             Card(
                 colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
                 shape = RoundedCornerShape(16.dp),
@@ -203,7 +252,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 4. Voice Customization (JARVIS Male Baritone & Pitch presets)
+            // 5. Voice Customization (JARVIS Male Baritone & Pitch presets)
             Card(
                 colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
                 shape = RoundedCornerShape(16.dp)
@@ -320,7 +369,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 5. System Prompt Configuration
+            // 6. System Prompt Configuration
             Card(
                 colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
                 shape = RoundedCornerShape(16.dp)
@@ -344,7 +393,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 6. Save Button
+            // 7. Save Button
             Button(
                 onClick = { viewModel.saveAllSettings() },
                 modifier = Modifier

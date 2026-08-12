@@ -2,11 +2,7 @@ package com.jarvis.assistant.data.preferences
 
 import android.content.Context
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
-import androidx.datastore.preferences.core.floatPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import com.jarvis.assistant.core.constants.AppConstants
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -29,6 +25,7 @@ class SettingsDataStore @Inject constructor(
         val SPEECH_RATE = floatPreferencesKey("speech_rate")
         val SPEECH_PITCH = floatPreferencesKey("speech_pitch")
         val SELECTED_MODEL = stringPreferencesKey("selected_model")
+        val HEADSET_ONLY_MODE = booleanPreferencesKey("headset_only_mode")
     }
 
     val userNameFlow: Flow<String> = context.dataStore.data
@@ -71,6 +68,14 @@ class SettingsDataStore @Inject constructor(
             preferences[PreferencesKeys.SELECTED_MODEL] ?: AppConstants.DEFAULT_MODEL
         }
 
+    val isHeadsetOnlyModeFlow: Flow<Boolean> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) emit(emptyPreferences()) else throw exception
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.HEADSET_ONLY_MODE] ?: false
+        }
+
     suspend fun setUserName(name: String) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.USER_NAME] = name
@@ -101,6 +106,12 @@ class SettingsDataStore @Inject constructor(
         }
     }
 
+    suspend fun setHeadsetOnlyMode(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.HEADSET_ONLY_MODE] = enabled
+        }
+    }
+
     suspend fun resetDefaults() {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.USER_NAME] = "Сэр"
@@ -108,6 +119,7 @@ class SettingsDataStore @Inject constructor(
             preferences[PreferencesKeys.SPEECH_RATE] = AppConstants.DEFAULT_SPEECH_RATE
             preferences[PreferencesKeys.SPEECH_PITCH] = AppConstants.DEFAULT_SPEECH_PITCH
             preferences[PreferencesKeys.SELECTED_MODEL] = AppConstants.DEFAULT_MODEL
+            preferences[PreferencesKeys.HEADSET_ONLY_MODE] = false
         }
     }
 }
