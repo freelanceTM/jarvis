@@ -110,8 +110,8 @@ class ToolDiscoveryEngine @Inject constructor(
             }
 
             // E. Взвешенный итоговый балл (BM25: 45%, Синонимы: 35%, Fuzzy: 15%, Вектор: 5%)
-            val normalizedBm25 = (bm25Score / 2.5f).coerceAtMost(1.0f)
-            val normalizedSynonym = (synonymBoost / 0.70f).coerceAtMost(1.0f)
+            val normalizedBm25 = (bm25Score / 2.0f).coerceAtMost(1.0f)
+            val normalizedSynonym = (synonymBoost / 0.35f).coerceAtMost(1.0f)
             val normalizedFuzzy = (fuzzyBoost / 0.25f).coerceAtMost(1.0f)
 
             val totalScore = (normalizedBm25 * 0.45f) +
@@ -123,7 +123,7 @@ class ToolDiscoveryEngine @Inject constructor(
         }
 
         // 4. Отбираем инструменты, преодолевшие строгий порог релевантности
-        val threshold = if (isPureConversation) 0.60f else 0.32f
+        val threshold = if (isPureConversation) 0.55f else 0.25f
         val filtered = scoredTools
             .filter { it.second >= threshold }
             .sortedByDescending { it.second }
