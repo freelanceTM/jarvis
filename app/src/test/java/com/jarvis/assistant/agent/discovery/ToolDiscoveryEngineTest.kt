@@ -109,6 +109,14 @@ class ToolDiscoveryEngineTest {
     }
 
     @Test
+    fun testSemanticVectorSynonymSimilarity() {
+        val vec1 = vectorEngine.createEmbedding("позвони маме")
+        val vec2 = vectorEngine.createEmbedding("вызов абонента")
+        val similarity = vectorEngine.computeCosineSimilarity(vec1, vec2)
+        assertTrue("Cosine similarity between synonyms should be >= 0.65, got $similarity", similarity >= 0.65f)
+    }
+
+    @Test
     fun testPureConversationReturnsEmptyOrHighThreshold() {
         val discovered = engine.discoverTools("почему трава зеленая", mockTools)
         assertTrue(discovered.isEmpty())
