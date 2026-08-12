@@ -7,68 +7,64 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
-import androidx.navigation.compose.rememberNavController
 import com.jarvis.assistant.presentation.navigation.JarvisNavGraph
-import com.jarvis.assistant.presentation.theme.JarvisBackground
-import com.jarvis.assistant.presentation.theme.JarvisTheme
+import com.jarvis.assistant.presentation.permissions.PermissionsScreen
+import com.jarvis.assistant.presentation.theme.JarvisAssistantTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-
-    private val permissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { _ ->
-        // Permissions handled reactively across features
-    }
-
+    
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-
-        checkAndRequestPermissions()
-
+        enableEdgeToEdge()
+        
         setContent {
-            JarvisTheme {
+            JarvisAssistantTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = JarvisBackground
+                    color = MaterialTheme.colorScheme.background
                 ) {
-                    val navController = rememberNavController()
-                    JarvisNavGraph(navController = navController)
+                    var showPermissions by remember { 
+                        mutableStateOf(!hasRequiredPermissions()) 
+                    }
+                    
+                    if (showPermissions) {
+                        PermissionsScreen(
+                            onAllPermissionsGranted = {
+                                showPermissions = false
+                            },
+                            onSkip = {
+                                showPermissions = false
+                            }
+                        )
+                    } else {
+                        JarvisNavGraph()
+                    }
                 }
             }
         }
     }
-
-    private fun checkAndRequestPermissions() {
-        val permissions = mutableListOf(
-            Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.CALL_PHONE,
-            Manifest.permission.READ_CONTACTS,
-            Manifest.permission.SEND_SMS,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
+    
+    private fun hasRequiredPermissions(): Boolean {
+        val requiredPermissions = mutableListOf(
+            Manifest.permission.RECORD_AUDIO
         )
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
-        }
+        
+        // Android 13+ требует отдельное разрешение для уведомлений
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+            requiredPermissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
-
-        val missing = permissions.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-
-        if (missing.isNotEmpty()) {
-            permissionLauncher.launch(missing.toTypedArray())
+        
+        return requiredPermissions.all { permission ->
+            ContextCompat.checkSelfPermission(this, permission) == 
+                PackageManager.PERMISSION_GRANTED
         }
     }
 }
