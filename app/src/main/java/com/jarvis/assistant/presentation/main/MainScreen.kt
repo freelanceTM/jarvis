@@ -351,6 +351,7 @@ fun WakeWordStatusBanner(mode: OrchestratorMode, state: VoiceAssistantState, isH
         OrchestratorMode.AI_THINKING -> "● Выполнение команды..." to JarvisCyanSecondary
         OrchestratorMode.TTS_SPEAKING -> "● Озвучивание (скажите «Стоп» для отмены)" to JarvisCyanPrimary
         OrchestratorMode.AWAITING_CONFIRMATION -> "● Ожидание подтверждения (скажите «Да» или «Нет»)..." to JarvisAmber
+        OrchestratorMode.LIVE_EAR_INTERPRETER -> "● Синхронный переводчик в ухе (слушаю собеседника)..." to JarvisCyanPrimary
         OrchestratorMode.PAUSED_CALL_OR_SLEEP -> {
             if (!isHeadsetConnected) "● Наушники отключены (Пауза)" to JarvisAmber
             else "● Энергосбережение / Сервис остановлен" to TextTertiary
