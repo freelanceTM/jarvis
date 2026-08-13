@@ -10,6 +10,7 @@ import androidx.navigation.compose.composable
 import com.jarvis.assistant.presentation.chat.ChatScreen
 import com.jarvis.assistant.presentation.main.MainScreen
 import com.jarvis.assistant.presentation.settings.SettingsScreen
+import com.jarvis.assistant.presentation.translator.LiveInterpreterScreen
 
 import androidx.navigation.compose.rememberNavController
 
@@ -40,7 +41,28 @@ fun JarvisNavGraph(
         ) {
             MainScreen(
                 onNavigateToChat = { navController.navigate(Screen.Chat.route) },
-                onNavigateToSettings = { navController.navigate(Screen.Settings.route) }
+                onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
+                onNavigateToInterpreter = { navController.navigate(Screen.Interpreter.route) }
+            )
+        }
+
+        composable(
+            route = Screen.Interpreter.route,
+            enterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Left,
+                    animationSpec = tween(300)
+                )
+            },
+            exitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Right,
+                    animationSpec = tween(300)
+                )
+            }
+        ) {
+            LiveInterpreterScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 

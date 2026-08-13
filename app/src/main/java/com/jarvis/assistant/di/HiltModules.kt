@@ -13,6 +13,7 @@ import com.jarvis.assistant.agent.tools.device.*
 import com.jarvis.assistant.agent.tools.intelligence.ForgetMemoryTool
 import com.jarvis.assistant.agent.tools.intelligence.RecallMemoryTool
 import com.jarvis.assistant.agent.tools.intelligence.RememberFactTool
+import com.jarvis.assistant.agent.tools.intelligence.TranslateTool
 import com.jarvis.assistant.agent.tools.intelligence.WebSearchTool
 import com.jarvis.assistant.agent.tools.location.LocationNavigationTool
 import com.jarvis.assistant.agent.tools.media.MediaControlTool
@@ -130,6 +131,7 @@ abstract class SecurityAndNetworkBindingModule {
     @Binds @IntoSet abstract fun bindRecallMemoryTool(tool: RecallMemoryTool): JarvisTool
     @Binds @IntoSet abstract fun bindForgetMemoryTool(tool: ForgetMemoryTool): JarvisTool
     @Binds @IntoSet abstract fun bindWebSearchTool(tool: WebSearchTool): JarvisTool
+    @Binds @IntoSet abstract fun bindTranslateTool(tool: TranslateTool): JarvisTool
 
     // 7. Спец. возможности и UI управление (Accessibility)
     @Binds @IntoSet abstract fun bindScreenReaderTool(tool: ScreenReaderTool): JarvisTool

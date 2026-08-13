@@ -39,6 +39,7 @@ import com.jarvis.assistant.voice.orchestrator.OrchestratorMode
 fun MainScreen(
     onNavigateToChat: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onNavigateToInterpreter: () -> Unit = {},
     viewModel: MainViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -104,6 +105,19 @@ fun MainScreen(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    IconButton(
+                        onClick = onNavigateToInterpreter,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(JarvisSurface)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Translate,
+                            contentDescription = "Синхронный переводчик в ухе",
+                            tint = JarvisCyanPrimary
+                        )
+                    }
+
                     IconButton(
                         onClick = onNavigateToChat,
                         modifier = Modifier

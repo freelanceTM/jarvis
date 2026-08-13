@@ -116,6 +116,33 @@ class FastCommandRouter @Inject constructor() {
             )
         }
 
+        // 2.2 Мгновенный голосовой перевод в ухо ("Джарвис, переведи на английский...", "Как переводится...")
+        if (q.startsWith("переведи") || q.startsWith("как переводится") || q.startsWith("переводчик") || q.contains("режим переводчика")) {
+            val targetLang = when {
+                q.contains("на английск") || q.contains("по-английски") || q.contains("in english") -> "en"
+                q.contains("на туркменск") || q.contains("по-туркменски") || q.contains("türkmen") -> "tk"
+                q.contains("на турецк") || q.contains("по-турецки") || q.contains("türkçe") -> "tr"
+                q.contains("на немецк") || q.contains("по-немецки") || q.contains("auf deutsch") -> "de"
+                q.contains("на китайск") || q.contains("по-китайски") -> "zh"
+                q.contains("на арабск") || q.contains("по-арабски") -> "ar"
+                else -> "ru"
+            }
+
+            val textToTranslate = q.replace(Regex("^(переведи на [а-яa-z]+|переведи фразу|переведи|как переводится|переводчик)\\s*"), "").trim()
+            if (textToTranslate.isNotEmpty()) {
+                return FastRouteResult.HandledLocally(
+                    toolCall = ToolCall(
+                        toolId = "intelligence.translate",
+                        arguments = buildJsonObject {
+                            put("text", textToTranslate)
+                            put("target_lang", targetLang)
+                        }
+                    ),
+                    immediateVoiceResponse = "Перевожу, сэр."
+                )
+            }
+        }
+
         // 3. Управление медиа и музыкой
         if (q.contains("пауз") || q == "стоп музыка" || q == "музыка стоп") {
             return FastRouteResult.HandledLocally(
