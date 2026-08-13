@@ -104,8 +104,16 @@ class FastCommandRouter @Inject constructor() {
         if (q in listOf("ты тут", "ты тут?", "ты здесь", "ты здесь?", "але", "алло", "на связи")) {
             return FastRouteResult.HandledLocally(immediateVoiceResponse = "Да, сэр, я на связи. Чем могу помочь?")
         }
-        if (q in listOf("привет", "здравствуй", "добрый день", "добрый вечер", "доброе утро", "хай", "салам")) {
+        if (q in listOf("привет", "здравствуй", "добрый день", "добрый вечер", "хай", "салам")) {
             return FastRouteResult.HandledLocally(immediateVoiceResponse = "Приветствую, сэр. Я готов к работе.")
+        }
+
+        // 2.1 Персональный аудио-брифинг в ухо ("Джарвис, брифинг", "Утренняя сводка", "Что нового")
+        if (q.contains("брифинг") || q.contains("сводка") || q.contains("что нового") || q == "утренний брифинг" || q == "вечерний брифинг") {
+            return FastRouteResult.HandledLocally(
+                toolCall = ToolCall(toolId = "productivity.ear_briefing", arguments = JsonObject(emptyMap())),
+                immediateVoiceResponse = "Формирую персональный брифинг, сэр."
+            )
         }
 
         // 3. Управление медиа и музыкой
