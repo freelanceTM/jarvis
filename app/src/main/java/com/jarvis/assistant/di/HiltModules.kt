@@ -26,6 +26,8 @@ import com.jarvis.assistant.ai.UniversalAIClient
 import com.jarvis.assistant.core.constants.AppConstants
 import com.jarvis.assistant.core.dispatcher.CoroutineDispatchers
 import com.jarvis.assistant.core.dispatcher.DefaultCoroutineDispatchers
+import com.jarvis.assistant.core.license.LicenseManager
+import com.jarvis.assistant.core.license.LicenseManagerImpl
 import com.jarvis.assistant.core.network.LiveNetworkMonitor
 import com.jarvis.assistant.core.network.NetworkMonitor
 import com.jarvis.assistant.core.security.SecurityManager
@@ -69,6 +71,10 @@ abstract class SecurityAndNetworkBindingModule {
     @Binds
     @Singleton
     abstract fun bindSecurityManager(impl: SecurityManagerImpl): SecurityManager
+
+    @Binds
+    @Singleton
+    abstract fun bindLicenseManager(impl: LicenseManagerImpl): LicenseManager
 
     @Binds
     @Singleton

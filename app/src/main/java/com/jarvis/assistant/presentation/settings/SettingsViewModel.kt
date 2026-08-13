@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jarvis.assistant.agent.automation.dao.AutomationDao
 import com.jarvis.assistant.agent.automation.entity.AutomationEntity
+import com.jarvis.assistant.core.license.LicenseInfo
+import com.jarvis.assistant.core.license.LicenseManager
 import com.jarvis.assistant.core.security.SecurityManager
 import com.jarvis.assistant.domain.models.VoiceSettings
 import com.jarvis.assistant.domain.usecases.GetSettingsUseCase
@@ -28,6 +30,7 @@ data class SettingsUiState(
     val isHeadsetOnlyMode: Boolean = false,
     val wakeWordSensitivity: Float = 0.65f,
     val automations: List<AutomationEntity> = emptyList(),
+    val licenseInfo: LicenseInfo? = null,
     val isSavedSuccess: Boolean = false
 )
 
@@ -36,15 +39,17 @@ class SettingsViewModel @Inject constructor(
     private val getSettingsUseCase: GetSettingsUseCase,
     private val saveSettingsUseCase: SaveSettingsUseCase,
     private val securityManager: SecurityManager,
-    private val automationDao: AutomationDao
+    private val automationDao: AutomationDao,
+    private val licenseManager: LicenseManager
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(SettingsUiState())
+    private val _uiState = MutableStateFlow(SettingsUiState(licenseInfo = licenseManager.getLicenseInfo()))
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
     init {
         loadSettings()
         loadAutomations()
+        observeLicense()
     }
 
     private fun loadSettings() {
@@ -74,6 +79,19 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update { it.copy(automations = rules) }
             }
         }
+    }
+
+    private fun observeLicense() {
+        viewModelScope.launch {
+            licenseManager.licenseFlow.collectLatest { info ->
+                _uiState.update { it.copy(licenseInfo = info) }
+            }
+        }
+    }
+
+    fun extendSubscription(days: Int = 30) {
+        val updated = licenseManager.extendSubscription(days)
+        _uiState.update { it.copy(licenseInfo = updated) }
     }
 
     fun toggleAutomation(ruleId: String, isEnabled: Boolean) {

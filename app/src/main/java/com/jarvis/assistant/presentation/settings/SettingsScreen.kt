@@ -99,6 +99,73 @@ fun SettingsScreen(
                 }
             }
 
+            // 1.1 Hardware License & Subscription Card (50 TMT / month)
+            val license = uiState.licenseInfo
+            Card(
+                colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, if (license?.isActivated == true && !license.isExpired) JarvisCyanPrimary.copy(alpha = 0.5f) else JarvisRed.copy(alpha = 0.5f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.VerifiedUser,
+                                contentDescription = null,
+                                tint = if (license?.isActivated == true && !license.isExpired) JarvisCyanPrimary else JarvisRed,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Лицензия JARVIS Earclip",
+                                style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
+                                color = TextPrimary
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (license?.isActivated == true && !license.isExpired) JarvisGreen.copy(alpha = 0.2f) else JarvisRed.copy(alpha = 0.2f)
+                        ) {
+                            Text(
+                                text = if (license?.isActivated == true && !license.isExpired) "АКТИВНА (${license.remainingDays} дн.)" else "ТРЕБУЕТСЯ АКТИВАЦИЯ",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (license?.isActivated == true && !license.isExpired) JarvisGreen else JarvisRed,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = if (license?.isActivated == true) "Код устройства: ${license.hardwareSerial}" else "Приложение заблокировано без кода из коробки наушников.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextTertiary
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Button(
+                        onClick = { viewModel.extendSubscription(30) },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = JarvisSurface, contentColor = JarvisCyanPrimary),
+                        border = BorderStroke(1.dp, JarvisCyanPrimary.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.AddCard, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Продлить подписку на 30 дней (50 TMT)", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
             // 2. Encrypted API Key Section
             Card(
                 colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
