@@ -303,16 +303,13 @@ class VoiceInteractionOrchestrator @Inject constructor(
                             return@collectLatest
                         }
 
-                        // 🎧 НЕПРЕРЫВНЫЙ СИНХРОННЫЙ ПЕРЕВОДЧИК В УХО
+                        // 🎧 НЕПРЕРЫВНЫЙ СИНХРОННЫЙ ПЕРЕВОДЧИК В УХО (Full-Duplex Continuous Stream)
                         if (_currentMode.value == OrchestratorMode.LIVE_EAR_INTERPRETER) {
-                            scope.launch {
-                                _assistantState.value = VoiceAssistantState.Recognizing(text)
-                                // Мгновенный перевод речи собеседника на язык владельца
+                            scope.launch(Dispatchers.IO) {
                                 val translation = translatorEngine.translate(text, sourceLang = "auto", targetLang = "ru")
                                 _lastAnswer.value = translation
-                                _assistantState.value = VoiceAssistantState.Speaking(translation)
                                 bluetoothAudioRouter.routeAudioToEarbud()
-                                textToSpeechManager.speak(translation, speechRate, speechPitch)
+                                textToSpeechManager.speakQueued(translation, speechRate, speechPitch)
                             }
                             return@collectLatest
                         }

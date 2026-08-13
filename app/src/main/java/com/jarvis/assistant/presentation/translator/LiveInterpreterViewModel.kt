@@ -10,6 +10,7 @@ import com.jarvis.assistant.voice.stt.SpeechRecognitionEvent
 import com.jarvis.assistant.voice.stt.SpeechRecognizerManager
 import com.jarvis.assistant.voice.tts.TextToSpeechManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -33,6 +34,13 @@ data class LiveInterpreterUiState(
     val isTranslating: Boolean = false
 )
 
+/**
+ * LiveInterpreterViewModel (Full-Duplex Simultaneous Translation)
+ * 
+ * Обеспечивает непрерывный синхронный перевод:
+ * 1. Микрофон слушает собеседника непрерывно (Continuous Mode).
+ * 2. Перевод фраз отправляется в наушник параллельно (speakQueued), не останавливая запись следующей фразы.
+ */
 @HiltViewModel
 class LiveInterpreterViewModel @Inject constructor(
     private val translatorEngine: LiveTranslatorEngine,
@@ -57,15 +65,16 @@ class LiveInterpreterViewModel @Inject constructor(
                     }
                     is SpeechRecognitionEvent.FinalResult -> {
                         val text = event.recognizedText.trim()
-                        _uiState.update { it.copy(partialRecognizedText = "", isTranslating = true) }
+                        _uiState.update { it.copy(partialRecognizedText = "") }
                         if (text.isNotBlank()) {
-                            processLiveTranslation(text)
-                        } else {
-                            _uiState.update { it.copy(isTranslating = false) }
+                            // Фоновый перевод без блокировки микрофона!
+                            dispatchParallelTranslation(text)
                         }
                     }
                     is SpeechRecognitionEvent.RecognitionError -> {
-                        _uiState.update { it.copy(isListening = false, isTranslating = false) }
+                        if (!_uiState.value.isListening) {
+                            _uiState.update { it.copy(isListening = false, isTranslating = false) }
+                        }
                     }
                     else -> Unit
                 }
@@ -73,9 +82,11 @@ class LiveInterpreterViewModel @Inject constructor(
         }
     }
 
-    private fun processLiveTranslation(text: String) {
-        viewModelScope.launch {
+    private fun dispatchParallelTranslation(text: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isTranslating = true) }
             val state = _uiState.value
+
             val translation = translatorEngine.translate(
                 text = text,
                 sourceLang = state.sourceLanguage.code,
@@ -97,24 +108,23 @@ class LiveInterpreterViewModel @Inject constructor(
                 ) 
             }
 
-            // Мгновенное озвучивание перевода прямо в ухо через Bluetooth SCO
+            // Мгновенное неблокирующее воспроизведение перевода прямо в ухо (Bluetooth SCO)
             bluetoothAudioRouter.routeAudioToEarbud()
-            textToSpeechManager.speak(translation)
-
-            // Если непрерывный режим — продолжаем слушать следующую фразу
-            if (_uiState.value.isListening) {
-                speechRecognizerManager.startListening(state.sourceLanguage.localeTag)
-            }
+            textToSpeechManager.speakQueued(translation)
         }
     }
 
     fun toggleListening() {
         if (_uiState.value.isListening) {
             speechRecognizerManager.stopListening()
-            _uiState.update { it.copy(isListening = false, partialRecognizedText = "") }
+            _uiState.update { it.copy(isListening = false, partialRecognizedText = "", isTranslating = false) }
         } else {
             _uiState.update { it.copy(isListening = true) }
-            speechRecognizerManager.startListening(_uiState.value.sourceLanguage.localeTag)
+            // Непрерывный режим прослушивания собеседника (continuous = true)
+            speechRecognizerManager.startListening(
+                languageTag = _uiState.value.sourceLanguage.localeTag,
+                continuous = true
+            )
         }
     }
 
@@ -126,12 +136,18 @@ class LiveInterpreterViewModel @Inject constructor(
             ) 
         }
         if (_uiState.value.isListening) {
-            speechRecognizerManager.startListening(_uiState.value.sourceLanguage.localeTag)
+            speechRecognizerManager.startListening(
+                languageTag = _uiState.value.sourceLanguage.localeTag,
+                continuous = true
+            )
         }
     }
 
     fun setSourceLanguage(lang: SupportedLanguage) {
         _uiState.update { it.copy(sourceLanguage = lang) }
+        if (_uiState.value.isListening) {
+            speechRecognizerManager.startListening(lang.localeTag, continuous = true)
+        }
     }
 
     fun setTargetLanguage(lang: SupportedLanguage) {
@@ -140,5 +156,12 @@ class LiveInterpreterViewModel @Inject constructor(
 
     fun clearHistory() {
         _uiState.update { it.copy(history = emptyList()) }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        if (_uiState.value.isListening) {
+            speechRecognizerManager.stopListening()
+        }
     }
 }
