@@ -142,6 +142,28 @@ class FastCommandRouterTest {
     }
     
     // ===========================================
+    // Screenshot (honest two-branch behavior)
+    // ===========================================
+
+    @Test
+    fun `screenshot command routes to screenshot tool`() {
+        val result = router.route("сделай скриншот")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.screenshot", handled.toolCall?.toolId)
+    }
+
+    @Test
+    fun `screen capture phrasing routes to screenshot tool`() {
+        val result = router.route("сделай снимок экрана")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.screenshot", handled.toolCall?.toolId)
+    }
+
+    // ===========================================
     // Brightness (absolute percent / relative delta / read)
     // ===========================================
 
