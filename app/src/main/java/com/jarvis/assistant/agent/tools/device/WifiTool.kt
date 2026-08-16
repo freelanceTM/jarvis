@@ -120,8 +120,9 @@ class WifiTool @Inject constructor(
             "settings" -> {
                 val opened = openWifiPanel()
                 if (opened) {
+                    val statePhrase = if (isWifiEnabled) "Wi-Fi сейчас включён." else "Wi-Fi сейчас выключен."
                     ToolExecutionResult.userActionRequired(
-                        summary = "Открываю системную панель Wi-Fi",
+                        summary = "$statePhrase Открываю панель Wi-Fi.",
                         reason = "OPENED_WIFI_PANEL",
                         data = buildJsonObject {
                             put("wifi_enabled", isWifiEnabled)
@@ -142,13 +143,19 @@ class WifiTool @Inject constructor(
                     )
                 }
 
-                val target = if (wantsEnable) "включить" else "выключить"
                 val opened = openWifiPanel()
+                // Честная формулировка: сообщаем текущее состояние и открываем
+                // системную панель — без имитации переключения.
+                val statePhrase = if (isWifiEnabled) {
+                    "Wi-Fi сейчас включён."
+                } else {
+                    "Wi-Fi сейчас выключен."
+                }
                 ToolExecutionResult.userActionRequired(
                     summary = if (opened) {
-                        "Начиная с Android 10 приложения не могут $target Wi-Fi самостоятельно. Открыл системную панель — переключите Wi-Fi, сэр."
+                        "$statePhrase Открываю панель Wi-Fi — переключите его там, сэр."
                     } else {
-                        "Начиная с Android 10 приложения не могут $target Wi-Fi самостоятельно, и панель открыть не удалось. Переключите Wi-Fi вручную, сэр."
+                        "$statePhrase Панель Wi-Fi открыть не удалось — переключите Wi-Fi вручную, сэр."
                     },
                     reason = "WIFI_TOGGLE_REQUIRES_USER",
                     data = buildJsonObject {

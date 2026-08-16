@@ -89,7 +89,16 @@ class BluetoothTool @Inject constructor(
 
         return when (action) {
             "status" -> readStatus()
-            "settings" -> openSettings("Открываю системный экран Bluetooth")
+            "settings" -> {
+                val enabled = try {
+                    (context.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager)
+                        ?.adapter?.isEnabled == true
+                } catch (_: SecurityException) {
+                    false
+                }
+                val statePhrase = if (enabled) "Bluetooth сейчас включён." else "Bluetooth сейчас выключен."
+                openSettings("$statePhrase Открываю настройки Bluetooth.")
+            }
             "enable", "disable", "toggle" -> requestToggle(action)
             else -> ToolExecutionResult.failure("Неизвестное действие: $action", "UNKNOWN_ACTION")
         }
@@ -165,7 +174,6 @@ class BluetoothTool @Inject constructor(
         }
 
         val toggleStatus = capabilities.statusOf(DeviceCapability.TOGGLE_BLUETOOTH_DIRECTLY)
-        val target = if (wantsEnable) "включить" else "выключить"
 
         return when (toggleStatus) {
             is CapabilityStatus.PermissionRequired -> ToolExecutionResult.permissionRequired(
@@ -182,11 +190,18 @@ class BluetoothTool @Inject constructor(
             // Android 13+ и общий случай: переключает пользователь в системном UI.
             else -> {
                 val opened = openBluetoothSettingsIntent()
+                // Честная формулировка: сообщаем текущее состояние и открываем
+                // системный экран — без имитации переключения.
+                val statePhrase = if (isEnabled) {
+                    "Bluetooth сейчас включён."
+                } else {
+                    "Bluetooth сейчас выключен."
+                }
                 ToolExecutionResult.userActionRequired(
                     summary = if (opened) {
-                        "Android не разрешает приложениям $target Bluetooth самостоятельно. Открыл системный экран Bluetooth — переключите его, сэр."
+                        "$statePhrase Открываю настройки Bluetooth — переключите его там, сэр."
                     } else {
-                        "Android не разрешает приложениям $target Bluetooth самостоятельно, и системный экран открыть не удалось. Переключите Bluetooth вручную, сэр."
+                        "$statePhrase Системный экран Bluetooth открыть не удалось — переключите Bluetooth вручную, сэр."
                     },
                     reason = "BLUETOOTH_TOGGLE_REQUIRES_USER",
                     data = buildJsonObject {
@@ -205,7 +220,16 @@ class BluetoothTool @Inject constructor(
             ToolExecutionResult.userActionRequired(
                 summary = message,
                 reason = "OPENED_BLUETOOTH_SETTINGS",
-                data = buildJsonObject { put("opened_settings", true) }
+                data = buildJsonObject {
+                    val enabled = try {
+                        (context.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager)
+                            ?.adapter?.isEnabled == true
+                    } catch (_: SecurityException) {
+                        false
+                    }
+                    put("enabled", enabled)
+                    put("opened_settings", true)
+                }
             )
         } else {
             ToolExecutionResult.failure(

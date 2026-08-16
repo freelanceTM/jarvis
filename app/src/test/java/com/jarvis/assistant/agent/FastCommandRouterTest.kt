@@ -2,6 +2,7 @@ package com.jarvis.assistant.agent
 
 import com.jarvis.assistant.agent.fast.FastCommandRouter
 import com.jarvis.assistant.agent.fast.FastRouteResult
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -139,6 +140,80 @@ class FastCommandRouterTest {
         assertTrue(handled.immediateVoiceResponse.isNotBlank())
     }
     
+    // ===========================================
+    // Bluetooth & Wi-Fi (honest Android behavior)
+    // ===========================================
+
+    @Test
+    fun `bluetooth enable command routes to bluetooth tool with enable action`() {
+        val result = router.route("Джарвис, включи блютуз")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.bluetooth", handled.toolCall?.toolId)
+        assertEquals("enable", handled.toolCall?.arguments?.get("action")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `bluetooth disable command routes with disable action`() {
+        val result = router.route("выключи bluetooth")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.bluetooth", handled.toolCall?.toolId)
+        assertEquals("disable", handled.toolCall?.arguments?.get("action")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `bluetooth toggle command routes with toggle action`() {
+        val result = router.route("переключи блютуз")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.bluetooth", handled.toolCall?.toolId)
+        assertEquals("toggle", handled.toolCall?.arguments?.get("action")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `bluetooth without verb routes to status`() {
+        val result = router.route("как там блютуз")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.bluetooth", handled.toolCall?.toolId)
+        assertEquals("status", handled.toolCall?.arguments?.get("action")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `wifi enable command routes to wifi tool with enable action`() {
+        val result = router.route("включи вайфай")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.wifi", handled.toolCall?.toolId)
+        assertEquals("enable", handled.toolCall?.arguments?.get("action")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `wifi disable command routes with disable action`() {
+        val result = router.route("выключи wi-fi")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.wifi", handled.toolCall?.toolId)
+        assertEquals("disable", handled.toolCall?.arguments?.get("action")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `wifi without verb routes to status`() {
+        val result = router.route("есть ли интернет")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.wifi", handled.toolCall?.toolId)
+        assertEquals("status", handled.toolCall?.arguments?.get("action")?.jsonPrimitive?.content)
+    }
+
     // ===========================================
     // Forward to LLM
     // ===========================================

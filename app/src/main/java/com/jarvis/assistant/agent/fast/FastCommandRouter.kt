@@ -322,10 +322,17 @@ class FastCommandRouter @Inject constructor() {
         }
 
         // 12. Запуск приложений
-        if (q.startsWith("открой") || q.startsWith("запусти") || q.startsWith("включи") || q.startsWith("перейди в") || q.startsWith("вруби")) {
+        // Фразы про Bluetooth/Wi-Fi сюда не попадают: «открой настройки
+        // блютуз» должно открыть системный экран Bluetooth (секция 13),
+        // а не приложение «Настройки».
+        if (!q.contains("блютуз") && !q.contains("bluetooth") &&
+            !q.contains("вайфай") && !q.contains("wifi") && !q.contains("wi-fi") &&
+            (q.startsWith("открой") || q.startsWith("запусти") || q.startsWith("включи") ||
+                q.startsWith("перейди в") || q.startsWith("вруби"))
+        ) {
             val app = when {
                 q.contains("телеграм") || q.contains("telegram") || q.contains("телегу") || q.contains("тг") || q.contains("tg") -> "telegram"
-                q.contains("ютуб") || q.contains("youtube") || q.contains("ют") -> "youtube"
+                q.contains("ютуб") || q.contains("youtube") -> "youtube"
                 q.contains("ватсап") || q.contains("whatsapp") || q.contains("вацап") -> "whatsapp"
                 q.contains("камер") || q.contains("camera") || q.contains("фотк") -> "camera"
                 q.contains("хром") || q.contains("chrome") || q.contains("браузер") -> "chrome"
@@ -361,16 +368,27 @@ class FastCommandRouter @Inject constructor() {
         }
 
         // 13. Bluetooth & Wi-Fi
+        // Честный UX: JARVIS не переключает Bluetooth/Wi-Fi сам (Android 10+
+        // и 13+ запрещают приложениям это делать), а сообщает текущее состояние
+        // и открывает системный экран, где переключение выполняет пользователь.
+        // Роутер передаёт тулу намерение (enable/disable/toggle/status) —
+        // итоговую фразу формирует тул по реальному результату.
         if (q.contains("блютуз") || q.contains("bluetooth")) {
             return FastRouteResult.HandledLocally(
-                toolCall = ToolCall(toolId = "device.bluetooth", arguments = JsonObject(emptyMap())),
-                immediateVoiceResponse = "Открываю панель Bluetooth, сэр."
+                toolCall = ToolCall(
+                    toolId = "device.bluetooth",
+                    arguments = buildJsonObject { put("action", resolveToggleIntent(q)) }
+                ),
+                immediateVoiceResponse = "Проверяю Bluetooth, сэр."
             )
         }
         if (q.contains("вайфай") || q.contains("wifi") || q.contains("wi-fi") || q.contains("интернет")) {
             return FastRouteResult.HandledLocally(
-                toolCall = ToolCall(toolId = "device.wifi", arguments = JsonObject(emptyMap())),
-                immediateVoiceResponse = "Открываю настройки Wi-Fi, сэр."
+                toolCall = ToolCall(
+                    toolId = "device.wifi",
+                    arguments = buildJsonObject { put("action", resolveToggleIntent(q)) }
+                ),
+                immediateVoiceResponse = "Проверяю Wi-Fi, сэр."
             )
         }
 
@@ -383,5 +401,22 @@ class FastCommandRouter @Inject constructor() {
         }
 
         return FastRouteResult.ForwardToLlm
+    }
+
+    /**
+     * Определяет намерение пользователя по глаголам: включить / выключить /
+     * переключить. Без глагола — запрос статуса.
+     *
+     * Проверка «выключить» идёт раньше «включить»: обе группы слов содержат
+     * корень «ключ», но «вы…»-формы не должны попадать в enable.
+     */
+    private fun resolveToggleIntent(query: String): String = when {
+        query.contains("выключи") || query.contains("выключить") ||
+            query.contains("отключи") || query.contains("отключить") ||
+            query.contains("выруби") || query.contains("выключай") -> "disable"
+        query.contains("включи") || query.contains("включить") ||
+            query.contains("вруби") || query.contains("включай") -> "enable"
+        query.contains("переключи") || query.contains("переключить") -> "toggle"
+        else -> "status"
     }
 }
