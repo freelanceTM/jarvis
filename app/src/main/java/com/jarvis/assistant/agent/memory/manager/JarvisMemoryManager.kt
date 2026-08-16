@@ -10,7 +10,7 @@ import com.jarvis.assistant.agent.memory.extractor.AutonomousMemoryExtractor
 import com.jarvis.assistant.agent.memory.model.ForgetResult
 import com.jarvis.assistant.agent.memory.model.MemoryItem
 import com.jarvis.assistant.agent.memory.model.MemoryType
-import com.jarvis.assistant.agent.memory.vector.VectorEmbeddingEngine
+import com.jarvis.assistant.agent.memory.semantic.SemanticFeatureEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -30,7 +30,7 @@ class JarvisMemoryManager @Inject constructor(
     private val factDao: FactDao,
     private val preferenceDao: PreferenceDao,
     private val procedureDao: ProcedureDao,
-    private val vectorEngine: VectorEmbeddingEngine,
+    private val featureEngine: SemanticFeatureEngine,
     private val memoryExtractor: AutonomousMemoryExtractor
 ) {
     /**
@@ -49,15 +49,15 @@ class JarvisMemoryManager @Inject constructor(
         val cleanContent = content.trim()
 
         // 1. Векторное представление текста
-        val vector = vectorEngine.createEmbedding(cleanContent)
-        val vectorStr = vectorEngine.serializeVector(vector)
+        val vector = featureEngine.featurize(cleanContent)
+        val vectorStr = featureEngine.serializeVector(vector)
 
         // 2. Дедупликация: поиск и удаление семантических дубликатов (>85% overlap слов или >0.88 векторное сходство)
         val allExisting = memoryDao.getAllMemoriesForVectorSearch()
         for (existing in allExisting) {
             val overlap = calculateWordOverlap(existing.content, cleanContent)
-            val existingVector = vectorEngine.deserializeVector(existing.embeddingVector)
-            val vectorSim = vectorEngine.computeCosineSimilarity(vector, existingVector)
+            val existingVector = featureEngine.deserializeVector(existing.embeddingVector)
+            val vectorSim = featureEngine.computeCosineSimilarity(vector, existingVector)
 
             if (overlap >= 0.85f || vectorSim >= 0.88f || (!cleanKey.isNullOrBlank() && existing.keyName == cleanKey)) {
                 // Удаляем старый дубликат в пользу новейшей записи
@@ -114,7 +114,7 @@ class JarvisMemoryManager @Inject constructor(
      */
     suspend fun recall(query: String, limit: Int = 3): List<MemoryItem> = withContext(Dispatchers.IO) {
         val q = query.lowercase().trim()
-        val queryVector = vectorEngine.createEmbedding(q)
+        val queryVector = featureEngine.featurize(q)
         val queryTokens = q.split(Regex("[\\s,?.!]+")).filter { it.length >= 2 }
         val allMemories = memoryDao.getAllMemoriesForVectorSearch()
 
@@ -129,8 +129,8 @@ class JarvisMemoryManager @Inject constructor(
             val memTokens = memText.split(Regex("[\\s,?.!]+")).filter { it.length >= 2 }
 
             // 1. Vector Cosine Similarity
-            val memVector = vectorEngine.deserializeVector(mem.embeddingVector)
-            val cosineSim = vectorEngine.computeCosineSimilarity(queryVector, memVector)
+            val memVector = featureEngine.deserializeVector(mem.embeddingVector)
+            val cosineSim = featureEngine.computeCosineSimilarity(queryVector, memVector)
 
             // 2. TF-IDF Lexical Match
             var tfIdfScore = 0f
@@ -188,13 +188,13 @@ class JarvisMemoryManager @Inject constructor(
             )
         }
 
-        val queryVector = vectorEngine.createEmbedding(cleanTarget)
+        val queryVector = featureEngine.featurize(cleanTarget)
         val allMemories = memoryDao.getAllMemoriesForVectorSearch()
         val toDelete = mutableListOf<MemoryEntity>()
 
         for (mem in allMemories) {
-            val memVector = vectorEngine.deserializeVector(mem.embeddingVector)
-            val similarity = vectorEngine.computeCosineSimilarity(queryVector, memVector)
+            val memVector = featureEngine.deserializeVector(mem.embeddingVector)
+            val similarity = featureEngine.computeCosineSimilarity(queryVector, memVector)
             val containsWord = mem.content.contains(cleanTarget, ignoreCase = true) ||
                     (mem.keyName?.contains(cleanTarget, ignoreCase = true) == true)
 

@@ -80,8 +80,13 @@ class SendPromptUseCase @Inject constructor(
                         )
                     )
                 }
-                if (executionResult.isSuccess) {
-                    voiceAnswer = "${executionResult.summary}, сэр."
+                // Никакого fake success: оптимистичная фраза роутера
+                // ("Фонарик включён, сэр.") заменяется реальным итогом, если
+                // Android заблокировал действие или инструмент вернул ошибку.
+                voiceAnswer = when {
+                    executionResult.isSuccess -> "${executionResult.summary}, сэр."
+                    executionResult.isBlockedByAndroid -> executionResult.summary
+                    else -> executionResult.summary
                 }
                 memoryManager.workingMemory.setLastAction(fastResult.toolCall.toolId)
             }

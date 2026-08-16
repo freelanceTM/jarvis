@@ -1,20 +1,24 @@
 package com.jarvis.assistant.agent.tools.communication
 
-import android.content.Context
-import android.provider.ContactsContract
-import com.jarvis.assistant.agent.core.JarvisTool
+import android.Manifest
+import com.jarvis.assistant.agent.capability.CapabilityStatus
+import com.jarvis.assistant.agent.capability.DangerLevel
+import com.jarvis.assistant.agent.capability.DeviceCapability
+import com.jarvis.assistant.agent.capability.DeviceCapabilityRegistry
+import com.jarvis.assistant.agent.capability.ToolCapabilityContract
+import com.jarvis.assistant.agent.core.CapabilityAwareTool
 import com.jarvis.assistant.agent.core.ToolCategory
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.*
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class ContactsTool @Inject constructor(
-    @ApplicationContext private val context: Context
-) : JarvisTool {
+    private val capabilities: DeviceCapabilityRegistry,
+    private val contactResolver: ContactResolver
+) : CapabilityAwareTool {
 
     override val toolId: String = "communication.contacts"
     override val description: String = "Ищет номер телефона и контакты в телефонной книге устройства"
@@ -22,6 +26,12 @@ class ContactsTool @Inject constructor(
     override val riskLevel: ToolRisk = ToolRisk.SAFE
     override val isOffline: Boolean = true
     override val supportsParallel: Boolean = true
+
+    override val capabilityContract = ToolCapabilityContract(
+        capabilities = setOf(DeviceCapability.READ_CONTACTS),
+        requiredPermissions = listOf(Manifest.permission.READ_CONTACTS),
+        dangerLevel = DangerLevel.LOW
+    )
 
     override val parametersSchema: JsonObject = buildJsonObject {
         put("type", "object")
@@ -35,42 +45,48 @@ class ContactsTool @Inject constructor(
     }
 
     override suspend fun execute(arguments: JsonObject): ToolExecutionResult {
-        val searchName = arguments["name"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+        val searchName = arguments["name"]?.jsonPrimitive?.contentOrNull?.trim()
+            ?: arguments["query"]?.jsonPrimitive?.contentOrNull?.trim()
+            ?: ""
+
         if (searchName.isEmpty()) {
             return ToolExecutionResult.failure("Укажите имя для поиска", "MISSING_NAME")
         }
 
-        return try {
-            val cr = context.contentResolver
-            val cursor = cr.query(
-                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER),
-                "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?",
-                arrayOf("%$searchName%"),
-                null
+        val status = capabilities.statusOf(DeviceCapability.READ_CONTACTS)
+        if (status is CapabilityStatus.PermissionRequired) {
+            return ToolExecutionResult.permissionRequired(
+                summary = "Чтобы искать контакты, нужен доступ к телефонной книге",
+                permissions = status.permissions
             )
+        }
 
-            val contactsFound = mutableListOf<String>()
-            cursor?.use {
-                val nameIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
-                val numIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
-                while (it.moveToNext() && contactsFound.size < 3) {
-                    if (nameIdx != -1 && numIdx != -1) {
-                        val name = it.getString(nameIdx)
-                        val num = it.getString(numIdx)
-                        contactsFound.add("$name: $num")
-                    }
+        val matches = contactResolver.search(searchName)
+        return if (matches.isNotEmpty()) {
+            ToolExecutionResult.success(
+                summary = "Найдено: " + matches.joinToString("; ") { "${it.first}: ${it.second}" },
+                data = buildJsonObject {
+                    put("query", searchName)
+                    put("count", matches.size)
+                    put("contacts", buildJsonArray {
+                        matches.forEach { (name, number) ->
+                            add(buildJsonObject {
+                                put("name", name)
+                                put("number", number)
+                            })
+                        }
+                    })
                 }
-            }
-
-            if (contactsFound.isNotEmpty()) {
-                val summary = contactsFound.joinToString("; ")
-                ToolExecutionResult.success("Найдено: $summary")
-            } else {
-                ToolExecutionResult.success("Контакт '$searchName' не найден в телефонной книге")
-            }
-        } catch (e: Exception) {
-            ToolExecutionResult.failure("Ошибка доступа к контактам: ${e.localizedMessage}", "CONTACTS_ERROR")
+            )
+        } else {
+            // Пустой результат — это корректно выполненный поиск без совпадений.
+            ToolExecutionResult.success(
+                summary = "Контакт «$searchName» не найден в телефонной книге",
+                data = buildJsonObject {
+                    put("query", searchName)
+                    put("count", 0)
+                }
+            )
         }
     }
 }

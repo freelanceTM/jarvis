@@ -1,7 +1,7 @@
 package com.jarvis.assistant.agent.discovery
 
 import com.jarvis.assistant.agent.core.JarvisTool
-import com.jarvis.assistant.agent.memory.vector.VectorEmbeddingEngine
+import com.jarvis.assistant.agent.memory.semantic.SemanticFeatureEngine
 import com.jarvis.assistant.agent.model.ToolDefinition
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,7 +20,7 @@ import kotlin.math.min
  */
 @Singleton
 class ToolDiscoveryEngine @Inject constructor(
-    private val vectorEngine: VectorEmbeddingEngine
+    private val featureEngine: SemanticFeatureEngine
 ) {
     /**
      * Выбирает топ релевантных инструментов для запроса
@@ -37,7 +37,7 @@ class ToolDiscoveryEngine @Inject constructor(
         val isPureConversation = isConversationalQuery(q)
 
         // 2. Векторный семантический поиск
-        val queryVector = vectorEngine.createEmbedding(q)
+        val queryVector = featureEngine.featurize(q)
         val queryWords = q.split(Regex("[\\s,?.!]+")).filter { it.length >= 2 }
 
         // 3. Подготовка корпуса документов для BM25
@@ -100,8 +100,8 @@ class ToolDiscoveryEngine @Inject constructor(
             }
 
             // D. Vector Cosine Similarity (Фоновый семантический компонент)
-            val toolVector = vectorEngine.createEmbedding(toolText)
-            val semanticScore = vectorEngine.computeCosineSimilarity(queryVector, toolVector)
+            val toolVector = featureEngine.featurize(toolText)
+            val semanticScore = featureEngine.computeCosineSimilarity(queryVector, toolVector)
 
             // Защита от ложных срабатываний: если нет ни одного лексического/синонимического/fuzzy совпадения -> скор 0
             val hasExplicitMatch = (bm25Score > 0f || synonymBoost > 0f || fuzzyBoost > 0f)

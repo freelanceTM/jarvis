@@ -38,6 +38,14 @@ data class AutomationEntity(
     @ColumnInfo(name = "is_enabled")
     val isEnabled: Boolean = true,
 
+    /** Больший приоритет выполняется раньше при совпадении нескольких правил. */
+    @ColumnInfo(name = "priority")
+    val priority: Int = 0,
+
+    /** Минимальный интервал между срабатываниями правила, мс. 0 — без ограничения. */
+    @ColumnInfo(name = "cooldown_ms")
+    val cooldownMs: Long = 0L,
+
     @ColumnInfo(name = "last_triggered_at")
     val lastTriggeredAt: Long = 0L,
 

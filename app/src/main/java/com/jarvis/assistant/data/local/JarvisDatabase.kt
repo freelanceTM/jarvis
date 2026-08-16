@@ -18,7 +18,7 @@ import com.jarvis.assistant.data.local.entity.MessageEntity
         ProcedureEntity::class,
         AutomationEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class JarvisDatabase : RoomDatabase() {

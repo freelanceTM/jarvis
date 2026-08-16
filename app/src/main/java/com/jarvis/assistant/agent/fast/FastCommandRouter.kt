@@ -1,5 +1,7 @@
 package com.jarvis.assistant.agent.fast
 
+import com.jarvis.assistant.agent.media.MediaIntent
+import com.jarvis.assistant.agent.media.MediaIntentParser
 import com.jarvis.assistant.agent.model.ToolCall
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -69,7 +71,7 @@ class FastCommandRouter @Inject constructor() {
                 }
 
                 val actionParams = when (actionTool) {
-                    "media.control" -> buildJsonObject { put("action", "next") }
+                    "media.control" -> buildJsonObject { put("action", MediaIntent.PLAY_MEDIA.action) }
                     "device.flashlight" -> buildJsonObject { put("enabled", !q.contains("выключ")) }
                     "device.volume" -> buildJsonObject { put("action", if (q.contains("тише")) "down" else "up") }
                     "device.open_app" -> buildJsonObject { put("app_name", "telegram") }
@@ -143,23 +145,23 @@ class FastCommandRouter @Inject constructor() {
             }
         }
 
-        // 3. Управление медиа и музыкой
-        if (q.contains("пауз") || q == "стоп музыка" || q == "музыка стоп") {
+        // 3. Управление медиа и музыкой (через нормализацию намерения)
+        // Важно: "включи музыку" -> PLAY_MEDIA, а не NEXT_TRACK.
+        MediaIntentParser.parse(q)?.let { mediaIntent ->
+            val voice = when (mediaIntent) {
+                MediaIntent.PLAY_MEDIA -> "Включаю музыку, сэр."
+                MediaIntent.PAUSE_MEDIA -> "Музыка поставлена на паузу, сэр."
+                MediaIntent.NEXT_TRACK -> "Включаю следующий трек, сэр."
+                MediaIntent.PREVIOUS_TRACK -> "Переключаю назад, сэр."
+                MediaIntent.STOP_MEDIA -> "Останавливаю воспроизведение, сэр."
+                MediaIntent.TOGGLE_PLAY_PAUSE -> "Переключаю воспроизведение, сэр."
+            }
             return FastRouteResult.HandledLocally(
-                toolCall = ToolCall(toolId = "media.control", arguments = buildJsonObject { put("action", "pause") }),
-                immediateVoiceResponse = "Музыка поставлена на паузу, сэр."
-            )
-        }
-        if (q.contains("следующий трек") || q.contains("следующая песня") || q == "дальше" || q == "след трек") {
-            return FastRouteResult.HandledLocally(
-                toolCall = ToolCall(toolId = "media.control", arguments = buildJsonObject { put("action", "next") }),
-                immediateVoiceResponse = "Включаю следующий трек, сэр."
-            )
-        }
-        if (q.contains("предыдущий трек") || q.contains("назад трек")) {
-            return FastRouteResult.HandledLocally(
-                toolCall = ToolCall(toolId = "media.control", arguments = buildJsonObject { put("action", "previous") }),
-                immediateVoiceResponse = "Переключаю назад, сэр."
+                toolCall = ToolCall(
+                    toolId = "media.control",
+                    arguments = buildJsonObject { put("action", mediaIntent.action) }
+                ),
+                immediateVoiceResponse = voice
             )
         }
 
@@ -327,7 +329,7 @@ class FastCommandRouter @Inject constructor() {
                 q.contains("ватсап") || q.contains("whatsapp") || q.contains("вацап") -> "whatsapp"
                 q.contains("камер") || q.contains("camera") || q.contains("фотк") -> "camera"
                 q.contains("хром") || q.contains("chrome") || q.contains("браузер") -> "chrome"
-                q.contains("музык") || q.contains("спотифай") || q.contains("spotify") || q.contains("плеер") -> "spotify"
+                q.contains("спотифай") || q.contains("spotify") || q.contains("плеер") -> "spotify"
                 q.contains("настройк") -> "settings"
                 q.contains("калькулятор") -> "calculator"
                 q.contains("карт") || q.contains("maps") || q.contains("навигатор") -> "maps"

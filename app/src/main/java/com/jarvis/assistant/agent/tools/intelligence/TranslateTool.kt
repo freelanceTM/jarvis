@@ -5,6 +5,7 @@ import com.jarvis.assistant.agent.core.ToolCategory
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
 import com.jarvis.assistant.agent.translator.LiveTranslatorEngine
+import com.jarvis.assistant.agent.translator.TranslationResult
 import kotlinx.serialization.json.*
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -49,18 +50,37 @@ class TranslateTool @Inject constructor(
         val targetLang = arguments["target_lang"]?.jsonPrimitive?.contentOrNull ?: "ru"
         val sourceLang = arguments["source_lang"]?.jsonPrimitive?.contentOrNull ?: "auto"
 
-        val translation = translatorEngine.translate(text, sourceLang, targetLang)
-        if (translation.startsWith("Ошибка")) {
-            return ToolExecutionResult.failure(translation, "TRANSLATION_FAILED")
-        }
+        return when (val result = translatorEngine.translateStructured(text, sourceLang, targetLang)) {
+            is TranslationResult.Success -> ToolExecutionResult.success(
+                summary = result.translatedText,
+                data = buildJsonObject {
+                    put("original", text)
+                    put("translation", result.translatedText)
+                    put("source_lang", result.sourceLang)
+                    put("target_lang", result.targetLang)
+                    put("provider", result.providerId)
+                }
+            )
 
-        return ToolExecutionResult.success(
-            summary = translation,
-            data = buildJsonObject {
-                put("original", text)
-                put("translation", translation)
-                put("target_lang", targetLang)
-            }
-        )
+            is TranslationResult.Unsupported -> ToolExecutionResult.unsupported(
+                summary = translatorEngine.describeFailure(result),
+                reason = "TRANSLATION_UNSUPPORTED"
+            )
+
+            is TranslationResult.NetworkRequired -> ToolExecutionResult.failure(
+                summary = translatorEngine.describeFailure(result),
+                error = "NETWORK_REQUIRED"
+            )
+
+            is TranslationResult.ModelUnavailable -> ToolExecutionResult.failure(
+                summary = translatorEngine.describeFailure(result),
+                error = "MODEL_UNAVAILABLE"
+            )
+
+            is TranslationResult.Error -> ToolExecutionResult.failure(
+                summary = translatorEngine.describeFailure(result),
+                error = "TRANSLATION_FAILED"
+            )
+        }
     }
 }

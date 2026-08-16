@@ -1,4 +1,4 @@
-package com.jarvis.assistant.agent.memory.vector
+package com.jarvis.assistant.agent.memory.semantic
 
 import com.jarvis.assistant.agent.discovery.SynonymDictionary
 import javax.inject.Inject
@@ -6,18 +6,29 @@ import javax.inject.Singleton
 import kotlin.math.sqrt
 
 /**
- * Vector Embedding Engine v3.0 (Dense Semantic Clusters + Subword Morphological Vectors)
- * 
- * 1. 30+ семантических концептуальных кластеров с фиксированными подпространствами координат
- * 2. Проекция синонимических рядов на общие координаты (Semantic Anchor Projection)
- * 3. Контекстуальные связи (Глагол действия ➔ Целевой инструмент)
- * 4. N-граммная декомпозиция (биграммы/триграммы) для морфологической гибкости русского языка
- * 5. L2-нормализация к единичной гиперсфере для идеального косинусного сходства (Cosine Similarity)
- * 
- * Время вычисления: < 0.5 мс, 100% офлайн, 0 МБ оверхеда.
+ * Semantic Feature Engine.
+ *
+ * ЧЕСТНОЕ НАЗВАНИЕ: это НЕ ML-embedding модель. Здесь нет обученной нейросети
+ * и никаких выученных представлений. Это лексико-семантический признаковый
+ * вектор, построенный вручную:
+ *
+ *  1. фиксированные концептуальные подпространства (ручной словарь корней);
+ *  2. проекция синонимов на те же координаты (SynonymDictionary);
+ *  3. хеш-отпечаток слова + n-граммы (би-/триграммы) для устойчивости
+ *     к русской морфологии и опечаткам;
+ *  4. L2-нормализация для косинусного сходства.
+ *
+ * Такой вектор хорошо работает для Tool Discovery и грубого поиска по памяти,
+ * но он не обладает свойствами настоящих embeddings (не переносит смысл на
+ * незнакомые слова, не отражает контекст предложения).
+ *
+ * Настоящие embeddings подключаются отдельным слоем через
+ * [com.jarvis.assistant.agent.memory.semantic.EmbeddingModel], не заменяя этот класс.
+ *
+ * Стоимость: < 0.5 мс, полностью офлайн, 0 МБ моделей.
  */
 @Singleton
-class VectorEmbeddingEngine @Inject constructor() {
+class SemanticFeatureEngine @Inject constructor() {
 
     companion object {
         private const val VECTOR_DIM = 128
@@ -109,9 +120,9 @@ class VectorEmbeddingEngine @Inject constructor() {
     }
 
     /**
-     * Создает нормализованный семантический вектор размерности 128
+     * Строит нормализованный лексико-семантический вектор размерности 128.
      */
-    fun createEmbedding(text: String): FloatArray {
+    fun featurize(text: String): FloatArray {
         val vector = FloatArray(VECTOR_DIM)
         val normalized = text.lowercase().trim()
         if (normalized.isEmpty()) return vector

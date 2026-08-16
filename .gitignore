@@ -1,0 +1,42 @@
+# Gradle
+.gradle/
+build/
+*/build/
+gradle-app.setting
+.gradletasknamecache
+
+# Android build artifacts
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+out/
+release/
+
+# Local configuration (contains SDK path — машинозависимо)
+local.properties
+
+# Secrets / signing — никогда не коммитим
+*.jks
+*.keystore
+keystore.properties
+secrets.properties
+google-services.json
+api_keys.properties
+.env
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Logs
+*.log

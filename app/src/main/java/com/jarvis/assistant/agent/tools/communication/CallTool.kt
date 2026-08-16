@@ -3,11 +3,13 @@ package com.jarvis.assistant.agent.tools.communication
 import android.Manifest
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
-import android.provider.ContactsContract
-import androidx.core.content.ContextCompat
-import com.jarvis.assistant.agent.core.JarvisTool
+import com.jarvis.assistant.agent.capability.CapabilityStatus
+import com.jarvis.assistant.agent.capability.DangerLevel
+import com.jarvis.assistant.agent.capability.DeviceCapability
+import com.jarvis.assistant.agent.capability.DeviceCapabilityRegistry
+import com.jarvis.assistant.agent.capability.ToolCapabilityContract
+import com.jarvis.assistant.agent.core.CapabilityAwareTool
 import com.jarvis.assistant.agent.core.ToolCategory
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
@@ -16,10 +18,21 @@ import kotlinx.serialization.json.*
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Call Tool v0.2.
+ *
+ * Разница между двумя путями теперь отражена честно:
+ *  - CALL_PHONE выдано → ACTION_CALL, вызов действительно начинается (SUCCESS);
+ *  - разрешения нет    → ACTION_DIAL открывает номеронабиратель с введённым
+ *                        номером, но звонок НЕ совершён. Это USER_ACTION_REQUIRED,
+ *                        а не SUCCESS: пользователь должен нажать кнопку вызова.
+ */
 @Singleton
 class CallTool @Inject constructor(
-    @ApplicationContext private val context: Context
-) : JarvisTool {
+    @ApplicationContext private val context: Context,
+    private val capabilities: DeviceCapabilityRegistry,
+    private val contactResolver: ContactResolver
+) : CapabilityAwareTool {
 
     override val toolId: String = "communication.call"
     override val description: String = "Совершает телефонный звонок контакту по имени или номеру телефона"
@@ -27,6 +40,17 @@ class CallTool @Inject constructor(
     override val riskLevel: ToolRisk = ToolRisk.CONFIRMATION_REQUIRED
     override val isOffline: Boolean = true
     override val requiresForeground: Boolean = true
+
+    override val capabilityContract = ToolCapabilityContract(
+        capabilities = setOf(
+            DeviceCapability.PLACE_CALL_DIRECTLY,
+            DeviceCapability.OPEN_DIALER,
+            DeviceCapability.READ_CONTACTS
+        ),
+        requiredPermissions = listOf(Manifest.permission.CALL_PHONE),
+        dangerLevel = DangerLevel.MEDIUM,
+        confirmationRequired = true
+    )
 
     override val parametersSchema: JsonObject = buildJsonObject {
         put("type", "object")
@@ -45,111 +69,77 @@ class CallTool @Inject constructor(
             return ToolExecutionResult.failure("Не указан номер или имя контакта", "MISSING_RECIPIENT")
         }
 
-        // Проверка разрешений
-        val hasCallPermission = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.CALL_PHONE
-        ) == PackageManager.PERMISSION_GRANTED
-        
-        val hasContactsPermission = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.READ_CONTACTS
-        ) == PackageManager.PERMISSION_GRANTED
+        if (capabilities.statusOf(DeviceCapability.OPEN_DIALER) is CapabilityStatus.Unsupported) {
+            return ToolExecutionResult.unsupported(
+                summary = "Это устройство не поддерживает телефонные вызовы",
+                reason = "TELEPHONY_UNSUPPORTED"
+            )
+        }
 
-        // 1. Если переданы цифры -> прямой номер
-        val phoneNumber = if (recipient.any { it.isDigit() } && recipient.length >= 4) {
-            recipient.replace(Regex("[^0-9+]"), "")
-        } else {
-            // 2. Ищем номер по имени в контактах (если есть разрешение)
-            if (hasContactsPermission) {
-                findContactNumber(recipient) ?: recipient
-            } else {
-                // Нет разрешения на контакты — пробуем использовать имя напрямую
-                recipient
+        // 1. Определяем реальный номер.
+        val phoneNumber = when (val resolution = contactResolver.resolve(recipient)) {
+            is ContactResolution.Resolved -> resolution.phoneNumber
+            is ContactResolution.PermissionRequired -> return ToolExecutionResult.permissionRequired(
+                summary = "Чтобы найти номер контакта «$recipient», нужен доступ к контактам",
+                permissions = resolution.permissions
+            )
+            is ContactResolution.NotFound -> return ToolExecutionResult.failure(
+                summary = "Контакт «$recipient» не найден в телефонной книге, звонок не выполнен",
+                error = "CONTACT_NOT_FOUND"
+            )
+        }
+
+        val canCallDirectly = capabilities.statusOf(DeviceCapability.PLACE_CALL_DIRECTLY).isAvailable
+
+        // 2. Прямой вызов при наличии разрешения.
+        if (canCallDirectly) {
+            val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$phoneNumber")).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            return try {
+                context.startActivity(intent)
+                ToolExecutionResult.success(
+                    summary = "Звоню $recipient ($phoneNumber)",
+                    data = buildJsonObject {
+                        put("recipient", recipient)
+                        put("phone_number", phoneNumber)
+                        put("direct_call", true)
+                    }
+                )
+            } catch (e: SecurityException) {
+                ToolExecutionResult.permissionRequired(
+                    summary = "Система отклонила вызов: нет разрешения CALL_PHONE",
+                    permissions = listOf(Manifest.permission.CALL_PHONE)
+                )
+            } catch (e: android.content.ActivityNotFoundException) {
+                ToolExecutionResult.failure(
+                    summary = "На устройстве нет приложения для звонков",
+                    error = "NO_DIALER_APP"
+                )
             }
         }
 
-        // Проверяем, есть ли у нас номер для звонка
-        val hasValidNumber = phoneNumber.any { it.isDigit() } && phoneNumber.length >= 4
-        
+        // 3. Без разрешения открываем номеронабиратель — но это НЕ состоявшийся звонок.
+        val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phoneNumber")).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
         return try {
-            val intent = if (hasCallPermission && hasValidNumber) {
-                // Есть разрешение и валидный номер — звоним напрямую
-                Intent(Intent.ACTION_CALL, Uri.parse("tel:$phoneNumber"))
-            } else {
-                // Нет разрешения или нет номера — открываем dialer
-                Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phoneNumber"))
-            }.apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-
-            context.startActivity(intent)
-            
-            val summary = when {
-                hasCallPermission && hasValidNumber -> "Звоню $recipient ($phoneNumber)"
-                !hasCallPermission -> "Открываю номеронабиратель для $recipient. Для прямых звонков разрешите доступ к телефону в настройках."
-                !hasValidNumber && !hasContactsPermission -> "Открываю номеронабиратель. Для поиска по имени разрешите доступ к контактам."
-                else -> "Открываю номеронабиратель для $recipient"
-            }
-            
-            ToolExecutionResult.success(
-                summary = summary,
-                actionRequiresUser = !hasCallPermission || !hasValidNumber,
+            context.startActivity(dialIntent)
+            ToolExecutionResult.userActionRequired(
+                summary = "Открыл номеронабиратель с номером $recipient. Нажмите кнопку вызова, сэр — для автоматических звонков нужно разрешение на телефон.",
+                reason = "CALL_PHONE_PERMISSION_REQUIRED",
                 data = buildJsonObject {
                     put("recipient", recipient)
                     put("phone_number", phoneNumber)
-                    put("direct_call", hasCallPermission && hasValidNumber)
-                    put("needs_call_permission", !hasCallPermission)
-                    put("needs_contacts_permission", !hasContactsPermission)
+                    put("direct_call", false)
+                    put("required_permission", Manifest.permission.CALL_PHONE)
                 }
             )
-        } catch (e: Exception) {
-            ToolExecutionResult.failure("Не удалось совершить звонок: ${e.localizedMessage}", "CALL_ERROR")
-        }
-    }
-
-    private fun findContactNumber(contactName: String): String? {
-        return try {
-            val cr = context.contentResolver
-            val cursor = cr.query(
-                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                arrayOf(
-                    ContactsContract.CommonDataKinds.Phone.NUMBER, 
-                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME
-                ),
-                "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?",
-                arrayOf("%$contactName%"),
-                null
+        } catch (e: android.content.ActivityNotFoundException) {
+            ToolExecutionResult.failure(
+                summary = "На устройстве нет приложения для звонков",
+                error = "NO_DIALER_APP"
             )
-
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    val numIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
-                    if (numIdx != -1) {
-                        return it.getString(numIdx)
-                    }
-                }
-            }
-            null
-        } catch (_: Exception) {
-            null
         }
-    }
-
-    /**
-     * Возвращает список отсутствующих разрешений для полноценной работы
-     */
-    fun getMissingPermissions(): List<String> {
-        val missing = mutableListOf<String>()
-        
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) 
-            != PackageManager.PERMISSION_GRANTED) {
-            missing.add(Manifest.permission.CALL_PHONE)
-        }
-        
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) 
-            != PackageManager.PERMISSION_GRANTED) {
-            missing.add(Manifest.permission.READ_CONTACTS)
-        }
-        
-        return missing
     }
 }

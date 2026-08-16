@@ -2,7 +2,7 @@ package com.jarvis.assistant.agent.discovery
 
 import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.core.ToolCategory
-import com.jarvis.assistant.agent.memory.vector.VectorEmbeddingEngine
+import com.jarvis.assistant.agent.memory.semantic.SemanticFeatureEngine
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
 import kotlinx.serialization.json.JsonObject
@@ -14,7 +14,7 @@ import org.junit.Test
 class ToolDiscoveryEngineTest {
 
     private lateinit var engine: ToolDiscoveryEngine
-    private lateinit var vectorEngine: VectorEmbeddingEngine
+    private lateinit var featureEngine: SemanticFeatureEngine
     private lateinit var mockTools: List<JarvisTool>
 
     class DummyTool(
@@ -29,8 +29,8 @@ class ToolDiscoveryEngineTest {
 
     @Before
     fun setUp() {
-        vectorEngine = VectorEmbeddingEngine()
-        engine = ToolDiscoveryEngine(vectorEngine)
+        featureEngine = SemanticFeatureEngine()
+        engine = ToolDiscoveryEngine(featureEngine)
 
         mockTools = listOf(
             DummyTool(
@@ -110,9 +110,9 @@ class ToolDiscoveryEngineTest {
 
     @Test
     fun testSemanticVectorSynonymSimilarity() {
-        val vec1 = vectorEngine.createEmbedding("позвони маме")
-        val vec2 = vectorEngine.createEmbedding("вызов абонента")
-        val similarity = vectorEngine.computeCosineSimilarity(vec1, vec2)
+        val vec1 = featureEngine.featurize("позвони маме")
+        val vec2 = featureEngine.featurize("вызов абонента")
+        val similarity = featureEngine.computeCosineSimilarity(vec1, vec2)
         assertTrue("Cosine similarity between synonyms should be >= 0.65, got $similarity", similarity >= 0.65f)
     }
 

@@ -5,15 +5,14 @@ import android.os.BatteryManager
 import android.content.Intent
 import android.content.IntentFilter
 import com.jarvis.assistant.agent.memory.manager.JarvisMemoryManager
-import com.jarvis.assistant.agent.tools.intelligence.WebSearchTool
+import com.jarvis.assistant.agent.tools.intelligence.WeatherTool
 import com.jarvis.assistant.core.network.NetworkMonitor
 import com.jarvis.assistant.domain.repository.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import kotlinx.serialization.json.JsonObject
 import java.text.SimpleDateFormat
 import java.util.*
 import javax.inject.Inject
@@ -35,7 +34,7 @@ class ProactiveEarBriefingEngine @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val memoryManager: JarvisMemoryManager,
     private val networkMonitor: NetworkMonitor,
-    private val webSearchTool: WebSearchTool
+    private val weatherTool: WeatherTool
 ) {
 
     suspend fun generateBriefing(): String = withContext(Dispatchers.IO) {
@@ -64,20 +63,20 @@ class ProactiveEarBriefingEngine @Inject constructor(
         val sb = StringBuilder()
         sb.append("$greeting, $userName. ")
         sb.append("Сейчас $timeStr, $dayStr. ")
-        sb.append("Заряд аккумулятора: $batteryPercent%. ")
+        // Если система не отдала уровень заряда — не подставляем выдуманное число.
+        if (batteryPercent >= 0) {
+            sb.append("Заряд аккумулятора: $batteryPercent%. ")
+        }
 
         if (isOnline) {
             sb.append("Системы онлайн. ")
-            // Пробуем получить краткую погоду
-            try {
-                val weatherResult = webSearchTool.execute(
-                    buildJsonObject { put("query", "погода в Ашхабаде сегодня") }
-                )
-                if (weatherResult.isSuccess && weatherResult.summary.isNotBlank() && !weatherResult.summary.contains("не найдено")) {
-                    val weatherSnippet = weatherResult.summary.take(120)
-                    sb.append("Погода: $weatherSnippet. ")
-                }
-            } catch (_: Exception) { }
+            // Погода по ТЕКУЩЕМУ местоположению: город не зашит в код.
+            // Если местоположение недоступно, брифинг просто не содержит погоду —
+            // выдумывать её нельзя.
+            val weatherResult = weatherTool.execute(JsonObject(emptyMap()))
+            if (weatherResult.isSuccess && weatherResult.summary.isNotBlank()) {
+                sb.append("Погода: ${weatherResult.summary.take(140)}. ")
+            }
         } else {
             sb.append("Работаем в автономном режиме. ")
         }
@@ -99,10 +98,10 @@ class ProactiveEarBriefingEngine @Inject constructor(
         val level = batteryIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
         val scale = batteryIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
 
-        return if (level != -1 && scale != -1) {
+        return if (level != -1 && scale > 0) {
             (level * 100 / scale.toFloat()).toInt()
         } else {
-            85
+            -1 // Неизвестно: вызывающий код обязан это учесть, а не показать фейк
         }
     }
 }

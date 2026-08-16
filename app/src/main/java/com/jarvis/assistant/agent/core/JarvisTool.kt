@@ -1,5 +1,6 @@
 package com.jarvis.assistant.agent.core
 
+import com.jarvis.assistant.agent.capability.ToolCapabilityContract
 import com.jarvis.assistant.agent.model.ToolDefinition
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
@@ -62,4 +63,21 @@ interface JarvisTool {
     suspend fun rollback(arguments: JsonObject, rollbackData: JsonObject?): Boolean {
         return false // По умолчанию для необратимых действий (например, опрос времени/батареи)
     }
+}
+
+/**
+ * Инструмент, который явно объявляет свои требования к устройству и разрешениям.
+ *
+ * Позволяет агенту ответить на вопрос «могу ли я выполнить это действие на данном
+ * устройстве» ДО вызова [JarvisTool.execute] — вместо того, чтобы узнавать об
+ * ограничении Android постфактум.
+ */
+interface CapabilityAwareTool : JarvisTool {
+    val capabilityContract: ToolCapabilityContract
+
+    override val requiresConfirmation: Boolean
+        get() = capabilityContract.confirmationRequired ||
+            riskLevel == ToolRisk.CONFIRMATION_REQUIRED ||
+            riskLevel == ToolRisk.HIGH ||
+            riskLevel == ToolRisk.CRITICAL
 }

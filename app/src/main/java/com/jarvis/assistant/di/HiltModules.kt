@@ -4,7 +4,15 @@ import android.content.Context
 import androidx.room.Room
 import com.jarvis.assistant.BuildConfig
 import com.jarvis.assistant.agent.automation.dao.AutomationDao
+import com.jarvis.assistant.agent.capability.CapabilityChecker
+import com.jarvis.assistant.agent.capability.DeviceCapabilityRegistry
 import com.jarvis.assistant.agent.core.JarvisTool
+import com.jarvis.assistant.agent.location.LocationProvider
+import com.jarvis.assistant.agent.location.SystemLocationProvider
+import com.jarvis.assistant.agent.translator.LlmTranslationProvider
+import com.jarvis.assistant.agent.translator.TranslationProvider
+import com.jarvis.assistant.agent.weather.OpenMeteoWeatherProvider
+import com.jarvis.assistant.agent.weather.WeatherProvider
 import com.jarvis.assistant.agent.memory.dao.*
 import com.jarvis.assistant.agent.tools.accessibility.ScreenReaderTool
 import com.jarvis.assistant.agent.tools.accessibility.UiClickTool
@@ -14,6 +22,7 @@ import com.jarvis.assistant.agent.tools.intelligence.ForgetMemoryTool
 import com.jarvis.assistant.agent.tools.intelligence.RecallMemoryTool
 import com.jarvis.assistant.agent.tools.intelligence.RememberFactTool
 import com.jarvis.assistant.agent.tools.intelligence.TranslateTool
+import com.jarvis.assistant.agent.tools.intelligence.WeatherTool
 import com.jarvis.assistant.agent.tools.intelligence.WebSearchTool
 import com.jarvis.assistant.agent.tools.location.LocationNavigationTool
 import com.jarvis.assistant.agent.tools.media.MediaControlTool
@@ -90,8 +99,27 @@ abstract class SecurityAndNetworkBindingModule {
     @Singleton
     abstract fun bindWakeWordDetector(impl: AlisaStyleWakeWordEngine): WakeWordDetector
 
+    @Binds
+    @Singleton
+    abstract fun bindWeatherProvider(impl: OpenMeteoWeatherProvider): WeatherProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindCapabilityChecker(impl: DeviceCapabilityRegistry): CapabilityChecker
+
+    @Binds
+    @Singleton
+    abstract fun bindLocationProvider(impl: SystemLocationProvider): LocationProvider
+
     @Multibinds
     abstract fun bindToolsSet(): Set<JarvisTool>
+
+    @Multibinds
+    abstract fun bindTranslationProviders(): Set<TranslationProvider>
+
+    // Провайдеры перевода. Офлайн-модели в v0.2 нет — регистрируем только
+    // реально работающий онлайн-провайдер, а не заглушку.
+    @Binds @IntoSet abstract fun bindLlmTranslationProvider(provider: LlmTranslationProvider): TranslationProvider
 
     // 1. Системные инструменты (System)
     @Binds @IntoSet abstract fun bindGetDeviceInfoTool(tool: GetDeviceInfoTool): JarvisTool
@@ -132,6 +160,7 @@ abstract class SecurityAndNetworkBindingModule {
     @Binds @IntoSet abstract fun bindForgetMemoryTool(tool: ForgetMemoryTool): JarvisTool
     @Binds @IntoSet abstract fun bindWebSearchTool(tool: WebSearchTool): JarvisTool
     @Binds @IntoSet abstract fun bindTranslateTool(tool: TranslateTool): JarvisTool
+    @Binds @IntoSet abstract fun bindWeatherTool(tool: WeatherTool): JarvisTool
 
     // 7. Спец. возможности и UI управление (Accessibility)
     @Binds @IntoSet abstract fun bindScreenReaderTool(tool: ScreenReaderTool): JarvisTool

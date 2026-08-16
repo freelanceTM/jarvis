@@ -19,7 +19,7 @@ import javax.inject.Singleton
  * 3. Re-planning с альтернативными инструментами
  */
 @Singleton
-class CognitivePlanner @Inject constructor(
+open class CognitivePlanner @Inject constructor(
     private val toolCallParser: ToolCallParser
 ) {
     /**
@@ -473,7 +473,7 @@ class CognitivePlanner @Inject constructor(
      * 1. Поиск альтернативного инструмента для упавшего шага
      * 2. Пропуск некритичного шага и продолжение
      */
-    fun replan(
+    open fun replan(
         currentPlan: ExecutionPlan,
         failedStep: PlanStep,
         observation: StepObservation.StepFailed,

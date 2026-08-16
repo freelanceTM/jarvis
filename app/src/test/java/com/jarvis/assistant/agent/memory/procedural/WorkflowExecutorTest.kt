@@ -1,5 +1,6 @@
 package com.jarvis.assistant.agent.memory.procedural
 
+import com.jarvis.assistant.agent.capability.FakeCapabilityRegistry
 import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.core.ToolCategory
 import com.jarvis.assistant.agent.executor.ToolExecutor
@@ -72,8 +73,12 @@ class WorkflowExecutorTest {
             DummyTool("device.flashlight"),
             DummyTool("device.open_app")
         )
-        val registry = ToolRegistry(tools, com.jarvis.assistant.agent.discovery.ToolDiscoveryEngine(com.jarvis.assistant.agent.memory.vector.VectorEmbeddingEngine()))
-        val permissionManager = ToolPermissionManager(android.content.ContextWrapper(null))
+        val registry = ToolRegistry(tools, com.jarvis.assistant.agent.discovery.ToolDiscoveryEngine(com.jarvis.assistant.agent.memory.semantic.SemanticFeatureEngine()))
+        // ToolPermissionManager теперь работает поверх capability-реестра;
+        // в чистом unit-тесте Android-контекст недоступен, поэтому пропускаем
+        // проверку возможностей через null-реестр не получится — используем
+        // реальный менеджер с фиктивным реестром.
+        val permissionManager = ToolPermissionManager(FakeCapabilityRegistry.create())
         val executor = ToolExecutor(registry, permissionManager)
         val json = Json { ignoreUnknownKeys = true; isLenient = true }
 

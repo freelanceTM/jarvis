@@ -5,6 +5,8 @@ import android.media.AudioManager
 import android.view.KeyEvent
 import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.core.ToolCategory
+import com.jarvis.assistant.agent.media.MediaIntent
+import com.jarvis.assistant.agent.media.MediaIntentParser
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -40,28 +42,40 @@ class MediaControlTool @Inject constructor(
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
             ?: return ToolExecutionResult.failure("Аудио-служба недоступна", "NO_AUDIO_SERVICE")
 
-        val keyCode = when (action) {
-            "pause", "пауза", "стоп" -> KeyEvent.KEYCODE_MEDIA_PAUSE
-            "play", "плей", "играй", "продолжи" -> KeyEvent.KEYCODE_MEDIA_PLAY
-            "next", "следующий", "вперед" -> KeyEvent.KEYCODE_MEDIA_NEXT
-            "prev", "previous", "назад", "предыдущий" -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
-            "stop" -> KeyEvent.KEYCODE_MEDIA_STOP
-            else -> KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+        // Нормализация: фраза/аргумент -> MediaIntent -> KeyEvent.
+        // Неизвестное действие НЕ подменяется на произвольное (раньше падало в PLAY_PAUSE).
+        val intent = MediaIntentParser.normalizeAction(action)
+            ?: return ToolExecutionResult.failure(
+                summary = "Неизвестная медиа-команда: $action",
+                error = "UNKNOWN_MEDIA_ACTION"
+            )
+
+        val keyCode = when (intent) {
+            MediaIntent.PAUSE_MEDIA -> KeyEvent.KEYCODE_MEDIA_PAUSE
+            MediaIntent.PLAY_MEDIA -> KeyEvent.KEYCODE_MEDIA_PLAY
+            MediaIntent.NEXT_TRACK -> KeyEvent.KEYCODE_MEDIA_NEXT
+            MediaIntent.PREVIOUS_TRACK -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
+            MediaIntent.STOP_MEDIA -> KeyEvent.KEYCODE_MEDIA_STOP
+            MediaIntent.TOGGLE_PLAY_PAUSE -> KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
         }
 
         return try {
             audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
             audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
 
-            val actionLabel = when (keyCode) {
-                KeyEvent.KEYCODE_MEDIA_PAUSE -> "Музыка поставлена на паузу"
-                KeyEvent.KEYCODE_MEDIA_PLAY -> "Воспроизведение запущено"
-                KeyEvent.KEYCODE_MEDIA_NEXT -> "Переключено на следующий трек"
-                KeyEvent.KEYCODE_MEDIA_PREVIOUS -> "Переключено на предыдущий трек"
-                else -> "Медиа-команда выполнена"
+            val actionLabel = when (intent) {
+                MediaIntent.PAUSE_MEDIA -> "Музыка поставлена на паузу"
+                MediaIntent.PLAY_MEDIA -> "Воспроизведение запущено"
+                MediaIntent.NEXT_TRACK -> "Переключено на следующий трек"
+                MediaIntent.PREVIOUS_TRACK -> "Переключено на предыдущий трек"
+                MediaIntent.STOP_MEDIA -> "Воспроизведение остановлено"
+                MediaIntent.TOGGLE_PLAY_PAUSE -> "Воспроизведение переключено"
             }
 
-            ToolExecutionResult.success(summary = actionLabel)
+            ToolExecutionResult.success(
+                summary = actionLabel,
+                data = buildJsonObject { put("intent", intent.name) }
+            )
         } catch (e: Exception) {
             ToolExecutionResult.failure("Ошибка управления медиа: ${e.localizedMessage}", "MEDIA_ERROR")
         }

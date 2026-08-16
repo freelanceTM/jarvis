@@ -54,6 +54,14 @@ android {
         kotlinCompilerExtensionVersion = "1.5.14"
     }
 
+    testOptions {
+        unitTests {
+            // android.util.Log и прочие android.jar-заглушки возвращают значения
+            // по умолчанию вместо выброса "not mocked" в чистых JVM-тестах.
+            isReturnDefaultValues = true
+        }
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

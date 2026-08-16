@@ -21,7 +21,9 @@ data class TranslationItem(
     val translatedText: String,
     val sourceLang: String,
     val targetLang: String,
-    val isInterlocutor: Boolean = true
+    val isInterlocutor: Boolean = true,
+    /** false — перевод не выполнен, в translatedText лежит причина. */
+    val isTranslated: Boolean = true
 )
 
 data class LiveInterpreterUiState(
@@ -87,15 +89,19 @@ class LiveInterpreterViewModel @Inject constructor(
             _uiState.update { it.copy(isTranslating = true) }
             val state = _uiState.value
 
-            val translation = translatorEngine.translate(
+            val result = translatorEngine.translateStructured(
                 text = text,
                 sourceLang = state.sourceLanguage.code,
                 targetLang = state.targetLanguage.code
             )
+            // Неуспешный перевод показывается как причина отказа,
+            // а не как «перевод», совпадающий с оригиналом.
+            val translation = translatorEngine.describeFailure(result)
 
             val item = TranslationItem(
                 originalText = text,
                 translatedText = translation,
+                isTranslated = result is com.jarvis.assistant.agent.translator.TranslationResult.Success,
                 sourceLang = state.sourceLanguage.displayName,
                 targetLang = state.targetLanguage.displayName,
                 isInterlocutor = true

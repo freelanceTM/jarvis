@@ -33,12 +33,16 @@ class PersonalAutomationEngine @Inject constructor(
     private val automationDao: AutomationDao,
     private val toolExecutor: ToolExecutor,
     private val textToSpeechManager: TextToSpeechManager,
+    private val ruleEvaluator: RuleEvaluator,
     private val json: Json
 ) {
     companion object {
         private const val TAG = "AutomationEngine"
         private const val PREFS_NAME = "jarvis_automation_prefs"
         private const val KEY_DEFAULTS_INITIALIZED = "defaults_initialized"
+
+        /** Защита от повторных срабатываний при «дребезге» системных событий. */
+        private const val DEFAULT_COOLDOWN_MS = 60_000L
     }
 
     private val initMutex = Mutex()
@@ -58,52 +62,58 @@ class PersonalAutomationEngine @Inject constructor(
 
         val candidateRules = automationDao.getAutomationsByTrigger(triggerType.name)
         Log.d(TAG, "Found ${candidateRules.size} rules for ${triggerType.name}")
-        
+
         if (candidateRules.isEmpty()) return@withContext
 
         val now = Calendar.getInstance(Locale.getDefault())
+        val nowMillis = System.currentTimeMillis()
         val currentHour = now.get(Calendar.HOUR_OF_DAY)
         val currentMinute = now.get(Calendar.MINUTE)
 
-        for (rule in candidateRules) {
-            if (!rule.isEnabled) {
-                Log.d(TAG, "Rule '${rule.name}' is disabled, skipping")
-                continue
-            }
+        // Оцениваем ВСЕ правила события, а не только первое подходящее.
+        val decisions = ruleEvaluator.evaluate(candidateRules, nowMillis, currentHour, currentMinute)
+        val voiceMessages = mutableListOf<String>()
 
-            // 1. Проверка предусловий (Conditions: Time Window)
-            if (!isConditionSatisfied(rule.conditionsJson, currentHour, currentMinute)) {
-                Log.d(TAG, "Rule '${rule.name}' skipped: time condition not satisfied")
-                continue
-            }
-
-            // 2. Парсинг и последовательное выполнение действий инструмента
-            val calls = parseActionCalls(rule.actionsJson)
-            if (calls.isNotEmpty()) {
-                Log.d(TAG, "Executing ${calls.size} actions for rule '${rule.name}'")
-                
-                try {
-                    val results = toolExecutor.executeAll(calls)
-                    automationDao.recordTrigger(rule.id)
-
-                    // 3. Голосовое оповещение прямо в наушник
-                    val voiceFeedback = if (rule.voiceAnnouncement.isNotBlank()) {
-                        rule.voiceAnnouncement
-                    } else {
-                        val summary = results.filter { it.isSuccess }.joinToString(". ") { it.summary }
-                        if (summary.isNotBlank()) "$summary, сэр." else ""
-                    }
-
-                    if (voiceFeedback.isNotBlank()) {
-                        withContext(Dispatchers.Main) {
-                            textToSpeechManager.speak(voiceFeedback)
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error executing rule '${rule.name}'", e)
+        for (decision in decisions) {
+            when (decision) {
+                is RuleDecision.Skip -> {
+                    Log.d(TAG, "Rule '${decision.rule.name}' skipped: ${decision.reason}")
                 }
-                
-                break // Одно правило на событие
+
+                is RuleDecision.Execute -> {
+                    val rule = decision.rule
+                    val calls = parseActionCalls(rule.actionsJson)
+                    if (calls.isEmpty()) {
+                        Log.w(TAG, "Rule '${rule.name}' has no parsable actions")
+                        continue
+                    }
+
+                    Log.d(TAG, "Executing ${calls.size} actions for rule '${rule.name}'")
+                    try {
+                        val results = toolExecutor.executeAll(calls)
+                        automationDao.recordTrigger(rule.id)
+
+                        val voiceFeedback = if (rule.voiceAnnouncement.isNotBlank()) {
+                            rule.voiceAnnouncement
+                        } else {
+                            results.filter { it.isSuccess }
+                                .joinToString(". ") { it.summary }
+                                .takeIf { it.isNotBlank() }
+                                ?.let { "$it, сэр." }
+                                .orEmpty()
+                        }
+                        if (voiceFeedback.isNotBlank()) voiceMessages.add(voiceFeedback)
+                    } catch (e: Exception) {
+                        // Сбой одного правила не должен останавливать остальные правила события.
+                        Log.e(TAG, "Error executing rule '${rule.name}', continuing with other rules", e)
+                    }
+                }
+            }
+        }
+
+        if (voiceMessages.isNotEmpty()) {
+            withContext(Dispatchers.Main) {
+                textToSpeechManager.speak(voiceMessages.joinToString(" "))
             }
         }
     }
@@ -123,25 +133,6 @@ class PersonalAutomationEngine @Inject constructor(
             } catch (e: Exception) {
                 Log.e(TAG, "Error initializing default automations", e)
             }
-        }
-    }
-
-    private fun isConditionSatisfied(conditionsJson: String, currentHour: Int, currentMinute: Int): Boolean {
-        if (conditionsJson.isBlank()) return true
-        return try {
-            val cond = json.decodeFromString<TimeRangeCondition>(conditionsJson)
-            val currentTotalMinutes = currentHour * 60 + currentMinute
-            val startTotalMinutes = cond.startHour * 60 + cond.startMinute
-            val endTotalMinutes = cond.endHour * 60 + cond.endMinute
-
-            // Обработка перехода через полночь
-            if (startTotalMinutes <= endTotalMinutes) {
-                currentTotalMinutes in startTotalMinutes..endTotalMinutes
-            } else {
-                currentTotalMinutes >= startTotalMinutes || currentTotalMinutes <= endTotalMinutes
-            }
-        } catch (_: Exception) {
-            true
         }
     }
 
@@ -208,7 +199,9 @@ class PersonalAutomationEngine @Inject constructor(
             conditionsJson = timeCondition,
             actionsJson = actions,
             voiceAnnouncement = "Доброе утро, сэр. Громкость установлена на 50%.",
-            isEnabled = true
+            isEnabled = true,
+            priority = 10,
+            cooldownMs = DEFAULT_COOLDOWN_MS
         )
     }
 
@@ -230,7 +223,9 @@ class PersonalAutomationEngine @Inject constructor(
             conditionsJson = "",
             actionsJson = actions,
             voiceAnnouncement = "С возвращением домой, сэр. Громкость установлена на 70%.",
-            isEnabled = true
+            isEnabled = true,
+            priority = 5,
+            cooldownMs = DEFAULT_COOLDOWN_MS
         )
     }
 
@@ -258,7 +253,9 @@ class PersonalAutomationEngine @Inject constructor(
             conditionsJson = "",
             actionsJson = actions,
             voiceAnnouncement = "Внимание, сэр. Низкий заряд батареи. Включаю режим экономии.",
-            isEnabled = true
+            isEnabled = true,
+            priority = 20,
+            cooldownMs = DEFAULT_COOLDOWN_MS
         )
     }
 
@@ -291,7 +288,9 @@ class PersonalAutomationEngine @Inject constructor(
         triggerType: AutomationTriggerType,
         timeCondition: TimeRangeCondition? = null,
         actions: List<ToolCall>,
-        voiceAnnouncement: String = ""
+        voiceAnnouncement: String = "",
+        priority: Int = 0,
+        cooldownMs: Long = DEFAULT_COOLDOWN_MS
     ): Long = withContext(Dispatchers.IO) {
         val ruleId = "user_${UUID.randomUUID()}"
         
@@ -315,7 +314,9 @@ class PersonalAutomationEngine @Inject constructor(
             conditionsJson = conditionsJson,
             actionsJson = actionsArray,
             voiceAnnouncement = voiceAnnouncement,
-            isEnabled = true
+            isEnabled = true,
+            priority = priority,
+            cooldownMs = cooldownMs
         )
 
         automationDao.insertAutomation(entity)

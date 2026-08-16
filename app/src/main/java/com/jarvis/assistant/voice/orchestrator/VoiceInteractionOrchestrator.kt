@@ -306,10 +306,17 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         // 🎧 НЕПРЕРЫВНЫЙ СИНХРОННЫЙ ПЕРЕВОДЧИК В УХО (Full-Duplex Continuous Stream)
                         if (_currentMode.value == OrchestratorMode.LIVE_EAR_INTERPRETER) {
                             scope.launch(Dispatchers.IO) {
-                                val translation = translatorEngine.translate(text, sourceLang = "auto", targetLang = "ru")
-                                _lastAnswer.value = translation
+                                // Если перевод не выполнен, озвучиваем причину,
+                                // а НЕ исходную фразу под видом перевода.
+                                val result = translatorEngine.translateStructured(
+                                    text = text,
+                                    sourceLang = "auto",
+                                    targetLang = "ru"
+                                )
+                                val spoken = translatorEngine.describeFailure(result)
+                                _lastAnswer.value = spoken
                                 bluetoothAudioRouter.routeAudioToEarbud()
-                                textToSpeechManager.speakQueued(translation, speechRate, speechPitch)
+                                textToSpeechManager.speakQueued(spoken, speechRate, speechPitch)
                             }
                             return@collectLatest
                         }
@@ -503,10 +510,12 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
                 scope.launch {
                     val result = toolExecutor.executeWithBypass(callToExecute)
-                    val voiceResponse = if (result.isSuccess) {
-                        "${result.summary}, сэр."
-                    } else {
-                        "Не удалось выполнить: ${result.error ?: result.summary}"
+                    val voiceResponse = when {
+                        result.isSuccess -> "${result.summary}, сэр."
+                        // Разрешение/системный UI/неподдерживаемая возможность —
+                        // это не «ошибка выполнения», а понятное объяснение.
+                        result.isBlockedByAndroid -> result.summary
+                        else -> "Не удалось выполнить: ${result.error ?: result.summary}"
                     }
                     _lastAnswer.value = voiceResponse
                     _currentMode.value = OrchestratorMode.TTS_SPEAKING
@@ -550,7 +559,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
         scope.launch {
             textToSpeechManager.ttsState.collectLatest { ttsState ->
                 when (ttsState) {
-                    is TtsState.Finished -> {
+                    is TtsState.Done -> {
                         when (_currentMode.value) {
                             OrchestratorMode.TTS_SPEAKING -> {
                                 openContinuousConversationWindow()
