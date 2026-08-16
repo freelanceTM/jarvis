@@ -2,6 +2,7 @@ package com.jarvis.assistant.agent
 
 import com.jarvis.assistant.agent.fast.FastCommandRouter
 import com.jarvis.assistant.agent.fast.FastRouteResult
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.*
 import org.junit.Before
@@ -140,6 +141,90 @@ class FastCommandRouterTest {
         assertTrue(handled.immediateVoiceResponse.isNotBlank())
     }
     
+    // ===========================================
+    // Brightness (absolute percent / relative delta / read)
+    // ===========================================
+
+    @Test
+    fun `brightness to percent routes absolute value`() {
+        val result = router.route("увеличь яркость до 80%")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.brightness", handled.toolCall?.toolId)
+        assertEquals(80, handled.toolCall?.arguments?.get("percent")?.jsonPrimitive?.int)
+    }
+
+    @Test
+    fun `brightness number without preposition routes absolute value`() {
+        val result = router.route("поставь яркость 50 процентов")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.brightness", handled.toolCall?.toolId)
+        assertEquals(50, handled.toolCall?.arguments?.get("percent")?.jsonPrimitive?.int)
+    }
+
+    @Test
+    fun `brightness increase by delta routes relative value`() {
+        val result = router.route("увеличь яркость на 20")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.brightness", handled.toolCall?.toolId)
+        assertEquals(20, handled.toolCall?.arguments?.get("delta")?.jsonPrimitive?.int)
+    }
+
+    @Test
+    fun `brightness decrease by delta routes negative relative value`() {
+        val result = router.route("уменьши яркость на 20 процентов")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.brightness", handled.toolCall?.toolId)
+        assertEquals(-20, handled.toolCall?.arguments?.get("delta")?.jsonPrimitive?.int)
+    }
+
+    @Test
+    fun `brighter without number routes +10 delta`() {
+        val result = router.route("сделай ярче")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.brightness", handled.toolCall?.toolId)
+        assertEquals(10, handled.toolCall?.arguments?.get("delta")?.jsonPrimitive?.int)
+    }
+
+    @Test
+    fun `darker without number routes -10 delta`() {
+        val result = router.route("сделай темнее")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.brightness", handled.toolCall?.toolId)
+        assertEquals(-10, handled.toolCall?.arguments?.get("delta")?.jsonPrimitive?.int)
+    }
+
+    @Test
+    fun `brightness max routes 100 percent`() {
+        val result = router.route("яркость на максимум")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.brightness", handled.toolCall?.toolId)
+        assertEquals(100, handled.toolCall?.arguments?.get("percent")?.jsonPrimitive?.int)
+    }
+
+    @Test
+    fun `brightness query without value routes read (empty arguments)`() {
+        val result = router.route("какая сейчас яркость")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.brightness", handled.toolCall?.toolId)
+        assertTrue(handled.toolCall?.arguments?.isEmpty() == true)
+    }
+
     // ===========================================
     // Bluetooth & Wi-Fi (honest Android behavior)
     // ===========================================

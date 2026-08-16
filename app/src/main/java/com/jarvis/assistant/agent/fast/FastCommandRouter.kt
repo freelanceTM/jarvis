@@ -223,6 +223,50 @@ class FastCommandRouter @Inject constructor() {
             )
         }
 
+        // 5.1 Яркость экрана
+        // Алгоритм (в туле): canWrite() → YES: реально изменить яркость;
+        // NO: открыть системный экран ACTION_MANAGE_WRITE_SETTINGS.
+        // Здесь определяем намерение: «до N» — абсолютный percent,
+        // «на N» — относительный delta, без числа — глаголы ±10 / чтение.
+        if (q.contains("яркост") || q.contains("ярче") || q.contains("темне") || q.contains("brightness")) {
+            val percentMatch = Regex("""(\d+)\s*(%|процент)""").find(q)
+            val numberMatch = Regex("""(\d+)""").find(q)
+            val number = percentMatch?.groupValues?.get(1)?.toIntOrNull()
+                ?: numberMatch?.groupValues?.get(1)?.toIntOrNull()
+
+            val isDecrease = q.contains("меньш") || q.contains("пониз") ||
+                q.contains("убав") || q.contains("темне") || q.contains("тускл")
+
+            val arguments = when {
+                // «на максимум / на всю» → 100, «на минимум» → 0
+                q.contains("максимум") || q.contains("на всю") || q.contains("по максимум") ->
+                    buildJsonObject { put("percent", 100) }
+                q.contains("минимум") || q.contains("по минимум") || q.contains("на минимальн") ->
+                    buildJsonObject { put("percent", 0) }
+
+                // «увеличь/уменьши яркость НА N» → относительное смещение
+                number != null && q.contains(" на ") ->
+                    buildJsonObject { put("delta", if (isDecrease) -number else number) }
+
+                // «яркость до N» / «яркость N процентов» → абсолютное значение
+                number != null ->
+                    buildJsonObject { put("percent", number) }
+
+                // Глаголы без числа: ярче/темнее ±10
+                isDecrease -> buildJsonObject { put("delta", -10) }
+                q.contains("ярче") || q.contains("увелич") || q.contains("прибав") ->
+                    buildJsonObject { put("delta", 10) }
+
+                // Просто «какая яркость» — чтение текущего значения.
+                else -> buildJsonObject { }
+            }
+
+            return FastRouteResult.HandledLocally(
+                toolCall = ToolCall(toolId = "device.brightness", arguments = arguments),
+                immediateVoiceResponse = "Настраиваю яркость, сэр."
+            )
+        }
+
         // 6. Батарея
         if (q.contains("батаре") || q.contains("заряд") || q.contains("аккумулятор") || q.contains("сколько процентов")) {
             return FastRouteResult.HandledLocally(

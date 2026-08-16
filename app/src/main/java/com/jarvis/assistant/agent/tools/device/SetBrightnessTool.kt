@@ -59,7 +59,11 @@ class SetBrightnessTool @Inject constructor(
         putJsonObject("properties") {
             putJsonObject("percent") {
                 put("type", "number")
-                put("description", "Целевая яркость в процентах (0-100). Если не указана — вернуть текущую яркость")
+                put("description", "Целевая яркость в процентах (0-100). Если не указана и delta не указан — вернуть текущую яркость")
+            }
+            putJsonObject("delta") {
+                put("type", "number")
+                put("description", "Относительное изменение яркости в процентах (-100..100): текущая яркость + delta. Пример: 'увеличь на 20' → delta=20")
             }
         }
     }
@@ -67,13 +71,27 @@ class SetBrightnessTool @Inject constructor(
     override suspend fun execute(arguments: JsonObject): ToolExecutionResult {
         val requested = arguments["percent"]?.jsonPrimitive?.intOrNull
             ?: arguments["level"]?.jsonPrimitive?.intOrNull
+        val delta = arguments["delta"]?.jsonPrimitive?.intOrNull
 
-        if (requested == null) {
+        if (requested == null && delta == null) {
             return readCurrentBrightness()
         }
 
-        val targetPercent = requested.coerceIn(0, 100)
+        // Абсолютное значение или относительное смещение от текущей яркости.
+        val targetPercent = if (delta != null) {
+            val current = currentBrightnessPercent()
+            if (current < 0) {
+                return ToolExecutionResult.failure(
+                    summary = "Не удалось прочитать текущую яркость для расчёта изменения",
+                    error = "BRIGHTNESS_READ_FAILED"
+                )
+            }
+            (current + delta).coerceIn(0, 100)
+        } else {
+            requested!!.coerceIn(0, 100)
+        }
 
+        // Алгоритм: canWrite() → YES: изменить яркость / NO: системное разрешение.
         if (!capabilities.canWriteSystemSettings()) {
             val opened = openWriteSettingsScreen()
             return ToolExecutionResult.userActionRequired(
@@ -91,7 +109,9 @@ class SetBrightnessTool @Inject constructor(
             )
         }
 
+        // Сохраняем старое значение (и режим автояркости) для rollback.
         val previousPercent = currentBrightnessPercent()
+        val previousMode = currentBrightnessMode()
 
         return try {
             // Автояркость перетирает ручное значение — отключаем её перед записью.
@@ -111,8 +131,12 @@ class SetBrightnessTool @Inject constructor(
                 data = buildJsonObject {
                     put("percent", targetPercent)
                     put("previous_percent", previousPercent)
+                    put("previous_mode", previousMode)
                 },
-                rollbackData = buildJsonObject { put("previous_percent", previousPercent) }
+                rollbackData = buildJsonObject {
+                    put("previous_percent", previousPercent)
+                    put("previous_mode", previousMode)
+                }
             )
         } catch (e: SecurityException) {
             ToolExecutionResult.userActionRequired(
@@ -133,6 +157,11 @@ class SetBrightnessTool @Inject constructor(
         if (!capabilities.canWriteSystemSettings()) return false
         return try {
             Settings.System.putInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS, percentToRaw(previous))
+            // Если до нашего вмешательства автояркость была включена — возвращаем её.
+            val previousMode = rollbackData.get("previous_mode")?.jsonPrimitive?.intOrNull
+            if (previousMode != null) {
+                Settings.System.putInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE, previousMode)
+            }
             true
         } catch (_: SecurityException) {
             false
@@ -159,6 +188,12 @@ class SetBrightnessTool @Inject constructor(
         (raw * 100f / MAX_RAW_BRIGHTNESS).roundToInt().coerceIn(0, 100)
     } catch (_: Settings.SettingNotFoundException) {
         -1
+    }
+
+    private fun currentBrightnessMode(): Int = try {
+        Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE)
+    } catch (_: Settings.SettingNotFoundException) {
+        Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL
     }
 
     private fun percentToRaw(percent: Int): Int =
