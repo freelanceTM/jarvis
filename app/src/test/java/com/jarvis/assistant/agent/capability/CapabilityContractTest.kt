@@ -87,6 +87,46 @@ class CapabilityContractTest {
     }
 
     @Test
+    fun `call tool always requires confirmation before dialing`() {
+        val tool = TestTool(
+            "communication.call",
+            ToolRisk.CONFIRMATION_REQUIRED,
+            ToolCapabilityContract(
+                capabilities = setOf(DeviceCapability.PLACE_CALL_DIRECTLY),
+                requiredPermissions = listOf("android.permission.CALL_PHONE"),
+                dangerLevel = DangerLevel.MEDIUM,
+                confirmationRequired = true
+            )
+        )
+        val registry = FakeCapabilityRegistry.create().grant("android.permission.CALL_PHONE")
+        val manager = ToolPermissionManager(registry)
+
+        // Даже с выданным разрешением звонок не выполняется без подтверждения.
+        assertFalse(manager.isExecutionAllowed(tool, emptyCall))
+        assertTrue(manager.preflight(tool, emptyCall) is PreflightVerdict.ConfirmationRequired)
+    }
+
+    @Test
+    fun `call tool without permission is not allowed and never returns success`() {
+        val tool = TestTool(
+            "communication.call",
+            ToolRisk.CONFIRMATION_REQUIRED,
+            ToolCapabilityContract(
+                capabilities = setOf(DeviceCapability.PLACE_CALL_DIRECTLY),
+                requiredPermissions = listOf("android.permission.CALL_PHONE"),
+                dangerLevel = DangerLevel.MEDIUM,
+                confirmationRequired = true
+            )
+        )
+        // Разрешение НЕ выдано
+        val manager = ToolPermissionManager(FakeCapabilityRegistry.create())
+
+        assertFalse(manager.isExecutionAllowed(tool, emptyCall))
+        // Гейт подтверждения срабатывает первым — звонок не выполняется молча.
+        assertTrue(manager.preflight(tool, emptyCall) is PreflightVerdict.ConfirmationRequired)
+    }
+
+    @Test
     fun `tool whose every capability is unsupported is rejected`() {
         val tool = TestTool(
             "device.screenshot",

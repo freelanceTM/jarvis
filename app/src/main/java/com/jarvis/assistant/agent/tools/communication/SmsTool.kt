@@ -2,8 +2,6 @@ package com.jarvis.assistant.agent.tools.communication
 
 import android.Manifest
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.telephony.SmsManager
 import com.jarvis.assistant.agent.capability.CapabilityStatus
 import com.jarvis.assistant.agent.capability.DangerLevel
@@ -152,22 +150,11 @@ class SmsTool @Inject constructor(
     }
 
     /**
-     * Открывает SMS-приложение с подготовленным текстом. Используется как
-     * альтернативный путь, когда пользователь не хочет выдавать SEND_SMS.
+     * Открытие SMS-композера как «отправка» сознательно удалено: раньше это
+     * приводило к классу ошибок «композер открыт → сообщение отправлено».
+     * Единственный путь отправки — SEND_SMS через [SmsManager]; без разрешения
+     * возвращается PERMISSION_REQUIRED, без фальшивого SUCCESS.
      */
-    fun openComposer(phoneNumber: String, message: String): Boolean {
-        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$phoneNumber")).apply {
-            putExtra("sms_body", message)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        if (intent.resolveActivity(context.packageManager) == null) return false
-        return try {
-            context.startActivity(intent)
-            true
-        } catch (_: android.content.ActivityNotFoundException) {
-            false
-        }
-    }
 
     @Suppress("DEPRECATION")
     private fun smsManager(): SmsManager? =
