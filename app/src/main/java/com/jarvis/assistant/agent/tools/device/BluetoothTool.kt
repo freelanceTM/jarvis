@@ -7,6 +7,7 @@ import com.jarvis.assistant.agent.capability.CapabilityStatus
 import com.jarvis.assistant.agent.capability.DangerLevel
 import com.jarvis.assistant.agent.capability.DeviceCapability
 import com.jarvis.assistant.agent.capability.DeviceCapabilityRegistry
+import com.jarvis.assistant.agent.capability.JarvisCapability
 import com.jarvis.assistant.agent.capability.ToolCapabilityContract
 import com.jarvis.assistant.agent.core.CapabilityAwareTool
 import com.jarvis.assistant.agent.core.ToolCategory
@@ -53,6 +54,7 @@ class BluetoothTool @Inject constructor(
         requiredPermissions = capabilities.bluetoothReadPermissions(),
         dangerLevel = DangerLevel.LOW
     )
+    override val capability: JarvisCapability = JarvisCapability.Bluetooth
 
     override val parametersSchema: JsonObject = buildJsonObject {
         put("type", "object")

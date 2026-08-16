@@ -10,6 +10,7 @@ import android.provider.Settings
 import com.jarvis.assistant.agent.capability.DangerLevel
 import com.jarvis.assistant.agent.capability.DeviceCapability
 import com.jarvis.assistant.agent.capability.DeviceCapabilityRegistry
+import com.jarvis.assistant.agent.capability.JarvisCapability
 import com.jarvis.assistant.agent.capability.ToolCapabilityContract
 import com.jarvis.assistant.agent.core.CapabilityAwareTool
 import com.jarvis.assistant.agent.core.ToolCategory
@@ -52,6 +53,7 @@ class WifiTool @Inject constructor(
         ),
         dangerLevel = DangerLevel.LOW
     )
+    override val capability: JarvisCapability = JarvisCapability.Wifi
 
     override val parametersSchema: JsonObject = buildJsonObject {
         put("type", "object")

@@ -5,7 +5,11 @@ import android.content.Intent
 import android.net.Uri
 import com.jarvis.assistant.agent.apps.AppResolution
 import com.jarvis.assistant.agent.apps.AppResolver
-import com.jarvis.assistant.agent.core.JarvisTool
+import com.jarvis.assistant.agent.capability.DangerLevel
+import com.jarvis.assistant.agent.capability.DeviceCapability
+import com.jarvis.assistant.agent.capability.JarvisCapability
+import com.jarvis.assistant.agent.capability.ToolCapabilityContract
+import com.jarvis.assistant.agent.core.CapabilityAwareTool
 import com.jarvis.assistant.agent.core.ToolCategory
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
@@ -30,7 +34,7 @@ import javax.inject.Singleton
 class OpenAppTool @Inject constructor(
     @ApplicationContext private val context: Context,
     private val appResolver: AppResolver
-) : JarvisTool {
+) : CapabilityAwareTool {
 
     override val toolId: String = "device.open_app"
     override val description: String = "Открывает установленное приложение на телефоне по названию (Telegram, YouTube, WhatsApp, Камера, Chrome, Карты, Настройки)"
@@ -38,6 +42,12 @@ class OpenAppTool @Inject constructor(
     override val riskLevel: ToolRisk = ToolRisk.LOW
     override val isOffline: Boolean = true
     override val requiresForeground: Boolean = true
+
+    override val capabilityContract = ToolCapabilityContract(
+        capabilities = setOf(DeviceCapability.OPEN_APP),
+        dangerLevel = DangerLevel.LOW
+    )
+    override val capability: JarvisCapability = JarvisCapability.Apps
 
     override val parametersSchema: JsonObject = buildJsonObject {
         put("type", "object")

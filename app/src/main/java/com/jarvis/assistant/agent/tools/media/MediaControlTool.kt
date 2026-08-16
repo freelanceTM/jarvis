@@ -3,7 +3,11 @@ package com.jarvis.assistant.agent.tools.media
 import android.content.Context
 import android.media.AudioManager
 import android.view.KeyEvent
-import com.jarvis.assistant.agent.core.JarvisTool
+import com.jarvis.assistant.agent.capability.DangerLevel
+import com.jarvis.assistant.agent.capability.DeviceCapability
+import com.jarvis.assistant.agent.capability.JarvisCapability
+import com.jarvis.assistant.agent.capability.ToolCapabilityContract
+import com.jarvis.assistant.agent.core.CapabilityAwareTool
 import com.jarvis.assistant.agent.core.ToolCategory
 import com.jarvis.assistant.agent.media.MediaIntent
 import com.jarvis.assistant.agent.media.MediaIntentParser
@@ -17,7 +21,7 @@ import javax.inject.Singleton
 @Singleton
 class MediaControlTool @Inject constructor(
     @ApplicationContext private val context: Context
-) : JarvisTool {
+) : CapabilityAwareTool {
 
     override val toolId: String = "media.control"
     override val description: String = "Управляет воспроизведением музыки и видео (плей, пауза, следующий трек, предыдущий трек)"
@@ -25,6 +29,12 @@ class MediaControlTool @Inject constructor(
     override val riskLevel: ToolRisk = ToolRisk.LOW
     override val isOffline: Boolean = true
     override val supportsParallel: Boolean = true
+
+    override val capabilityContract = ToolCapabilityContract(
+        capabilities = setOf(DeviceCapability.CONTROL_MEDIA),
+        dangerLevel = DangerLevel.LOW
+    )
+    override val capability: JarvisCapability = JarvisCapability.Media
 
     override val parametersSchema: JsonObject = buildJsonObject {
         put("type", "object")

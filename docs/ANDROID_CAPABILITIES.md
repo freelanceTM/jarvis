@@ -18,6 +18,39 @@ Android. Правило проекта:
 
 ---
 
+## Android Capability Layer (`JarvisCapability`)
+
+Отдельный слой возможностей устройства — `agent/capability/JarvisCapability.kt`.
+Группа (домен) → набор листовых проверок (`DeviceCapability`), которые реально
+выполняет `DeviceCapabilityRegistry` (API-level, hardware, permission model):
+
+| Группа | Листовые возможности |
+|---|---|
+| `device.bluetooth` | чтение состояния, переключение (только до Android 12), системный экран |
+| `device.wifi` | чтение состояния, панель Wi-Fi (переключение — `USER_ACTION_REQUIRED`) |
+| `device.brightness` | чтение, запись (`WRITE_SETTINGS`), настройки экрана |
+| `device.screenshot` | AccessibilityService (API 30+), MediaProjection (согласие) |
+| `device.apps` | запуск установленных приложений |
+| `communication.sms` | прямая отправка (`SEND_SMS`), композер |
+| `communication.call` | прямой вызов (`CALL_PHONE`), номеронабиратель |
+| `media` | управление воспроизведением |
+| `accessibility` | служба специальных возможностей JARVIS |
+| `location` | определение местоположения (`LocationProvider`) |
+
+Каждый инструмент домена реализует `CapabilityAwareTool` и объявляет:
+`capabilityContract` (листовые гейты для preflight) и `capability` (группа слоя).
+
+Статус группы — агрегация листьев по принципу «лучший доступный путь»:
+`Available`, если есть хотя бы один рабочий путь; иначе — самый действенный
+блокер: `PERMISSION_REQUIRED` (разрешения объединяются) →
+`USER_ACTION_REQUIRED` → `UNSUPPORTED`. Снимок всего слоя:
+`DeviceCapabilityRegistry.snapshotByGroup()`.
+
+Слой расширяемый: новый домен = объект-группа + листовые проверки в
+`DeviceCapability` и `DeviceCapabilityRegistry`.
+
+---
+
 ## Bluetooth (`device.bluetooth`)
 
 | Возможность | Статус | Причина |

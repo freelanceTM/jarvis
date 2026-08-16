@@ -3,7 +3,10 @@ package com.jarvis.assistant.agent.tools.location
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import com.jarvis.assistant.agent.core.JarvisTool
+import com.jarvis.assistant.agent.capability.DangerLevel
+import com.jarvis.assistant.agent.capability.JarvisCapability
+import com.jarvis.assistant.agent.capability.ToolCapabilityContract
+import com.jarvis.assistant.agent.core.CapabilityAwareTool
 import com.jarvis.assistant.agent.core.ToolCategory
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
@@ -16,7 +19,7 @@ import javax.inject.Singleton
 @Singleton
 class LocationNavigationTool @Inject constructor(
     @ApplicationContext private val context: Context
-) : JarvisTool {
+) : CapabilityAwareTool {
 
     override val toolId: String = "location.navigation"
     override val description: String = "Запускает навигатор по адресу или координатам в Google Maps или Яндекс Картах"
@@ -24,6 +27,15 @@ class LocationNavigationTool @Inject constructor(
     override val riskLevel: ToolRisk = ToolRisk.LOW
     override val isOffline: Boolean = false
     override val requiresForeground: Boolean = true
+
+    // Открытие карт не требует разрешения на локацию (её запрашивает само
+    // навигационное приложение), поэтому листовых гейтов нет — группа
+    // объявлена для Android Capability Layer и дисконери.
+    override val capabilityContract = ToolCapabilityContract(
+        capabilities = emptySet(),
+        dangerLevel = DangerLevel.LOW
+    )
+    override val capability: JarvisCapability = JarvisCapability.Location
 
     override val parametersSchema: JsonObject = buildJsonObject {
         put("type", "object")

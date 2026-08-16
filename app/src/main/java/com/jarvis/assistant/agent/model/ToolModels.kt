@@ -188,5 +188,7 @@ data class ToolDefinition(
     val isOffline: Boolean,
     val executionTimeoutMs: Long,
     val supportsParallel: Boolean,
-    val requiresForeground: Boolean
+    val requiresForeground: Boolean,
+    /** Группа Android Capability Layer (например, "device.bluetooth"), если применимо. */
+    val capabilityId: String? = null
 )

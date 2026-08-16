@@ -3,7 +3,11 @@ package com.jarvis.assistant.agent.tools.accessibility
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
-import com.jarvis.assistant.agent.core.JarvisTool
+import com.jarvis.assistant.agent.capability.DangerLevel
+import com.jarvis.assistant.agent.capability.DeviceCapability
+import com.jarvis.assistant.agent.capability.JarvisCapability
+import com.jarvis.assistant.agent.capability.ToolCapabilityContract
+import com.jarvis.assistant.agent.core.CapabilityAwareTool
 import com.jarvis.assistant.agent.core.ToolCategory
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
@@ -15,7 +19,7 @@ import javax.inject.Singleton
 @Singleton
 class UiClickTool @Inject constructor(
     @ApplicationContext private val context: Context
-) : JarvisTool {
+) : CapabilityAwareTool {
 
     override val toolId: String = "accessibility.ui_click"
     override val description: String = "Нажимает на элемент интерфейса по его тексту или описанию (требует включения Accessibility Service)"
@@ -24,6 +28,12 @@ class UiClickTool @Inject constructor(
     override val isOffline: Boolean = true
     override val requiresForeground: Boolean = true
     override val executionTimeoutMs: Long = 5000L
+
+    override val capabilityContract = ToolCapabilityContract(
+        capabilities = setOf(DeviceCapability.USE_ACCESSIBILITY_SERVICE),
+        dangerLevel = DangerLevel.LOW
+    )
+    override val capability: JarvisCapability = JarvisCapability.Accessibility
 
     override val parametersSchema: JsonObject = buildJsonObject {
         put("type", "object")
@@ -49,16 +59,25 @@ class UiClickTool @Inject constructor(
         // КРИТИЧНО: Проверяем, включён ли Accessibility Service
         if (!JarvisAccessibilityService.isServiceRunning()) {
             // Открываем настройки Accessibility для пользователя
-            try {
+            val opened = try {
                 val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 context.startActivity(intent)
-            } catch (_: Exception) { }
+                true
+            } catch (_: Exception) {
+                false
+            }
 
-            return ToolExecutionResult.failure(
-                summary = "Для управления интерфейсом необходимо включить JARVIS Accessibility Service в настройках. Открываю настройки специальных возможностей.",
-                error = "ACCESSIBILITY_SERVICE_DISABLED"
+            // Честный статус: действие НЕ выполнено, нужен пользователь в системном UI.
+            return ToolExecutionResult.userActionRequired(
+                summary = if (opened) {
+                    "Для управления интерфейсом необходимо включить JARVIS Accessibility Service. Открыл настройки специальных возможностей."
+                } else {
+                    "Для управления интерфейсом необходимо включить JARVIS Accessibility Service в настройках."
+                },
+                reason = "ACCESSIBILITY_SERVICE_DISABLED",
+                data = buildJsonObject { put("opened_settings", opened) }
             )
         }
 

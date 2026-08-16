@@ -169,7 +169,19 @@ class DeviceCapabilityRegistry @Inject constructor(
             else CapabilityStatus.Unsupported("На устройстве нет вспышки")
 
         DeviceCapability.CONTROL_VOLUME -> CapabilityStatus.Available
+
+        DeviceCapability.OPEN_APP -> CapabilityStatus.Available
+
+        DeviceCapability.USE_ACCESSIBILITY_SERVICE ->
+            if (JarvisAccessibilityService.isServiceRunning()) CapabilityStatus.Available
+            else CapabilityStatus.UserActionRequired("Служба специальных возможностей JARVIS не включена")
     }
+
+    /**
+     * Статус группы Android Capability Layer: агрегация листовых проверок.
+     */
+    override fun statusOf(capability: JarvisCapability): CapabilityStatus =
+        aggregateCapabilityStatus(capability.leaves.map { statusOf(it) })
 
     fun bluetoothTogglePermissions(): List<String> =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -197,4 +209,11 @@ class DeviceCapabilityRegistry @Inject constructor(
      */
     fun snapshot(): Map<DeviceCapability, CapabilityStatus> =
         DeviceCapability.entries.associateWith { statusOf(it) }
+
+    /**
+     * Снимок Android Capability Layer по группам — для планирования и
+     * диагностики на уровне доменов (device.bluetooth, communication.sms, ...).
+     */
+    fun snapshotByGroup(): Map<JarvisCapability, CapabilityStatus> =
+        JarvisCapability.all.associateWith { statusOf(it) }
 }

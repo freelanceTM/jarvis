@@ -8,6 +8,7 @@ import com.jarvis.assistant.agent.capability.CapabilityStatus
 import com.jarvis.assistant.agent.capability.DangerLevel
 import com.jarvis.assistant.agent.capability.DeviceCapability
 import com.jarvis.assistant.agent.capability.DeviceCapabilityRegistry
+import com.jarvis.assistant.agent.capability.JarvisCapability
 import com.jarvis.assistant.agent.capability.ToolCapabilityContract
 import com.jarvis.assistant.agent.core.CapabilityAwareTool
 import com.jarvis.assistant.agent.core.ToolCategory
@@ -54,6 +55,7 @@ class ScreenshotTool @Inject constructor(
         capabilities = setOf(DeviceCapability.TAKE_SCREENSHOT_ACCESSIBILITY),
         dangerLevel = DangerLevel.MEDIUM
     )
+    override val capability: JarvisCapability = JarvisCapability.Screenshot
 
     override val parametersSchema: JsonObject = buildJsonObject {
         put("type", "object")

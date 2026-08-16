@@ -1,5 +1,6 @@
 package com.jarvis.assistant.agent.core
 
+import com.jarvis.assistant.agent.capability.JarvisCapability
 import com.jarvis.assistant.agent.capability.ToolCapabilityContract
 import com.jarvis.assistant.agent.model.ToolDefinition
 import com.jarvis.assistant.agent.model.ToolExecutionResult
@@ -49,7 +50,8 @@ interface JarvisTool {
         isOffline = isOffline,
         executionTimeoutMs = executionTimeoutMs,
         supportsParallel = supportsParallel,
-        requiresForeground = requiresForeground
+        requiresForeground = requiresForeground,
+        capabilityId = (this as? CapabilityAwareTool)?.capability?.id
     )
 
     /**
@@ -74,6 +76,14 @@ interface JarvisTool {
  */
 interface CapabilityAwareTool : JarvisTool {
     val capabilityContract: ToolCapabilityContract
+
+    /**
+     * Группа Android Capability Layer, к которой относится инструмент
+     * (например, [JarvisCapability.Bluetooth] для device.bluetooth).
+     * `null`, если инструмент не привязан ни к одному домену слоя.
+     */
+    val capability: JarvisCapability?
+        get() = null
 
     override val requiresConfirmation: Boolean
         get() = capabilityContract.confirmationRequired ||

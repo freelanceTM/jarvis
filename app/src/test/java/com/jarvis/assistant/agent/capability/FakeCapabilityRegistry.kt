@@ -12,6 +12,9 @@ class FakeCapabilityRegistry(
     override fun statusOf(capability: DeviceCapability): CapabilityStatus =
         statuses[capability] ?: CapabilityStatus.Available
 
+    override fun statusOf(capability: JarvisCapability): CapabilityStatus =
+        aggregateCapabilityStatus(capability.leaves.map { statusOf(it) })
+
     override fun missingPermissions(permissions: List<String>): List<String> =
         permissions.filterNot { it in grantedPermissions }
 

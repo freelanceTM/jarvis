@@ -35,7 +35,10 @@ enum class DeviceCapability(val id: String, val description: String) {
     CONTROL_DND("control_dnd", "Управление режимом «Не беспокоить»"),
     CONTROL_MEDIA("control_media", "Управление воспроизведением медиа"),
     CONTROL_FLASHLIGHT("control_flashlight", "Управление фонариком"),
-    CONTROL_VOLUME("control_volume", "Управление громкостью")
+    CONTROL_VOLUME("control_volume", "Управление громкостью"),
+
+    OPEN_APP("open_app", "Запуск установленного приложения по названию"),
+    USE_ACCESSIBILITY_SERVICE("use_accessibility_service", "Включённая служба специальных возможностей JARVIS")
 }
 
 /**
@@ -90,6 +93,15 @@ data class ToolCapabilityContract(
  * покрывались обычными unit-тестами.
  */
 interface CapabilityChecker {
+    /** Статус листовой возможности. */
     fun statusOf(capability: DeviceCapability): CapabilityStatus
+
+    /**
+     * Статус группы Android Capability Layer ([JarvisCapability]).
+     * Агрегация листов: Available, если есть хотя бы один рабочий путь;
+     * иначе — наиболее «действенный» блокер (см. [aggregateCapabilityStatus]).
+     */
+    fun statusOf(capability: JarvisCapability): CapabilityStatus
+
     fun missingPermissions(permissions: List<String>): List<String>
 }
