@@ -1,10 +1,5 @@
-# Retrofit & OkHttp
+# OkHttp
 -dontwarn okhttp3.**
--dontwarn retrofit2.**
--keepattributes Signature, InnerClasses, EnclosingMethod
--keepclassmembers,allowobfuscation interface * {
-    @retrofit2.http.* <methods>;
-}
 
 # Kotlinx Serialization
 -keepattributes *Annotation*, InnerClasses

@@ -2,6 +2,7 @@
 .gradle/
 build/
 */build/
+.kotlin/
 gradle-app.setting
 .gradletasknamecache
 
@@ -11,6 +12,7 @@ gradle-app.setting
 *.ap_
 *.dex
 *.class
+*.idsig
 bin/
 gen/
 out/
@@ -22,21 +24,27 @@ local.properties
 # Secrets / signing — никогда не коммитим
 *.jks
 *.keystore
+*.p12
 keystore.properties
 secrets.properties
 google-services.json
 api_keys.properties
 .env
+.env.*
+!.env.example
 
 # IDE
 .idea/
 *.iml
 *.iws
 *.ipr
+.vscode/
 .DS_Store
+Thumbs.db
 captures/
 .externalNativeBuild/
 .cxx/
 
-# Logs
+# Logs & dumps
 *.log
+*.hprof

@@ -51,7 +51,7 @@ android {
     }
 
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.14"
+        kotlinCompilerExtensionVersion = libs.versions.composeCompiler.get()
     }
 
     testOptions {
@@ -93,8 +93,6 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
-    implementation(libs.retrofit.core)
-    implementation(libs.retrofit.converter.kotlinx.serialization)
     implementation(libs.okhttp.core)
     implementation(libs.okhttp.logging)
 
