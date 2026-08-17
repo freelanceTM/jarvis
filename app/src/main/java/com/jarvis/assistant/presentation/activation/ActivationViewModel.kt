@@ -1,11 +1,14 @@
 package com.jarvis.assistant.presentation.activation
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jarvis.assistant.R
 import com.jarvis.assistant.core.license.ActivationResult
 import com.jarvis.assistant.core.license.LicenseInfo
 import com.jarvis.assistant.core.license.LicenseManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -21,6 +24,7 @@ data class ActivationUiState(
 
 @HiltViewModel
 class ActivationViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val licenseManager: LicenseManager
 ) : ViewModel() {
 
@@ -55,7 +59,7 @@ class ActivationViewModel @Inject constructor(
     fun activate() {
         val code = _uiState.value.inputCode.trim()
         if (code.isBlank()) {
-            _uiState.update { it.copy(errorMessage = "Пожалуйста, введите код активации со скретч-карты из коробки.") }
+            _uiState.update { it.copy(errorMessage = context.getString(R.string.pozhaluysta_vvedite_kod)) }
             return
         }
 

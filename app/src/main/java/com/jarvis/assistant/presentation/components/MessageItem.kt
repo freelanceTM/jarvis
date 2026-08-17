@@ -30,8 +30,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import com.jarvis.assistant.domain.models.Message
 import com.jarvis.assistant.domain.models.MessageRole
+import com.jarvis.assistant.R
 import com.jarvis.assistant.presentation.theme.AssistantBorderColor
 import com.jarvis.assistant.presentation.theme.AssistantBubbleColor
 import com.jarvis.assistant.presentation.theme.JarvisCyanPrimary
@@ -88,7 +90,7 @@ fun MessageItem(
                 )
             } else {
                 Text(
-                    text = "Вы",
+                    text = stringResource(R.string.vy),
                     style = MaterialTheme.typography.labelSmall,
                     color = TextSecondary
                 )
@@ -161,7 +163,7 @@ fun MessageItem(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.VolumeUp,
-                                    contentDescription = "Озвучить",
+                                    contentDescription = stringResource(R.string.ozvuchit),
                                     tint = JarvisCyanPrimary,
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -174,7 +176,7 @@ fun MessageItem(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Скопировать",
+                                contentDescription = stringResource(R.string.skopirovat),
                                 tint = TextSecondary,
                                 modifier = Modifier.size(14.dp)
                             )

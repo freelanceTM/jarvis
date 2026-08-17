@@ -30,6 +30,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.jarvis.assistant.R
 import com.jarvis.assistant.presentation.theme.JarvisAmber
 import com.jarvis.assistant.presentation.theme.JarvisCardBackground
 import com.jarvis.assistant.presentation.theme.JarvisGreen
@@ -72,7 +74,7 @@ fun ConfirmationCard(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Подтверждение действия",
+                text = stringResource(R.string.podtverzhdenie_deystviya),
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                 color = JarvisAmber
             )
@@ -95,7 +97,7 @@ fun ConfirmationCard(
                     strokeWidth = 2.dp
                 )
                 Text(
-                    text = "Выполняю…",
+                    text = stringResource(R.string.vypolnyayu),
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary
                 )
@@ -110,7 +112,7 @@ fun ConfirmationCard(
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary)
                 ) {
-                    Text("Отмена", fontSize = 14.sp)
+                    Text(stringResource(R.string.otmena), fontSize = 14.sp)
                 }
                 Button(
                     onClick = onConfirm,
@@ -126,7 +128,7 @@ fun ConfirmationCard(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Подтвердить", fontSize = 14.sp)
+                    Text(stringResource(R.string.podtverdit), fontSize = 14.sp)
                 }
             }
         }

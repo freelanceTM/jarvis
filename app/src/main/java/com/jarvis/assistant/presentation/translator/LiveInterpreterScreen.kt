@@ -22,10 +22,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jarvis.assistant.agent.translator.InterpreterPreset
 import com.jarvis.assistant.agent.translator.LiveTranslatorEngine
+import com.jarvis.assistant.R
 import com.jarvis.assistant.presentation.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,12 +47,12 @@ fun LiveInterpreterScreen(
                 title = {
                     Column {
                         Text(
-                            text = "Синхронный переводчик",
+                            text = stringResource(R.string.sinhronnyy_perevodchik),
                             style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
                             color = TextPrimary
                         )
                         Text(
-                            text = "Перевод речи собеседника прямо в наушник",
+                            text = stringResource(R.string.perevod_rechi_sobesednika_pryamo_v_naushnik),
                             style = MaterialTheme.typography.labelSmall,
                             color = JarvisCyanPrimary
                         )
@@ -60,7 +62,7 @@ fun LiveInterpreterScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Назад",
+                            contentDescription = stringResource(R.string.nazad),
                             tint = JarvisCyanPrimary
                         )
                     }
@@ -70,7 +72,7 @@ fun LiveInterpreterScreen(
                         IconButton(onClick = { viewModel.clearHistory() }) {
                             Icon(
                                 imageVector = Icons.Default.DeleteOutline,
-                                contentDescription = "Очистить историю",
+                                contentDescription = stringResource(R.string.ochistit_istoriyu),
                                 tint = TextSecondary
                             )
                         }
@@ -148,7 +150,7 @@ fun LiveInterpreterScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.SwapHoriz,
-                            contentDescription = "Поменять языки",
+                            contentDescription = stringResource(R.string.pomenyat_yazyki),
                             tint = JarvisCyanPrimary,
                             modifier = Modifier.size(20.dp)
                         )
@@ -244,11 +246,11 @@ fun LiveInterpreterScreen(
                         Text(
                             text = when {
                                 uiState.partialRecognizedText.isNotBlank() ->
-                                    "Слышу: \"${uiState.partialRecognizedText}\""
+                                    stringResource(R.string.slyshu, uiState.partialRecognizedText)
                                 uiState.preset == InterpreterPreset.AUTO ->
-                                    "Слушаю собеседника (язык определяется автоматически)..."
+                                    stringResource(R.string.slushayu_sobesednika_yazyk_opredelyaetsya_avtomaticheski)
                                 else ->
-                                    "Слушаю речь собеседника на ${uiState.sourceLanguage.displayName}..."
+                                    stringResource(R.string.slushayu_rech_sobesednika, uiState.sourceLanguage.displayName)
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             color = JarvisCyanPrimary
@@ -281,13 +283,13 @@ fun LiveInterpreterScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "Режим Ear Interpreter",
+                            text = stringResource(R.string.rezhim_ear_interpreter),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = TextPrimary
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Наденьте наушник и нажмите кнопку ниже. JARVIS будет слушать собеседника и синхронно переводить фразу прямо вам в ухо.",
+                            text = stringResource(R.string.nadente_naushnik_i_nazhmite_knopku_nizhe_jarvis_budet_slusha),
                             style = MaterialTheme.typography.bodyMedium,
                             color = TextTertiary,
                             textAlign = TextAlign.Center
@@ -329,7 +331,7 @@ fun LiveInterpreterScreen(
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = if (uiState.isListening) "Остановить перевод" else "Слушать перевод в наушник",
+                        text = if (uiState.isListening) stringResource(R.string.ostanovit_perevod) else stringResource(R.string.slushat_perevod_v_naushnik),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = JarvisBackground
@@ -358,7 +360,7 @@ fun TranslationStreamCard(item: TranslationItem) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Собеседник (${item.sourceLang}):",
+                    text = stringResource(R.string.sobesednik, item.sourceLang),
                     style = MaterialTheme.typography.labelSmall,
                     color = TextTertiary
                 )
@@ -393,7 +395,7 @@ fun TranslationStreamCard(item: TranslationItem) {
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Перевод в ухо (${item.targetLang}):",
+                        text = stringResource(R.string.perevod_v_uho, item.targetLang),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = JarvisCyanPrimary
                     )

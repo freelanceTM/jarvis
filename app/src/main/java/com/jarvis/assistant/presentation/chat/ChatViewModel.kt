@@ -1,7 +1,9 @@
 package com.jarvis.assistant.presentation.chat
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jarvis.assistant.R
 import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.model.ToolCall
 import com.jarvis.assistant.core.confirmation.ConfirmationIntent
@@ -18,6 +20,7 @@ import com.jarvis.assistant.voice.stt.SpeechRecognitionEvent
 import com.jarvis.assistant.voice.stt.SpeechRecognizerManager
 import com.jarvis.assistant.voice.tts.TextToSpeechManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -44,6 +47,7 @@ data class ChatUiState(
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val getChatHistoryUseCase: GetChatHistoryUseCase,
     private val clearChatHistoryUseCase: ClearChatHistoryUseCase,
     private val sendPromptUseCase: SendPromptUseCase,
@@ -157,8 +161,8 @@ class ChatViewModel @Inject constructor(
                     }
                 }
                 is Resource.Error -> {
-                    val errorMsg = result.message ?: "Ошибка выполнения запроса"
-                    textToSpeechManager.speak("Ошибка: $errorMsg", speechRate, speechPitch)
+                    val errorMsg = result.message ?: context.getString(R.string.oshibka_vypolneniya_zaprosa)
+                    textToSpeechManager.speak(context.getString(R.string.oshibka, errorMsg), speechRate, speechPitch)
                 }
                 is Resource.Loading -> Unit
             }
@@ -183,9 +187,9 @@ class ChatViewModel @Inject constructor(
                 source = "chat_ui"
             )
             val voiceResponse = when {
-                result.isSuccess -> "${result.summary}, сэр."
+                result.isSuccess -> context.getString(R.string.s_sir, result.summary)
                 result.isBlockedByAndroid -> result.summary
-                else -> "Не удалось выполнить: ${result.error ?: result.summary}"
+                else -> context.getString(R.string.ne_udalos_vypolnit, result.error ?: result.summary)
             }
             messageRepository.insertMessage(
                 Message(
@@ -220,7 +224,7 @@ class ChatViewModel @Inject constructor(
         toolExecutor.removePendingConfirmation(pending.toolCall)
 
         viewModelScope.launch {
-            val cancelMsg = "Операция отменена, сэр."
+            val cancelMsg = context.getString(R.string.operaciya_otmenena_sir)
             messageRepository.insertMessage(
                 Message(
                     role = MessageRole.ASSISTANT,

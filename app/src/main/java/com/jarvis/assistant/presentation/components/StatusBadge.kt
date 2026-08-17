@@ -28,6 +28,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.jarvis.assistant.R
 import com.jarvis.assistant.presentation.theme.JarvisGreen
 import com.jarvis.assistant.presentation.theme.JarvisRed
 import com.jarvis.assistant.presentation.theme.JarvisSurfaceVariant
@@ -49,7 +51,7 @@ fun StatusBadgeRow(
         // Network Status Badge
         StatusChip(
             icon = if (isOnline) Icons.Default.Wifi else Icons.Default.WifiOff,
-            label = if (isOnline) "Онлайн" else "Офлайн",
+            label = if (isOnline) stringResource(R.string.onlayn) else stringResource(R.string.oflayn),
             isActive = isOnline,
             activeColor = JarvisGreen,
             inactiveColor = JarvisRed
@@ -58,7 +60,7 @@ fun StatusBadgeRow(
         // Mic Status Badge
         StatusChip(
             icon = if (isMicActive) Icons.Default.Mic else Icons.Default.MicOff,
-            label = if (isMicActive) "Микрофон активен" else "Микрофон свободен",
+            label = if (isMicActive) stringResource(R.string.mikrofon_aktiven) else stringResource(R.string.mikrofon_svoboden),
             isActive = isMicActive,
             activeColor = JarvisGreen,
             inactiveColor = TextSecondary
@@ -68,7 +70,7 @@ fun StatusBadgeRow(
         if (isBluetoothConnected) {
             StatusChip(
                 icon = Icons.Default.Bluetooth,
-                label = "Гарнитура",
+                label = stringResource(R.string.garnitura),
                 isActive = true,
                 activeColor = JarvisGreen,
                 inactiveColor = TextSecondary

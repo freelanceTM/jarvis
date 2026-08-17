@@ -26,10 +26,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jarvis.assistant.domain.models.VoiceAssistantState
+import com.jarvis.assistant.R
 import com.jarvis.assistant.presentation.components.JarvisOrbVisualizer
 import com.jarvis.assistant.presentation.components.StatusBadgeRow
 import com.jarvis.assistant.presentation.theme.*
@@ -113,7 +115,7 @@ fun MainScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Translate,
-                            contentDescription = "Синхронный переводчик в ухе",
+                            contentDescription = stringResource(R.string.sinhronnyy_perevodchik_v_uhe),
                             tint = JarvisCyanPrimary
                         )
                     }
@@ -126,7 +128,7 @@ fun MainScreen(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Chat,
-                            contentDescription = "Режим чата",
+                            contentDescription = stringResource(R.string.rezhim_chata),
                             tint = JarvisCyanPrimary
                         )
                     }
@@ -139,7 +141,7 @@ fun MainScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Settings,
-                            contentDescription = "Настройки",
+                            contentDescription = stringResource(R.string.nastroyki),
                             tint = TextSecondary
                         )
                     }
@@ -239,7 +241,7 @@ fun MainScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (uiState.isBackgroundServiceActive) "Остановить JARVIS" else "Запустить JARVIS",
+                            text = if (uiState.isBackgroundServiceActive) stringResource(R.string.ostanovit_jarvis) else stringResource(R.string.zapustit_jarvis),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = JarvisBackground
@@ -263,7 +265,7 @@ fun MainScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(imageVector = Icons.Default.Forum, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Чат", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.chat), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -290,14 +292,14 @@ fun MainScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Диалог в реальном времени:",
+                            text = stringResource(R.string.dialog_v_realnom_vremeni),
                             style = MaterialTheme.typography.labelSmall,
                             color = JarvisCyanPrimary
                         )
 
                         if (uiState.orchestratorMode == OrchestratorMode.TTS_SPEAKING) {
                             Text(
-                                text = "Прервать: «Джарвис, стоп»",
+                                text = stringResource(R.string.prervat_dzharvis_stop),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = JarvisAmber
                             )
@@ -308,9 +310,9 @@ fun MainScreen(
 
                     Text(
                         text = if (uiState.lastUserQuery.isNotEmpty()) {
-                            "Вы: ${uiState.lastUserQuery}"
+                            stringResource(R.string.vy_s, uiState.lastUserQuery)
                         } else {
-                            "Скажите «Джарвис» в наушник или нажмите «Запустить JARVIS»..."
+                            stringResource(R.string.skazhite_dzharvis_v_naushnik_ili_nazhmite_zapustit_jarvis)
                         },
                         style = MaterialTheme.typography.bodyLarge,
                         color = if (uiState.lastUserQuery.isNotEmpty()) TextPrimary else TextTertiary
@@ -327,7 +329,7 @@ fun MainScreen(
                         Spacer(modifier = Modifier.height(10.dp))
 
                         Text(
-                            text = "JARVIS: ${uiState.lastAssistantResponse}",
+                            text = stringResource(R.string.jarvis_s, uiState.lastAssistantResponse),
                             style = MaterialTheme.typography.bodyMedium,
                             color = TextSecondary
                         )
@@ -342,19 +344,19 @@ fun MainScreen(
 fun WakeWordStatusBanner(mode: OrchestratorMode, state: VoiceAssistantState, isHeadsetConnected: Boolean) {
     val (label, color) = when (mode) {
         OrchestratorMode.STANDBY_WAKE_WORD -> {
-            if (isHeadsetConnected) "● JARVIS слушает в наушнике (Скажите «Джарвис»)" to JarvisCyanPrimary
-            else "● Подключите наушники для работы" to JarvisAmber
+            if (isHeadsetConnected) stringResource(R.string.jarvis_slushaet_v_naushnike_skazhite_dzharvis) to JarvisCyanPrimary
+            else stringResource(R.string.podklyuchite_naushniki_dlya_raboty) to JarvisAmber
         }
-        OrchestratorMode.VERIFYING_KEYWORD -> "● Анализ..." to JarvisCyanPrimary
-        OrchestratorMode.LISTENING_USER_QUERY -> "● Слушаю ваш запрос..." to JarvisGreen
-        OrchestratorMode.CONTINUOUS_CONVERSATION -> "● Слушаю продолжение (говорите без «Джарвис»)..." to JarvisGreen
-        OrchestratorMode.AI_THINKING -> "● Выполнение команды..." to JarvisCyanSecondary
-        OrchestratorMode.TTS_SPEAKING -> "● Озвучивание (скажите «Стоп» для отмены)" to JarvisCyanPrimary
-        OrchestratorMode.AWAITING_CONFIRMATION -> "● Ожидание подтверждения (скажите «Да» или «Нет»)..." to JarvisAmber
-        OrchestratorMode.LIVE_EAR_INTERPRETER -> "● Синхронный переводчик в ухе (слушаю собеседника)..." to JarvisCyanPrimary
+        OrchestratorMode.VERIFYING_KEYWORD -> stringResource(R.string.analiz) to JarvisCyanPrimary
+        OrchestratorMode.LISTENING_USER_QUERY -> stringResource(R.string.slushayu_vash_zapros) to JarvisGreen
+        OrchestratorMode.CONTINUOUS_CONVERSATION -> stringResource(R.string.slushayu_prodolzhenie_govorite_bez_dzharvis) to JarvisGreen
+        OrchestratorMode.AI_THINKING -> stringResource(R.string.vypolnenie_komandy) to JarvisCyanSecondary
+        OrchestratorMode.TTS_SPEAKING -> stringResource(R.string.ozvuchivanie_skazhite_stop_dlya_otmeny) to JarvisCyanPrimary
+        OrchestratorMode.AWAITING_CONFIRMATION -> stringResource(R.string.ozhidanie_podtverzhdeniya_skazhite_da_ili_net) to JarvisAmber
+        OrchestratorMode.LIVE_EAR_INTERPRETER -> stringResource(R.string.sinhronnyy_perevodchik_v_uhe_slushayu_sobesednika) to JarvisCyanPrimary
         OrchestratorMode.PAUSED_CALL_OR_SLEEP -> {
-            if (!isHeadsetConnected) "● Наушники отключены (Пауза)" to JarvisAmber
-            else "● Энергосбережение / Сервис остановлен" to TextTertiary
+            if (!isHeadsetConnected) stringResource(R.string.naushniki_otklyucheny_pauza) to JarvisAmber
+            else stringResource(R.string.energosberezhenie_servis_ostanovlen) to TextTertiary
         }
     }
 

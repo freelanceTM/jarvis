@@ -24,8 +24,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.jarvis.assistant.R
 import com.jarvis.assistant.presentation.components.ConfirmationCard
 import com.jarvis.assistant.presentation.components.MessageItem
 import com.jarvis.assistant.presentation.theme.*
@@ -54,12 +56,12 @@ fun ChatScreen(
                 title = {
                     Column {
                         Text(
-                            text = "Чат с JARVIS",
+                            text = stringResource(R.string.chat_s_jarvis),
                             style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
                             color = TextPrimary
                         )
                         Text(
-                            text = "Текстовый и голосовой режим диалога",
+                            text = stringResource(R.string.tekstovyy_i_golosovoy_rezhim_dialoga),
                             style = MaterialTheme.typography.labelSmall,
                             color = TextTertiary
                         )
@@ -69,7 +71,7 @@ fun ChatScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Назад",
+                            contentDescription = stringResource(R.string.nazad),
                             tint = JarvisCyanPrimary
                         )
                     }
@@ -79,7 +81,7 @@ fun ChatScreen(
                         IconButton(onClick = { showClearDialog = true }) {
                             Icon(
                                 imageVector = Icons.Default.DeleteSweep,
-                                contentDescription = "Очистить чат",
+                                contentDescription = stringResource(R.string.ochistit_chat),
                                 tint = JarvisRed
                             )
                         }
@@ -124,7 +126,7 @@ fun ChatScreen(
                     ) {
                         Icon(
                             imageVector = if (uiState.isVoiceDictating) Icons.Default.Mic else Icons.Default.MicNone,
-                            contentDescription = "Голосовой ввод",
+                            contentDescription = stringResource(R.string.golosovoy_vvod),
                             tint = if (uiState.isVoiceDictating) JarvisBackground else JarvisCyanPrimary,
                             modifier = Modifier.size(22.dp)
                         )
@@ -134,7 +136,7 @@ fun ChatScreen(
                     OutlinedTextField(
                         value = uiState.inputText,
                         onValueChange = { viewModel.onInputTextChanged(it) },
-                        placeholder = { Text("Спросите JARVIS...", color = TextTertiary, fontSize = 14.sp) },
+                        placeholder = { Text(stringResource(R.string.sprosite_jarvis), color = TextTertiary, fontSize = 14.sp) },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(24.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -169,7 +171,7 @@ fun ChatScreen(
                         } else {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.Send,
-                                contentDescription = "Отправить",
+                                contentDescription = stringResource(R.string.otpravit),
                                 tint = if (uiState.inputText.isNotBlank()) JarvisBackground else TextTertiary,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -208,13 +210,13 @@ fun ChatScreen(
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "Чат с JARVIS готов",
+                        text = stringResource(R.string.chat_s_jarvis_gotov),
                         style = MaterialTheme.typography.titleMedium,
                         color = TextPrimary
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Напишите вопрос или нажмите микрофон для набора",
+                        text = stringResource(R.string.napishite_vopros_ili_nazhmite_mikrofon_dlya_nabora),
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextTertiary
                     )
@@ -244,11 +246,11 @@ fun ChatScreen(
             onDismissRequest = { showClearDialog = false },
             containerColor = JarvisCardBackground,
             title = {
-                Text(text = "Очистить чат?", color = TextPrimary)
+                Text(text = stringResource(R.string.ochistit_chat_2), color = TextPrimary)
             },
             text = {
                 Text(
-                    text = "Все сохраненные сообщения диалога будут удалены.",
+                    text = stringResource(R.string.vse_sohranennye_soobscheniya_dialoga_budut_udaleny),
                     color = TextSecondary
                 )
             },
@@ -260,7 +262,7 @@ fun ChatScreen(
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = JarvisRed)
                 ) {
-                    Text("Удалить")
+                    Text(stringResource(R.string.udalit))
                 }
             },
             dismissButton = {
@@ -268,7 +270,7 @@ fun ChatScreen(
                     onClick = { showClearDialog = false },
                     colors = ButtonDefaults.textButtonColors(contentColor = TextSecondary)
                 ) {
-                    Text("Отмена")
+                    Text(stringResource(R.string.otmena))
                 }
             }
         )

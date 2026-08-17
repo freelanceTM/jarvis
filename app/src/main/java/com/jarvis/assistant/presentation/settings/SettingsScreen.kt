@@ -20,10 +20,13 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jarvis.assistant.agent.automation.entity.AutomationEntity
 import com.jarvis.assistant.core.battery.BatteryOptimizationHelper
+import com.jarvis.assistant.R
 import com.jarvis.assistant.presentation.theme.*
 import java.util.*
 
@@ -35,10 +38,11 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val appContext = LocalContext.current
 
     LaunchedEffect(uiState.isSavedSuccess) {
         if (uiState.isSavedSuccess) {
-            snackbarHostState.showSnackbar("Настройки успешно сохранены")
+            snackbarHostState.showSnackbar(appContext.getString(R.string.nastroyki_uspeshno_sohraneny))
         }
     }
 
@@ -49,7 +53,7 @@ fun SettingsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Настройки JARVIS",
+                        text = stringResource(R.string.nastroyki_jarvis),
                         style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
                         color = TextPrimary
                     )
@@ -58,7 +62,7 @@ fun SettingsScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Назад",
+                            contentDescription = stringResource(R.string.nazad),
                             tint = JarvisCyanPrimary
                         )
                     }
@@ -84,7 +88,7 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Обращение к пользователю",
+                        text = stringResource(R.string.obraschenie_k_polzovatelyu),
                         style = MaterialTheme.typography.titleMedium,
                         color = JarvisCyanPrimary
                     )
@@ -92,7 +96,7 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = uiState.userName,
                         onValueChange = { viewModel.onUserNameChanged(it) },
-                        label = { Text("Имя / Обращение (например: Сэр)") },
+                        label = { Text(stringResource(R.string.imya_obraschenie_naprimer_ser)) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = outlinedTextFieldColors()
                     )
@@ -121,7 +125,7 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Лицензия JARVIS Earclip",
+                                text = stringResource(R.string.licenziya_jarvis_earclip),
                                 style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
                                 color = TextPrimary
                             )
@@ -132,7 +136,7 @@ fun SettingsScreen(
                             color = if (license?.isActivated == true && !license.isExpired) JarvisGreen.copy(alpha = 0.2f) else JarvisRed.copy(alpha = 0.2f)
                         ) {
                             Text(
-                                text = if (license?.isActivated == true && !license.isExpired) "АКТИВНА (${license.remainingDays} дн.)" else "ТРЕБУЕТСЯ АКТИВАЦИЯ",
+                                text = if (license?.isActivated == true && !license.isExpired) stringResource(R.string.aktivna_dn, license.remainingDays) else stringResource(R.string.trebuetsya_aktivaciya),
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                 color = if (license?.isActivated == true && !license.isExpired) JarvisGreen else JarvisRed,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -143,7 +147,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = if (license?.isActivated == true) "Код устройства: ${license.hardwareSerial}" else "Приложение заблокировано без кода из коробки наушников.",
+                        text = if (license?.isActivated == true) stringResource(R.string.kod_ustroystva, license.hardwareSerial) else stringResource(R.string.prilozhenie_zablokirovano_bez_koda_iz_korobki_naushnikov),
                         style = MaterialTheme.typography.labelSmall,
                         color = TextTertiary
                     )
@@ -160,7 +164,7 @@ fun SettingsScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(imageVector = Icons.Default.AddCard, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Продлить подписку на 30 дней (50 TMT)", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.prodlit_podpisku_na_30_dney_50_tmt), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -178,7 +182,7 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "AI API Ключ",
+                            text = stringResource(R.string.ai_api_klyuch),
                             style = MaterialTheme.typography.titleMedium,
                             color = JarvisCyanPrimary
                         )
@@ -190,7 +194,7 @@ fun SettingsScreen(
                         )
                     }
                     Text(
-                        text = "Поддерживаются ключи OpenRouter (sk-or-...), Google Gemini (AQ.../AIza...), Groq (gsk_...) и OpenAI (sk-...).",
+                        text = stringResource(R.string.podderzhivayutsya_klyuchi_openrouter_sk_or_google_gemini_aq_),
                         style = MaterialTheme.typography.labelSmall,
                         color = TextTertiary
                     )
@@ -198,7 +202,7 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = uiState.apiKey,
                         onValueChange = { viewModel.onApiKeyChanged(it) },
-                        label = { Text("sk-or-... или AQ... или gsk_...") },
+                        label = { Text(stringResource(R.string.sk_or_ili_aq_ili_gsk)) },
                         modifier = Modifier.fillMaxWidth(),
                         visualTransformation = if (uiState.isApiKeyHidden) PasswordVisualTransformation() else VisualTransformation.None,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -206,7 +210,7 @@ fun SettingsScreen(
                             IconButton(onClick = { viewModel.toggleApiKeyVisibility() }) {
                                 Icon(
                                     imageVector = if (uiState.isApiKeyHidden) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                    contentDescription = "Показать/скрыть",
+                                    contentDescription = stringResource(R.string.pokazat_skryt),
                                     tint = TextSecondary
                                 )
                             }
@@ -229,7 +233,7 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "Акустический Wake Word (Слово «Джарвис»)",
+                            text = stringResource(R.string.akusticheskiy_wake_word_slovo_dzharvis),
                             style = MaterialTheme.typography.titleMedium,
                             color = JarvisCyanPrimary
                         )
@@ -242,7 +246,7 @@ fun SettingsScreen(
                     }
 
                     Text(
-                        text = "Двухэтапный каскад: ZCR-фильтр формант речи (Stage 1) ➔ верификация ключевого слова (Stage 2).",
+                        text = stringResource(R.string.dvuhetapnyy_kaskad_zcr_filtr_formant_rechi_stage_1_verifikac),
                         style = MaterialTheme.typography.labelSmall,
                         color = TextTertiary
                     )
@@ -250,7 +254,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        text = "Чувствительность микрофона: ${String.format(Locale.US, "%.2f", uiState.wakeWordSensitivity)}x",
+                        text = stringResource(R.string.chuvstvitelnost_mikrofona, String.format(Locale.US, "%.2f", uiState.wakeWordSensitivity)),
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary
                     )
@@ -287,14 +291,14 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Работать только в наушниках",
+                                text = stringResource(R.string.rabotat_tolko_v_naushnikah),
                                 style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
                                 color = TextPrimary
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Фоновый микрофон и Wake Word активны только при подключенной Bluetooth-гарнитуре (Ear-First режим для экономии батареи).",
+                            text = stringResource(R.string.fonovyy_mikrofon_i_wake_word_aktivny_tolko_pri_podklyuchenno),
                             style = MaterialTheme.typography.labelSmall,
                             color = TextTertiary
                         )
@@ -334,7 +338,7 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Спец. возможности (Screen & Click)",
+                                text = stringResource(R.string.spec_vozmozhnosti_screen_click),
                                 style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
                                 color = TextPrimary
                             )
@@ -345,7 +349,7 @@ fun SettingsScreen(
                             color = if (com.jarvis.assistant.agent.tools.accessibility.JarvisAccessibilityService.isServiceRunning()) JarvisGreen.copy(alpha = 0.2f) else JarvisAmber.copy(alpha = 0.2f)
                         ) {
                             Text(
-                                text = if (com.jarvis.assistant.agent.tools.accessibility.JarvisAccessibilityService.isServiceRunning()) "АКТИВНО" else "ВЫКЛЮЧЕНО",
+                                text = if (com.jarvis.assistant.agent.tools.accessibility.JarvisAccessibilityService.isServiceRunning()) stringResource(R.string.aktivno) else stringResource(R.string.vyklyucheno),
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                 color = if (com.jarvis.assistant.agent.tools.accessibility.JarvisAccessibilityService.isServiceRunning()) JarvisGreen else JarvisAmber,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -355,7 +359,7 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Требуется для создания скриншотов, чтения экрана («Что на экране?») и нажатия кнопок без касания.",
+                        text = stringResource(R.string.trebuetsya_dlya_sozdaniya_skrinshotov_chteniya_ekrana_chto_n),
                         style = MaterialTheme.typography.labelSmall,
                         color = TextTertiary
                     )
@@ -375,7 +379,7 @@ fun SettingsScreen(
                             border = BorderStroke(1.dp, JarvisCyanPrimary.copy(alpha = 0.5f)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Включить в настройках Android", fontSize = 13.sp)
+                            Text(stringResource(R.string.vklyuchit_v_nastroykah_android), fontSize = 13.sp)
                         }
                     }
                 }
@@ -405,7 +409,7 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Фоновая работа 24/7 (${BatteryOptimizationHelper.getDeviceManufacturerName()})",
+                                text = stringResource(R.string.fonovaya_rabota, BatteryOptimizationHelper.getDeviceManufacturerName()),
                                 style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
                                 color = TextPrimary
                             )
@@ -416,7 +420,7 @@ fun SettingsScreen(
                             color = if (isBatteryIgnoring) JarvisGreen.copy(alpha = 0.2f) else JarvisAmber.copy(alpha = 0.2f)
                         ) {
                             Text(
-                                text = if (isBatteryIgnoring) "БЕЗ ОГРАНИЧЕНИЙ" else "ОГРАНИЧЕНО",
+                                text = if (isBatteryIgnoring) stringResource(R.string.bez_ogranicheniy) else stringResource(R.string.ogranicheno),
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                 color = if (isBatteryIgnoring) JarvisGreen else JarvisAmber,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -426,7 +430,7 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Предотвращает принудительное усыпление ассистента оболочками Samsung OneUI, Xiaomi MIUI, Huawei при выключенном экране.",
+                        text = stringResource(R.string.predotvraschaet_prinuditelnoe_usyplenie_assistenta_obolochka),
                         style = MaterialTheme.typography.labelSmall,
                         color = TextTertiary
                     )
@@ -447,7 +451,7 @@ fun SettingsScreen(
                                 border = BorderStroke(1.dp, JarvisCyanPrimary.copy(alpha = 0.5f)),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text("Снять лимит батареи", fontSize = 12.sp)
+                                Text(stringResource(R.string.snyat_limit_batarei), fontSize = 12.sp)
                             }
                         }
 
@@ -460,7 +464,7 @@ fun SettingsScreen(
                             border = BorderStroke(1.dp, JarvisCyanSecondary.copy(alpha = 0.5f)),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Автозапуск ${BatteryOptimizationHelper.getDeviceManufacturerName()}", fontSize = 12.sp)
+                            Text(stringResource(R.string.avtozapusk, BatteryOptimizationHelper.getDeviceManufacturerName()), fontSize = 12.sp)
                         }
                     }
                 }
@@ -479,7 +483,7 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "Автоматизации (Trigger ➔ Action)",
+                            text = stringResource(R.string.avtomatizacii_trigger_action),
                             style = MaterialTheme.typography.titleMedium,
                             color = JarvisCyanPrimary
                         )
@@ -492,7 +496,7 @@ fun SettingsScreen(
                     }
 
                     Text(
-                        text = "Сценарии выполняются автоматически при наступлении аппаратных событий.",
+                        text = stringResource(R.string.scenarii_vypolnyayutsya_avtomaticheski_pri_nastuplenii_appar),
                         style = MaterialTheme.typography.labelSmall,
                         color = TextTertiary
                     )
@@ -501,7 +505,7 @@ fun SettingsScreen(
 
                     if (uiState.automations.isEmpty()) {
                         Text(
-                            text = "Нет активных автоматизаций. Скажите: «Джарвис, когда подключатся наушники — включи музыку».",
+                            text = stringResource(R.string.net_aktivnyh_avtomatizaciy_skazhite_dzharvis_kogda_podklyuch),
                             style = MaterialTheme.typography.bodyMedium,
                             color = TextSecondary,
                             modifier = Modifier.padding(vertical = 8.dp)
@@ -532,7 +536,7 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "Голос JARVIS (Text-to-Speech)",
+                            text = stringResource(R.string.golos_jarvis_text_to_speech),
                             style = MaterialTheme.typography.titleMedium,
                             color = JarvisCyanPrimary
                         )
@@ -547,7 +551,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        text = "Пресеты тембра:",
+                        text = stringResource(R.string.presety_tembra),
                         style = MaterialTheme.typography.labelSmall,
                         color = TextTertiary
                     )
@@ -585,7 +589,7 @@ fun SettingsScreen(
                             ),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("⚡ Баритон", fontSize = 12.sp)
+                            Text(stringResource(R.string.bariton), fontSize = 12.sp)
                         }
 
                         Button(
@@ -600,14 +604,14 @@ fun SettingsScreen(
                             ),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("👤 Стандарт", fontSize = 12.sp)
+                            Text(stringResource(R.string.standart), fontSize = 12.sp)
                         }
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Text(
-                        text = "Высота тона (Pitch): ${String.format(Locale.US, "%.2f", uiState.speechPitch)}x (Ниже = глубже голос)",
+                        text = stringResource(R.string.vysota_tona_poyasnenie, String.format(Locale.US, "%.2f", uiState.speechPitch)),
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary
                     )
@@ -622,7 +626,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "Скорость речи: ${String.format(Locale.US, "%.2f", uiState.speechRate)}x",
+                        text = stringResource(R.string.skorost_rechi, String.format(Locale.US, "%.2f", uiState.speechRate)),
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary
                     )
@@ -643,7 +647,7 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Системный промпт JARVIS",
+                        text = stringResource(R.string.sistemnyy_prompt_jarvis),
                         style = MaterialTheme.typography.titleMedium,
                         color = JarvisCyanPrimary
                     )
@@ -671,7 +675,7 @@ fun SettingsScreen(
             ) {
                 Icon(imageVector = Icons.Default.Save, contentDescription = null)
                 Spacer(modifier = Modifier.size(8.dp))
-                Text(text = "Сохранить настройки", fontSize = 16.sp, color = JarvisBackground)
+                Text(text = stringResource(R.string.sohranit_nastroyki), fontSize = 16.sp, color = JarvisBackground)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -686,10 +690,10 @@ fun AutomationItemCard(
     onDelete: () -> Unit
 ) {
     val triggerTitle = when (rule.triggerType) {
-        "HEADPHONES_CONNECTED" -> "🎧 Подключение наушников"
-        "HEADPHONES_DISCONNECTED" -> "🔌 Отключение наушников"
-        "BATTERY_LOW" -> "🔋 Низкий заряд батареи"
-        "WIFI_CONNECTED" -> "📶 Подключение к Wi-Fi"
+        "HEADPHONES_CONNECTED" -> stringResource(R.string.podklyuchenie_naushnikov)
+        "HEADPHONES_DISCONNECTED" -> stringResource(R.string.otklyuchenie_naushnikov)
+        "BATTERY_LOW" -> stringResource(R.string.nizkiy_zaryad_batarei)
+        "WIFI_CONNECTED" -> stringResource(R.string.podklyuchenie_k_wi_fi)
         else -> rule.triggerType
     }
 
@@ -719,7 +723,7 @@ fun AutomationItemCard(
                 )
                 if (rule.triggerCount > 0) {
                     Text(
-                        text = "Сработало: ${rule.triggerCount} раз",
+                        text = stringResource(R.string.srabotalo_raz, rule.triggerCount),
                         style = MaterialTheme.typography.labelSmall,
                         color = TextTertiary
                     )
@@ -741,7 +745,7 @@ fun AutomationItemCard(
                 IconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Default.Delete,
-                        contentDescription = "Удалить",
+                        contentDescription = stringResource(R.string.udalit),
                         tint = JarvisRed.copy(alpha = 0.8f)
                     )
                 }

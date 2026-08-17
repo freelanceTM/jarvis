@@ -1,5 +1,6 @@
 package com.jarvis.assistant.presentation.permissions
 
+import com.jarvis.assistant.R
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
 
@@ -45,41 +47,40 @@ fun PermissionsScreen(
     onSkip: () -> Unit
 ) {
     val context = LocalContext.current
-    
     val permissionItems = remember {
         listOf(
             PermissionItem(
                 permission = Manifest.permission.RECORD_AUDIO,
-                title = "Микрофон",
-                description = "Для голосовых команд и распознавания речи",
+                title = context.getString(R.string.mikrofon),
+                description = context.getString(R.string.dlya_golosovyh_komand_i_raspoznavaniya_rechi),
                 icon = Icons.Default.Mic,
                 isRequired = true
             ),
             PermissionItem(
                 permission = Manifest.permission.CALL_PHONE,
-                title = "Телефон",
-                description = "Для совершения звонков голосом",
+                title = context.getString(R.string.telefon),
+                description = context.getString(R.string.dlya_soversheniya_zvonkov_golosom),
                 icon = Icons.Default.Phone,
                 isRequired = false
             ),
             PermissionItem(
                 permission = Manifest.permission.READ_CONTACTS,
-                title = "Контакты",
-                description = "Для поиска контактов по имени",
+                title = context.getString(R.string.kontakty),
+                description = context.getString(R.string.dlya_poiska_kontaktov_po_imeni),
                 icon = Icons.Default.Contacts,
                 isRequired = false
             ),
             PermissionItem(
                 permission = Manifest.permission.SEND_SMS,
                 title = "SMS",
-                description = "Для отправки сообщений голосом",
+                description = context.getString(R.string.dlya_otpravki_soobscheniy_golosom),
                 icon = Icons.Default.Sms,
                 isRequired = false
             ),
             PermissionItem(
                 permission = Manifest.permission.ACCESS_FINE_LOCATION,
-                title = "Геолокация",
-                description = "Для навигации и определения местоположения",
+                title = context.getString(R.string.geolokaciya),
+                description = context.getString(R.string.dlya_navigacii_i_opredeleniya_mestopolozheniya),
                 icon = Icons.Default.LocationOn,
                 isRequired = false
             ),
@@ -88,14 +89,14 @@ fun PermissionsScreen(
                     Manifest.permission.BLUETOOTH_CONNECT 
                 else Manifest.permission.BLUETOOTH,
                 title = "Bluetooth",
-                description = "Для работы с беспроводными наушниками",
+                description = context.getString(R.string.dlya_raboty_s_besprovodnymi_naushnikami),
                 icon = Icons.Default.Bluetooth,
                 isRequired = false
             ),
             PermissionItem(
                 permission = Manifest.permission.POST_NOTIFICATIONS,
-                title = "Уведомления",
-                description = "Для отображения статуса JARVIS",
+                title = context.getString(R.string.uvedomleniya),
+                description = context.getString(R.string.dlya_otobrazheniya_statusa_jarvis),
                 icon = Icons.Default.Notifications,
                 isRequired = false
             )
@@ -164,7 +165,7 @@ fun PermissionsScreen(
         Spacer(modifier = Modifier.height(24.dp))
         
         Text(
-            text = "Разрешения JARVIS",
+            text = stringResource(R.string.razresheniya_jarvis),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground
@@ -173,7 +174,7 @@ fun PermissionsScreen(
         Spacer(modifier = Modifier.height(8.dp))
         
         Text(
-            text = "Для полноценной работы голосового ассистента необходимы следующие разрешения",
+            text = stringResource(R.string.dlya_polnocennoy_raboty_golosovogo_assistenta_neobhodimy_sle),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -193,7 +194,7 @@ fun PermissionsScreen(
         )
         
         Text(
-            text = "$grantedCount из $totalCount разрешений",
+            text = stringResource(R.string.iz_razresheniy, grantedCount, totalCount),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp)
@@ -248,7 +249,7 @@ fun PermissionsScreen(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = if (allRequiredGranted) "Продолжить" else "Запросить все разрешения",
+                text = if (allRequiredGranted) stringResource(R.string.prodolzhit) else stringResource(R.string.zaprosit_vse_razresheniya),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -260,7 +261,7 @@ fun PermissionsScreen(
                 modifier = Modifier.padding(top = 8.dp)
             ) {
                 Text(
-                    text = "Пропустить (ограниченный режим)",
+                    text = stringResource(R.string.propustit_ogranichennyy_rezhim),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -327,7 +328,7 @@ private fun PermissionCard(
                     if (item.isRequired) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Обязательно",
+                            text = stringResource(R.string.obyazatelno),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.error
                         )
@@ -344,7 +345,7 @@ private fun PermissionCard(
                 IconButton(onClick = onRequestPermission) {
                     Icon(
                         imageVector = Icons.Default.Add,
-                        contentDescription = "Запросить",
+                        contentDescription = stringResource(R.string.zaprosit),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
