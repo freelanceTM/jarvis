@@ -5,6 +5,7 @@ import com.jarvis.assistant.agent.memory.context.ContextSlot
 import com.jarvis.assistant.agent.memory.context.ConversationContext
 import com.jarvis.assistant.agent.memory.context.ReferenceResolution
 import com.jarvis.assistant.agent.memory.context.ReferenceResolver
+import java.util.LinkedHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -15,13 +16,39 @@ import javax.inject.Singleton
  * [ConversationContext] со слотами (приложение, контакт, человек, место, файл).
  * Разрешение местоимений идёт через [ReferenceResolver]; если подходящего
  * слота нет, диалоговый слой обязан задать уточняющий вопрос.
+ *
+ * [contextStore] — вспомогательный кэш observation-данных (battery_percent,
+ * current_time, wifi_enabled, ...). Пункт аудита #10: ограничен LRU-емкостью
+ * ([MAX_CONTEXT_ENTRIES]) и TTL ([TTL_MS]) — в долгих сессиях не растёт
+ * бесконечно.
  */
 @Singleton
 class WorkingMemory @Inject constructor(
     private val anaphoraEngine: AnaphoraContextEngine,
     private val referenceResolver: ReferenceResolver
 ) {
-    private val contextStore = mutableMapOf<String, Any>()
+    companion object {
+        /** Предел записей contextStore: старейшие по использованию вытесняются (LRU). */
+        const val MAX_CONTEXT_ENTRIES = 128
+
+        /** Время жизни записи contextStore: 30 минут без обращения. */
+        const val TTL_MS = 30L * 60 * 1000L
+    }
+
+    /** Запись кэша с моментом последнего обращения (для TTL). */
+    private data class TimedEntry(val value: Any, var lastAccess: Long)
+
+    /**
+     * LRU-кэш: LinkedHashMap с accessOrder=true — при переполнении
+     * вытесняется запись, к которой дольше всех не обращались.
+     * Не synchronized (WorkingMemory живёт в основном потоке приложения
+     * и в Dispatchers.IO observation-цикла — обращение сериализовано
+     * корутинами вызывающих слоёв, как и раньше).
+     */
+    private val contextStore = object : LinkedHashMap<String, TimedEntry>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, TimedEntry>?): Boolean =
+            size > MAX_CONTEXT_ENTRIES
+    }
 
     @Volatile
     var context: ConversationContext = ConversationContext()
@@ -33,42 +60,42 @@ class WorkingMemory @Inject constructor(
         val clean = entity.trim()
         if (clean.isBlank()) return
         context = context.with(ContextSlot.PERSON, clean).copy(lastTopic = clean)
-        contextStore["last_entity"] = clean
+        contextStore["last_entity"] = TimedEntry(clean, System.currentTimeMillis())
     }
 
     fun getLastEntity(): String? = context.lastPerson ?: context.lastTopic
 
     fun setLastApp(app: String) {
         context = context.with(ContextSlot.APP, app)
-        contextStore["last_app"] = app
+        contextStore["last_app"] = TimedEntry(app, System.currentTimeMillis())
     }
 
     fun getLastApp(): String? = context.lastApp
 
     fun setLastPerson(person: String) {
         context = context.with(ContextSlot.PERSON, person)
-        contextStore["last_person"] = person
+        contextStore["last_person"] = TimedEntry(person, System.currentTimeMillis())
     }
 
     fun getLastPerson(): String? = context.lastPerson
 
     fun setLastContact(contact: String) {
         context = context.with(ContextSlot.CONTACT, contact)
-        contextStore["last_contact"] = contact
+        contextStore["last_contact"] = TimedEntry(contact, System.currentTimeMillis())
     }
 
     fun getLastContact(): String? = context.lastContact
 
     fun setLastLocation(location: String) {
         context = context.with(ContextSlot.LOCATION, location)
-        contextStore["last_location"] = location
+        contextStore["last_location"] = TimedEntry(location, System.currentTimeMillis())
     }
 
     fun getLastLocation(): String? = context.lastLocation
 
     fun setLastAction(action: String) {
         context = context.copy(lastAction = action)
-        contextStore["last_action"] = action
+        contextStore["last_action"] = TimedEntry(action, System.currentTimeMillis())
     }
 
     fun getLastAction(): String? = context.lastAction
@@ -77,7 +104,7 @@ class WorkingMemory @Inject constructor(
         val clean = message.trim()
         if (clean.isBlank()) return
         context = context.copy(lastMessage = clean)
-        contextStore["last_message"] = clean
+        contextStore["last_message"] = TimedEntry(clean, System.currentTimeMillis())
     }
 
     fun getLastMessage(): String? = context.lastMessage
@@ -86,7 +113,7 @@ class WorkingMemory @Inject constructor(
         val clean = conversation.trim()
         if (clean.isBlank()) return
         context = context.with(ContextSlot.CONVERSATION, clean)
-        contextStore["last_conversation"] = clean
+        contextStore["last_conversation"] = TimedEntry(clean, System.currentTimeMillis())
     }
 
     fun getLastConversation(): String? = context.lastConversation
@@ -95,11 +122,45 @@ class WorkingMemory @Inject constructor(
         context = context.copy(activeTask = task)
     }
 
+    // ------------------------------------------------------- contextStore (LRU + TTL)
+
+    /**
+     * Пункт аудита #10: запись в ограниченный кэш с TTL.
+     * Перед записью вытесняются истёкшие записи.
+     */
     fun put(key: String, value: Any) {
-        contextStore[key] = value
+        evictExpired()
+        contextStore[key] = TimedEntry(value, System.currentTimeMillis())
     }
 
-    fun get(key: String): Any? = contextStore[key]
+    /**
+     * Пункт аудита #10: чтение с обновлением времени обращения (LRU).
+     * Истёкшие записи при чтении удаляются и возвращают null.
+     */
+    fun get(key: String): Any? {
+        val now = System.currentTimeMillis()
+        val entry = contextStore[key] ?: return null
+        if (now - entry.lastAccess > TTL_MS) {
+            contextStore.remove(key)
+            return null
+        }
+        entry.lastAccess = now
+        return entry.value
+    }
+
+    /**
+     * Удаляет записи, к которым не обращались дольше [TTL_MS].
+     * Вызывается при каждом put; публичен для диагностики и тестов.
+     */
+    fun evictExpired(now: Long = System.currentTimeMillis()) {
+        val expired = contextStore.entries
+            .filter { now - it.value.lastAccess > TTL_MS }
+            .map { it.key }
+        expired.forEach { contextStore.remove(it) }
+    }
+
+    /** Текущее число записей contextStore (диагностика). */
+    fun contextStoreSize(): Int = contextStore.size
 
     fun clearContext() {
         context = ConversationContext()
