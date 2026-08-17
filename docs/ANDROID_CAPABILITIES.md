@@ -207,6 +207,58 @@ DangerLevel: **MEDIUM**, подтверждение обязательно.
 Нет разрешения на локацию → `PERMISSION_REQUIRED` + предложение назвать город.
 Нет координат → `FAILURE (LOCATION_UNAVAILABLE)`. Фейковая погода не выдаётся.
 
+## Архитектура агента (AgentPipeline)
+
+Единый конвейер JARVIS — `agent/pipeline/AgentPipeline.kt`:
+
+```
+                JARVIS
+                   │
+          ┌────────▼────────┐
+          │ FastCommandRouter│  TIER 0: локальный NLU (<10 мс, офлайн)
+          └────────┬────────┘
+                   │
+          ┌────────▼────────┐
+          │ Agent Cognitive │  TIER 1: PLAN → EXECUTE → OBSERVE →
+          │      Loop       │         VERIFY → REPLAN
+          └────────┬────────┘
+                   │
+             PLAN / REPLAN     (CognitivePlanner: сценарии + LLM-планы)
+                   │
+          ┌────────▼────────┐
+          │ Tool Discovery  │  (ToolRegistry.discoverRelevantTools)
+          └────────┬────────┘
+                   │
+          ┌────────▼────────┐
+          │  Tool Executor  │
+          └────────┬────────┘
+                   │
+          ┌────────▼────────┐
+          │   Observation    │  (AgentObservationEngine)
+          └────────┬────────┘
+                   │
+              VERIFY           (проверка результата по экрану)
+                   │
+              SUCCESS
+```
+
+`SendPromptUseCase` — тонкая обвязка (анафора, память, сохранение сообщений);
+вся агентская логика — в pipeline.
+
+Дерево TOOLS v0.2 (честное состояние):
+
+```
+TOOLS
+├── Device        WiFi ✓ Bluetooth ✓ Brightness ✓ Screenshot ✓ Volume ✓ Flashlight ✓ Apps ✓
+├── Communication Call ✓ SMS ✓ Contacts ✓ Telegram ✓ (открытие+share; отправка — пользователем)
+├── Intelligence  Web Search ✓ Weather ✓ Translation ✓ Memory ✓ Vision ⚠ (UNSUPPORTED — нет модели)
+├── Automation    Time ✓ (TIME_SCHEDULE) App Events ✓ Scheduled Tasks ✓ Location ⚠ (геозоны — будущее)
+└── Health        Wear OS ⚠ Heart Rate ⚠ Steps ⚠ Sleep ⚠ Activity ⚠ (UNSUPPORTED — нет источников данных)
+```
+
+`⚠` — честные заглушки-контракты: возвращают UNSUPPORTED с причиной вместо
+выдуманных данных (как EmbeddingProvider).
+
 ## Agent Cognitive Loop: PLAN → EXECUTE → OBSERVE → VERIFY → DONE/REPLAN
 
 Состояние агента при выполнении многошаговых планов:

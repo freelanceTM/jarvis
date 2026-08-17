@@ -26,6 +26,12 @@ import com.jarvis.assistant.agent.tools.intelligence.ForgetMemoryTool
 import com.jarvis.assistant.agent.tools.intelligence.RecallMemoryTool
 import com.jarvis.assistant.agent.tools.intelligence.RememberFactTool
 import com.jarvis.assistant.agent.tools.intelligence.TranslateTool
+import com.jarvis.assistant.agent.tools.health.ActivityTool
+import com.jarvis.assistant.agent.tools.health.HeartRateTool
+import com.jarvis.assistant.agent.tools.health.SleepTool
+import com.jarvis.assistant.agent.tools.health.StepsTool
+import com.jarvis.assistant.agent.tools.health.WearOsTool
+import com.jarvis.assistant.agent.tools.intelligence.VisionTool
 import com.jarvis.assistant.agent.tools.intelligence.WeatherTool
 import com.jarvis.assistant.agent.tools.intelligence.WebSearchTool
 import com.jarvis.assistant.agent.tools.location.LocationNavigationTool
@@ -156,6 +162,7 @@ abstract class SecurityAndNetworkBindingModule {
     @Binds @IntoSet abstract fun bindSmsTool(tool: SmsTool): JarvisTool
     @Binds @IntoSet abstract fun bindContactsTool(tool: ContactsTool): JarvisTool
     @Binds @IntoSet abstract fun bindShareTool(tool: ShareTool): JarvisTool
+    @Binds @IntoSet abstract fun bindTelegramTool(tool: TelegramTool): JarvisTool
 
     // 4. Продуктивность и задачи (Productivity)
     @Binds @IntoSet abstract fun bindAlarmTimerTool(tool: AlarmTimerTool): JarvisTool
@@ -174,6 +181,14 @@ abstract class SecurityAndNetworkBindingModule {
     @Binds @IntoSet abstract fun bindWebSearchTool(tool: WebSearchTool): JarvisTool
     @Binds @IntoSet abstract fun bindTranslateTool(tool: TranslateTool): JarvisTool
     @Binds @IntoSet abstract fun bindWeatherTool(tool: WeatherTool): JarvisTool
+    @Binds @IntoSet abstract fun bindVisionTool(tool: VisionTool): JarvisTool
+
+    // 8. Здоровье (Wear OS / Health — честные заглушки до появления источников данных)
+    @Binds @IntoSet abstract fun bindWearOsTool(tool: WearOsTool): JarvisTool
+    @Binds @IntoSet abstract fun bindHeartRateTool(tool: HeartRateTool): JarvisTool
+    @Binds @IntoSet abstract fun bindStepsTool(tool: StepsTool): JarvisTool
+    @Binds @IntoSet abstract fun bindSleepTool(tool: SleepTool): JarvisTool
+    @Binds @IntoSet abstract fun bindActivityTool(tool: ActivityTool): JarvisTool
 
     // 7. Спец. возможности и UI управление (Accessibility)
     @Binds @IntoSet abstract fun bindScreenReaderTool(tool: ScreenReaderTool): JarvisTool
