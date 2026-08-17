@@ -2,9 +2,14 @@ package com.jarvis.assistant.presentation.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jarvis.assistant.agent.executor.ToolExecutor
+import com.jarvis.assistant.agent.model.ToolCall
+import com.jarvis.assistant.core.confirmation.ConfirmationIntent
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.domain.models.Message
+import com.jarvis.assistant.domain.models.MessageRole
 import com.jarvis.assistant.domain.models.PromptExecutionResult
+import com.jarvis.assistant.domain.repository.MessageRepository
 import com.jarvis.assistant.domain.usecases.ClearChatHistoryUseCase
 import com.jarvis.assistant.domain.usecases.GetChatHistoryUseCase
 import com.jarvis.assistant.domain.usecases.GetSettingsUseCase
@@ -17,11 +22,18 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** Отложенное действие, ожидающее подтверждения пользователя в чате. */
+data class PendingConfirmationUi(
+    val toolCall: ToolCall,
+    val promptMessage: String
+)
+
 data class ChatUiState(
     val messages: List<Message> = emptyList(),
     val inputText: String = "",
     val isSending: Boolean = false,
-    val isVoiceDictating: Boolean = false
+    val isVoiceDictating: Boolean = false,
+    val pendingConfirmation: PendingConfirmationUi? = null
 )
 
 @HiltViewModel
@@ -31,7 +43,9 @@ class ChatViewModel @Inject constructor(
     private val sendPromptUseCase: SendPromptUseCase,
     private val getSettingsUseCase: GetSettingsUseCase,
     private val textToSpeechManager: TextToSpeechManager,
-    private val speechRecognizerManager: SpeechRecognizerManager
+    private val speechRecognizerManager: SpeechRecognizerManager,
+    private val toolExecutor: ToolExecutor,
+    private val messageRepository: MessageRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -91,6 +105,18 @@ class ChatViewModel @Inject constructor(
         val query = textToSend.trim()
         if (query.isBlank() || _uiState.value.isSending) return
 
+        // Если ждём подтверждения действия — текст «да/нет» обрабатывается как ответ.
+        val pending = _uiState.value.pendingConfirmation
+        if (pending != null && ConfirmationIntent.isDefinitive(query)) {
+            _uiState.update { it.copy(inputText = "") }
+            if (ConfirmationIntent.isYes(query)) {
+                confirmPendingAction()
+            } else {
+                cancelPendingAction()
+            }
+            return
+        }
+
         _uiState.update { it.copy(inputText = "", isSending = true) }
 
         viewModelScope.launch {
@@ -99,11 +125,23 @@ class ChatViewModel @Inject constructor(
 
             when (result) {
                 is Resource.Success -> {
-                    val voiceText = when (val exec = result.data) {
-                        is PromptExecutionResult.ConfirmationRequired -> exec.promptMessage
-                        is PromptExecutionResult.DirectAnswer -> exec.text
+                    when (val exec = result.data) {
+                        is PromptExecutionResult.ConfirmationRequired -> {
+                            // Показываем карточку подтверждения вместо простого озвучивания.
+                            _uiState.update {
+                                it.copy(
+                                    pendingConfirmation = PendingConfirmationUi(
+                                        toolCall = exec.toolCall,
+                                        promptMessage = exec.promptMessage
+                                    )
+                                )
+                            }
+                            textToSpeechManager.speak(exec.promptMessage, speechRate, speechPitch)
+                        }
+                        is PromptExecutionResult.DirectAnswer -> {
+                            textToSpeechManager.speak(exec.text, speechRate, speechPitch)
+                        }
                     }
-                    textToSpeechManager.speak(voiceText, speechRate, speechPitch)
                 }
                 is Resource.Error -> {
                     val errorMsg = result.message ?: "Ошибка выполнения запроса"
@@ -111,6 +149,52 @@ class ChatViewModel @Inject constructor(
                 }
                 is Resource.Loading -> Unit
             }
+        }
+    }
+
+    /**
+     * Пользователь подтвердил отложенное действие (кнопка «Подтвердить» или «Да»).
+     * Выполняется БЕЗ повторного гейта подтверждения — как после голосового «Да».
+     */
+    fun confirmPendingAction() {
+        val pending = _uiState.value.pendingConfirmation ?: return
+        _uiState.update { it.copy(pendingConfirmation = null, isSending = true) }
+
+        viewModelScope.launch {
+            val result = toolExecutor.executeWithBypass(pending.toolCall)
+            val voiceResponse = when {
+                result.isSuccess -> "${result.summary}, сэр."
+                result.isBlockedByAndroid -> result.summary
+                else -> "Не удалось выполнить: ${result.error ?: result.summary}"
+            }
+            messageRepository.insertMessage(
+                Message(
+                    role = MessageRole.ASSISTANT,
+                    text = voiceResponse,
+                    timestamp = System.currentTimeMillis()
+                )
+            )
+            _uiState.update { it.copy(isSending = false) }
+            textToSpeechManager.speak(voiceResponse, speechRate, speechPitch)
+        }
+    }
+
+    /** Пользователь отклонил отложенное действие (кнопка «Отмена» или «Нет»). */
+    fun cancelPendingAction() {
+        if (_uiState.value.pendingConfirmation == null) return
+        _uiState.update { it.copy(pendingConfirmation = null) }
+        toolExecutor.clearPendingConfirmation()
+
+        viewModelScope.launch {
+            val cancelMsg = "Операция отменена, сэр."
+            messageRepository.insertMessage(
+                Message(
+                    role = MessageRole.ASSISTANT,
+                    text = cancelMsg,
+                    timestamp = System.currentTimeMillis()
+                )
+            )
+            textToSpeechManager.speak(cancelMsg, speechRate, speechPitch)
         }
     }
 

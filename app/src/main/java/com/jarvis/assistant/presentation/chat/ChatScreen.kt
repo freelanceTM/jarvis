@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.jarvis.assistant.presentation.components.ConfirmationCard
 import com.jarvis.assistant.presentation.components.MessageItem
 import com.jarvis.assistant.presentation.theme.*
 
@@ -88,13 +89,24 @@ fun ChatScreen(
             )
         },
         bottomBar = {
-            // Нижняя панель ввода текста и микрофона
-            Surface(
-                color = JarvisSurface,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .imePadding()
-            ) {
+            Column {
+                // Карточка Confirmation Gate: ожидает «Да»/«Нет» от пользователя.
+                uiState.pendingConfirmation?.let { pending ->
+                    ConfirmationCard(
+                        prompt = pending.promptMessage,
+                        isExecuting = uiState.isSending,
+                        onConfirm = { viewModel.confirmPendingAction() },
+                        onCancel = { viewModel.cancelPendingAction() }
+                    )
+                }
+
+                // Нижняя панель ввода текста и микрофона
+                Surface(
+                    color = JarvisSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding()
+                ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -164,6 +176,7 @@ fun ChatScreen(
                         }
                     }
                 }
+            }
             }
         }
     ) { innerPadding ->

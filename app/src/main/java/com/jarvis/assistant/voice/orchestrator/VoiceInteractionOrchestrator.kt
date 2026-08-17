@@ -7,6 +7,7 @@ import android.util.Log
 import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.model.ToolCall
 import com.jarvis.assistant.agent.translator.LiveTranslatorEngine
+import com.jarvis.assistant.core.confirmation.ConfirmationIntent
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.core.security.SecurityManager
 import com.jarvis.assistant.domain.models.PromptExecutionResult
@@ -470,34 +471,11 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
     private fun handleConfirmationResponse(response: String) {
         confirmationTimeoutJob?.cancel()
-        val text = response.lowercase().trim()
 
-        val isYes = text.contains("да") ||
-                text.contains("подтверждаю") ||
-                text.contains("давай") ||
-                text.contains("окей") ||
-                text.contains("ок") ||
-                text.contains("выполняй") ||
-                text.contains("разрешаю") ||
-                text.contains("звони") ||
-                text.contains("набирай") ||
-                text.contains("отправляй") ||
-                text.contains("согласен") ||
-                text.contains("делай") ||
-                text.contains("конечно") ||
-                text.contains("ага") ||
-                text.contains("добро")
-
-        val isNo = text.contains("нет") ||
-                text.contains("отмена") ||
-                text.contains("стоп") ||
-                text.contains("отменить") ||
-                text.contains("не надо") ||
-                text.contains("не нужно") ||
-                text.contains("отбой") ||
-                text.contains("не стоит") ||
-                text.contains("передумал") ||
-                text.contains("хватит")
+        // Единый источник распознавания «да/нет» — ConfirmationIntent
+        // (общий для голосового флоу и текстового чата).
+        val isYes = ConfirmationIntent.isYes(response)
+        val isNo = ConfirmationIntent.isNo(response)
 
         when {
             isYes && pendingToolCall != null -> {
