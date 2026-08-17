@@ -1,5 +1,6 @@
 package com.jarvis.assistant.agent.executor
 
+import android.util.Log
 import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.model.ToolCall
 import com.jarvis.assistant.agent.model.ToolExecutionResult
@@ -7,19 +8,92 @@ import com.jarvis.assistant.agent.model.ToolExecutionStatus
 import com.jarvis.assistant.agent.registry.ToolRegistry
 import com.jarvis.assistant.agent.safety.ToolPermissionManager
 import kotlinx.coroutines.*
+import java.util.concurrent.ConcurrentLinkedQueue
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** Вызов инструмента, ожидающий подтверждения пользователя (элемент очереди). */
+data class PendingConfirmationRequest(
+    val toolCall: ToolCall,
+    val promptMessage: String
+)
 
 @Singleton
 class ToolExecutor @Inject constructor(
     private val registry: ToolRegistry,
     private val permissionManager: ToolPermissionManager
 ) {
+    companion object {
+        private const val TAG = "ToolExecutor"
+
+        /** Предел ожидающих подтверждения вызовов — защита от переполнения. */
+        const val MAX_PENDING_CONFIRMATIONS = 8
+    }
+
     /**
-     * Сохранённый вызов инструмента, ожидающий подтверждения пользователем
+     * Очередь вызовов, ожидающих подтверждения (пункт аудита #4 — HIGH).
+     *
+     * Заменяет одиночное поле `pendingConfirmationCall`: новый confirmation-запрос
+     * БОЛЬШЕ НЕ перезаписывает незавершённый предыдущий — он встаёт в конец
+     * очереди. Подтверждение/отмена извлекают КОНКРЕТНЫЙ вызов (по callId),
+     * не трогая остальные.
+     *
+     * Thread-safe: ConcurrentLinkedQueue.
      */
-    var pendingConfirmationCall: ToolCall? = null
-        private set
+    private val pendingConfirmations = ConcurrentLinkedQueue<PendingConfirmationRequest>()
+
+    /** @return первый ожидающий подтверждения вызов (голова очереди) или null. */
+    fun peekPendingConfirmation(): PendingConfirmationRequest? = pendingConfirmations.peek()
+
+    fun hasPendingConfirmations(): Boolean = !pendingConfirmations.isEmpty()
+
+    /** Количество ожидающих подтверждения вызовов (для диагностики). */
+    fun pendingConfirmationCount(): Int = pendingConfirmations.size
+
+    /**
+     * Добавляет вызов в очередь подтверждений.
+     *
+     * @return true, если вызов добавлен; false — дубликат или очередь переполнена
+     *         (в этом случае вызывающий слой обязан НЕ выдавать запрос на подтверждение).
+     */
+    private fun enqueuePendingConfirmation(call: ToolCall, prompt: String): Boolean {
+        if (pendingConfirmations.any { it.toolCall.callId == call.callId }) {
+            Log.w(TAG, "Call ${call.callId} уже ожидает подтверждения — дубликат отклонён")
+            return false
+        }
+        if (pendingConfirmations.size >= MAX_PENDING_CONFIRMATIONS) {
+            Log.w(TAG, "Очередь подтверждений переполнена ($MAX_PENDING_CONFIRMATIONS) — вызов ${call.callId} отклонён")
+            return false
+        }
+        pendingConfirmations.add(PendingConfirmationRequest(toolCall = call, promptMessage = prompt))
+        Log.d(TAG, "Confirmation enqueued: ${call.toolId} (${call.callId}), queue=${pendingConfirmations.size}")
+        return true
+    }
+
+    /**
+     * Извлекает вызов из очереди подтверждений (подтверждение или отмена).
+     *
+     * @return true, если вызов был в очереди и извлечён.
+     */
+    fun removePendingConfirmation(call: ToolCall): Boolean {
+        // Итератор ConcurrentLinkedQueue weakly-consistent и поддерживает remove().
+        val iterator = pendingConfirmations.iterator()
+        while (iterator.hasNext()) {
+            if (iterator.next().toolCall.callId == call.callId) {
+                iterator.remove()
+                return true
+            }
+        }
+        Log.w(TAG, "removePendingConfirmation: call ${call.callId} (${call.toolId}) не найден в очереди")
+        return false
+    }
+
+    /** Очищает ВСЮ очередь (полный сброс — смена режима, выход из приложения). */
+    fun clearPendingConfirmation() {
+        val size = pendingConfirmations.size
+        pendingConfirmations.clear()
+        if (size > 0) Log.d(TAG, "Pending confirmations cleared ($size)")
+    }
 
     /**
      * Выполняет одиночный вызов инструмента с проверкой безопасности и таймаутом
@@ -32,8 +106,15 @@ class ToolExecutor @Inject constructor(
             )
 
         if (!permissionManager.isExecutionAllowed(tool, call)) {
-            pendingConfirmationCall = call
             val confirmationPrompt = permissionManager.buildConfirmationPrompt(tool, call)
+            // Пункт аудита #4: встаём в очередь, а не перезаписываем предыдущий.
+            // Если очередь переполнена или вызов уже в ней — честный отказ.
+            if (!enqueuePendingConfirmation(call, confirmationPrompt)) {
+                return@withContext ToolExecutionResult.failure(
+                    summary = "Слишком много действий ожидают подтверждения. Сначала подтвердите или отмените предыдущие, сэр.",
+                    error = "CONFIRMATION_QUEUE_FULL"
+                )
+            }
             return@withContext ToolExecutionResult.requiresConfirmation(
                 message = confirmationPrompt,
                 pendingCall = call
@@ -60,10 +141,16 @@ class ToolExecutor @Inject constructor(
     }
 
     /**
-     * Выполняет инструмент БЕЗ повторной проверки PermissionManager (после голосового подтверждения пользователя)
+     * Выполняет инструмент БЕЗ повторной проверки PermissionManager (после голосового/UI-подтверждения пользователя)
+     *
+     * Пункт аудита #4: вызов извлекается из очереди подтверждений. Если его там
+     * нет — логируется предупреждение (подозрительный bypass), но вызов
+     * выполняется для обратной совместимости с существующими флоу.
      */
     suspend fun executeWithBypass(call: ToolCall): ToolExecutionResult = withContext(Dispatchers.IO) {
-        pendingConfirmationCall = null
+        if (!removePendingConfirmation(call)) {
+            Log.w(TAG, "executeWithBypass без ожидающего подтверждения: ${call.toolId} (${call.callId})")
+        }
         val tool = registry.getTool(call.toolId)
             ?: return@withContext ToolExecutionResult.failure(
                 summary = "Инструмент '${call.toolId}' не найден",
@@ -87,13 +174,6 @@ class ToolExecutor @Inject constructor(
                 executionTimeMs = duration
             )
         }
-    }
-
-    /**
-     * Очищает сохранённый отложенный вызов
-     */
-    fun clearPendingConfirmation() {
-        pendingConfirmationCall = null
     }
 
     /**

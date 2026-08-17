@@ -155,6 +155,9 @@ class ChatViewModel @Inject constructor(
     /**
      * Пользователь подтвердил отложенное действие (кнопка «Подтвердить» или «Да»).
      * Выполняется БЕЗ повторного гейта подтверждения — как после голосового «Да».
+     *
+     * Пункт аудита #4: после выполнения показываем СЛЕДУЮЩИЙ ожидающий
+     * подтверждения вызов из очереди ToolExecutor, если он есть.
      */
     fun confirmPendingAction() {
         val pending = _uiState.value.pendingConfirmation ?: return
@@ -176,14 +179,27 @@ class ChatViewModel @Inject constructor(
             )
             _uiState.update { it.copy(isSending = false) }
             textToSpeechManager.speak(voiceResponse, speechRate, speechPitch)
+
+            // Следующий запрос подтверждения из очереди (если есть).
+            toolExecutor.peekPendingConfirmation()?.let { next ->
+                _uiState.update {
+                    it.copy(
+                        pendingConfirmation = PendingConfirmationUi(
+                            toolCall = next.toolCall,
+                            promptMessage = next.promptMessage
+                        )
+                    )
+                }
+            }
         }
     }
 
     /** Пользователь отклонил отложенное действие (кнопка «Отмена» или «Нет»). */
     fun cancelPendingAction() {
-        if (_uiState.value.pendingConfirmation == null) return
+        val pending = _uiState.value.pendingConfirmation ?: return
         _uiState.update { it.copy(pendingConfirmation = null) }
-        toolExecutor.clearPendingConfirmation()
+        // Пункт аудита #4: отменяем ТОЛЬКО текущий вызов — остальные в очереди не трогаем.
+        toolExecutor.removePendingConfirmation(pending.toolCall)
 
         viewModelScope.launch {
             val cancelMsg = "Операция отменена, сэр."
@@ -195,6 +211,18 @@ class ChatViewModel @Inject constructor(
                 )
             )
             textToSpeechManager.speak(cancelMsg, speechRate, speechPitch)
+
+            // Показываем следующий ожидающий подтверждения, если есть.
+            toolExecutor.peekPendingConfirmation()?.let { next ->
+                _uiState.update {
+                    it.copy(
+                        pendingConfirmation = PendingConfirmationUi(
+                            toolCall = next.toolCall,
+                            promptMessage = next.promptMessage
+                        )
+                    )
+                }
+            }
         }
     }
 
