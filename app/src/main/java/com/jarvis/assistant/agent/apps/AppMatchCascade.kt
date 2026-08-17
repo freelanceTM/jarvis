@@ -65,7 +65,8 @@ class AppMatchCascade(
         "calculator" to listOf("calculator", "калькулятор", "кальк"),
         "camera" to listOf("camera", "камера", "камеру", "фотоаппарат"),
         "gallery" to listOf("gallery", "галерея", "галерею", "фото", "фотки"),
-        "settings" to listOf("settings", "настройки", "настройка")
+        "settings" to listOf("settings", "настройки", "настройка"),
+        "calendar" to listOf("calendar", "календарь", "календарю")
     )
 
     /** Известные пакеты для алиасов. Проверяются на установленность. */
@@ -79,7 +80,8 @@ class AppMatchCascade(
         "viber" to listOf("com.viber.voip"),
         "maps" to listOf("com.google.android.apps.maps", "ru.yandex.yandexmaps"),
         "calculator" to listOf("com.google.android.calculator", "com.android.calculator2"),
-        "gallery" to listOf("com.google.android.apps.photos", "com.android.gallery3d")
+        "gallery" to listOf("com.google.android.apps.photos", "com.android.gallery3d"),
+        "calendar" to listOf("com.google.android.calendar", "com.android.calendar")
     )
 
     /**

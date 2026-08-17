@@ -32,7 +32,11 @@ class CreateAutomationTool @Inject constructor(
             }
             putJsonObject("trigger_type") {
                 put("type", "string")
-                put("description", "Тип триггера: HEADPHONES_CONNECTED, HEADPHONES_DISCONNECTED, BATTERY_LOW, WIFI_CONNECTED")
+                put("description", "Тип триггера: HEADPHONES_CONNECTED, HEADPHONES_DISCONNECTED, BATTERY_LOW, WIFI_CONNECTED, TIME_SCHEDULE")
+            }
+            putJsonObject("trigger_param") {
+                put("type", "string")
+                put("description", "Параметр триггера: для TIME_SCHEDULE — время '07:00'")
             }
             putJsonObject("tool_action") {
                 put("type", "string")
@@ -56,12 +60,15 @@ class CreateAutomationTool @Inject constructor(
     override suspend fun execute(arguments: JsonObject): ToolExecutionResult {
         val rawTrigger = arguments["trigger_type"]?.jsonPrimitive?.contentOrNull?.uppercase() ?: "HEADPHONES_CONNECTED"
         val triggerType = when {
+            rawTrigger.contains("TIME") || rawTrigger.contains("ВРЕМ") || rawTrigger.contains("РАСПИСАН") -> AutomationTriggerType.TIME_SCHEDULE
             rawTrigger.contains("HEADPHONE") || rawTrigger.contains("НАУШНИК") -> AutomationTriggerType.HEADPHONES_CONNECTED
             rawTrigger.contains("DISCONNECT") || rawTrigger.contains("ОТКЛЮЧ") -> AutomationTriggerType.HEADPHONES_DISCONNECTED
             rawTrigger.contains("BATTERY") || rawTrigger.contains("БАТАРЕ") -> AutomationTriggerType.BATTERY_LOW
             rawTrigger.contains("WIFI") || rawTrigger.contains("ВАЙФАЙ") -> AutomationTriggerType.WIFI_CONNECTED
             else -> AutomationTriggerType.HEADPHONES_CONNECTED
         }
+
+        val triggerParam = arguments["trigger_param"]?.jsonPrimitive?.contentOrNull ?: ""
 
         val toolAction = arguments["tool_action"]?.jsonPrimitive?.contentOrNull ?: "media.control"
         val actionParams = arguments["action_params"]?.jsonObject ?: buildJsonObject { put("action", "next") }
@@ -74,6 +81,7 @@ class CreateAutomationTool @Inject constructor(
             engine.createAutomationRule(
                 name = name,
                 triggerType = triggerType,
+                triggerParam = triggerParam,
                 actions = listOf(call),
                 voiceAnnouncement = announcement
             )

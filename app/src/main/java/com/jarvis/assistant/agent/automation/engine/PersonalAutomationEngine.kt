@@ -33,7 +33,7 @@ class PersonalAutomationEngine @Inject constructor(
     private val automationDao: AutomationDao,
     private val toolExecutor: ToolExecutor,
     private val textToSpeechManager: TextToSpeechManager,
-    private val ruleEvaluator: RuleEvaluator,
+    private val ruleMatcher: AutomationRuleMatcher,
     private val json: Json
 ) {
     companion object {
@@ -70,44 +70,68 @@ class PersonalAutomationEngine @Inject constructor(
         val currentHour = now.get(Calendar.HOUR_OF_DAY)
         val currentMinute = now.get(Calendar.MINUTE)
 
-        // Оцениваем ВСЕ правила события, а не только первое подходящее.
-        val decisions = ruleEvaluator.evaluate(candidateRules, nowMillis, currentHour, currentMinute)
+        // RuleMatcher: событие → ВСЕ подходящие правила (отсортированы по приоритету).
+        val matchingRules = ruleMatcher.matchForTrigger(candidateRules, nowMillis, currentHour, currentMinute)
+        Log.d(TAG, "Matched ${matchingRules.size} rules for ${triggerType.name}")
+
+        executeRules(matchingRules, nowMillis)
+    }
+
+    /**
+     * Обработка расписания: точное время (TIME_SCHEDULE, triggerParam "HH:MM").
+     *
+     * Пример: 07:00 → открыть календарь, сказать погоду, прочитать расписание,
+     * сообщить важные задачи — ВСЕ правила на 07:00 выполняются.
+     */
+    suspend fun onTimeSchedule(hour: Int, minute: Int) = withContext(Dispatchers.IO) {
+        Log.d(TAG, ">>> Schedule event: %02d:%02d".format(hour, minute))
+
+        ensureDefaultsInitialized()
+
+        val candidateRules = automationDao.getAutomationsByTrigger(AutomationTriggerType.TIME_SCHEDULE.name)
+        if (candidateRules.isEmpty()) return@withContext
+
+        val nowMillis = System.currentTimeMillis()
+        val matchingRules = ruleMatcher.matchForSchedule(candidateRules, nowMillis, hour, minute)
+        Log.d(TAG, "Matched ${matchingRules.size} rules for schedule %02d:%02d".format(hour, minute))
+
+        executeRules(matchingRules, nowMillis)
+    }
+
+    /**
+     * Выполняет ВСЕ переданные правила по порядку (приоритет уже учтён
+     * RuleMatcher'ом). Сбой одного правила не останавливает остальные.
+     */
+    private suspend fun executeRules(rules: List<AutomationEntity>, nowMillis: Long) {
+        if (rules.isEmpty()) return
+
         val voiceMessages = mutableListOf<String>()
 
-        for (decision in decisions) {
-            when (decision) {
-                is RuleDecision.Skip -> {
-                    Log.d(TAG, "Rule '${decision.rule.name}' skipped: ${decision.reason}")
+        for (rule in rules) {
+            val calls = parseActionCalls(rule.actionsJson)
+            if (calls.isEmpty()) {
+                Log.w(TAG, "Rule '${rule.name}' has no parsable actions")
+                continue
+            }
+
+            Log.d(TAG, "Executing ${calls.size} actions for rule '${rule.name}'")
+            try {
+                val results = toolExecutor.executeAll(calls)
+                automationDao.recordTrigger(rule.id, nowMillis)
+
+                val voiceFeedback = if (rule.voiceAnnouncement.isNotBlank()) {
+                    rule.voiceAnnouncement
+                } else {
+                    results.filter { it.isSuccess }
+                        .joinToString(". ") { it.summary }
+                        .takeIf { it.isNotBlank() }
+                        ?.let { "$it, сэр." }
+                        .orEmpty()
                 }
-
-                is RuleDecision.Execute -> {
-                    val rule = decision.rule
-                    val calls = parseActionCalls(rule.actionsJson)
-                    if (calls.isEmpty()) {
-                        Log.w(TAG, "Rule '${rule.name}' has no parsable actions")
-                        continue
-                    }
-
-                    Log.d(TAG, "Executing ${calls.size} actions for rule '${rule.name}'")
-                    try {
-                        val results = toolExecutor.executeAll(calls)
-                        automationDao.recordTrigger(rule.id)
-
-                        val voiceFeedback = if (rule.voiceAnnouncement.isNotBlank()) {
-                            rule.voiceAnnouncement
-                        } else {
-                            results.filter { it.isSuccess }
-                                .joinToString(". ") { it.summary }
-                                .takeIf { it.isNotBlank() }
-                                ?.let { "$it, сэр." }
-                                .orEmpty()
-                        }
-                        if (voiceFeedback.isNotBlank()) voiceMessages.add(voiceFeedback)
-                    } catch (e: Exception) {
-                        // Сбой одного правила не должен останавливать остальные правила события.
-                        Log.e(TAG, "Error executing rule '${rule.name}', continuing with other rules", e)
-                    }
-                }
+                if (voiceFeedback.isNotBlank()) voiceMessages.add(voiceFeedback)
+            } catch (e: Exception) {
+                // Сбой одного правила не должен останавливать остальные правила события.
+                Log.e(TAG, "Error executing rule '${rule.name}', continuing with other rules", e)
             }
         }
 
@@ -159,7 +183,8 @@ class PersonalAutomationEngine @Inject constructor(
             createMorningHeadphonesRule(),
             createHomeWifiRule(),
             createBatteryLowRule(),
-            createHeadphonesDisconnectedRule()
+            createHeadphonesDisconnectedRule(),
+            createMorningScheduleRule()
         )
 
         for (rule in defaultRules) {
@@ -174,6 +199,49 @@ class PersonalAutomationEngine @Inject constructor(
                 Log.e(TAG, "Error inserting rule ${rule.ruleId}", e)
             }
         }
+    }
+
+    /**
+     * Дефолтное правило 07:00 — пример «одно событие → много действий»:
+     *   открыть календарь, сказать погоду, прочитать расписание, сообщить задачи.
+     */
+    private fun createMorningScheduleRule(): AutomationEntity {
+        val actions = buildJsonArray {
+            add(buildJsonObject {
+                put("tool", "device.open_app")
+                putJsonObject("arguments") {
+                    put("app_name", "calendar")
+                }
+            })
+            add(buildJsonObject {
+                put("tool", "intelligence.weather")
+                putJsonObject("arguments") { }
+            })
+            add(buildJsonObject {
+                put("tool", "system.time")
+                putJsonObject("arguments") { }
+            })
+            add(buildJsonObject {
+                put("tool", "memory.recall")
+                putJsonObject("arguments") {
+                    put("query", "важные задачи")
+                }
+            })
+        }.toString()
+
+        return AutomationEntity(
+            ruleId = "default_morning_schedule",
+            name = "Утреннее расписание 07:00",
+            triggerType = AutomationTriggerType.TIME_SCHEDULE.name,
+            triggerParam = "07:00",
+            conditionsJson = "",
+            actionsJson = actions,
+            voiceAnnouncement = "Доброе утро, сэр. Вот ваш план на день: календарь, погода, расписание и задачи.",
+            isEnabled = true,
+            priority = 30,
+            // Точное время — срабатываем раз в сутки, а не каждую минуту.
+            cooldownMs = 24L * 60 * 60 * 1000
+        )
     }
 
     private fun createMorningHeadphonesRule(): AutomationEntity {
@@ -290,7 +358,8 @@ class PersonalAutomationEngine @Inject constructor(
         actions: List<ToolCall>,
         voiceAnnouncement: String = "",
         priority: Int = 0,
-        cooldownMs: Long = DEFAULT_COOLDOWN_MS
+        cooldownMs: Long = DEFAULT_COOLDOWN_MS,
+        triggerParam: String = ""
     ): Long = withContext(Dispatchers.IO) {
         val ruleId = "user_${UUID.randomUUID()}"
         
@@ -311,6 +380,7 @@ class PersonalAutomationEngine @Inject constructor(
             ruleId = ruleId,
             name = name,
             triggerType = triggerType.name,
+            triggerParam = triggerParam,
             conditionsJson = conditionsJson,
             actionsJson = actionsArray,
             voiceAnnouncement = voiceAnnouncement,
