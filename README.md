@@ -3,8 +3,8 @@
 Персональный голосовой AI-ассистент для Android (minSdk 29 / targetSdk 34).
 Проект реализует голосовое взаимодействие, агентную систему с набором
 инструментов (tools), «режим наушников» (Ear Mode) с непрерывным переводом
-речи, память на основе Room + семантического поиска и лицензирование по
-скретч-кодам.
+речи, память на основе Room с лексико-семантическим поиском и лицензирование
+по скретч-кодам.
 
 > Текущая версия: **0.2.0** (ветка `main`).
 
@@ -21,6 +21,15 @@
 
 Честное описание того, что реально работает на Android (и что невозможно
 программно) — в [docs/ANDROID_CAPABILITIES.md](docs/ANDROID_CAPABILITIES.md).
+
+## Семантический поиск — честная формулировка
+
+Поиск по памяти и Tool Discovery используют **лексико-семантический матчинг**
+(`SemanticTextMatcher`): ручные векторы из словаря корней, синонимов,
+хеш-отпечатков слов и n-грамм. Это НЕ neural embeddings — нейросетевые
+embedding-модели в проект не включены (`LocalEmbeddingProvider.isReady() == false`,
+`RemoteEmbeddingProvider` не настроен). Настоящие embeddings — будущий слой
+(контракт `EmbeddingProvider` уже зафиксирован), см. docs/ANDROID_CAPABILITIES.md.
 
 ## Требования
 
@@ -62,4 +71,7 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`
 ## CI
 
 GitHub Actions (`.github/workflows/build.yml`): при каждом push собирает
-debug APK и прогоняет unit-тесты, артефакт выкладывается в workflow artifacts.
+debug APK, прогоняет unit-тесты и lint (`warningsAsErrors` + baseline —
+новые warnings блокируют сборку), артефакт выкладывается в workflow artifacts.
+Инструментальные тесты (`androidTest`, включая миграции Room) — локально:
+`./gradlew connectedDebugAndroidTest`.
