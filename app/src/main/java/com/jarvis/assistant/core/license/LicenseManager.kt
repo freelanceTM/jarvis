@@ -44,6 +44,7 @@ interface LicenseManager {
 class LicenseManagerImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val remoteConfig: LicenseRemoteConfig,
+    private val serverValidator: LicenseServerValidator,
     private val validator: LicenseCodeValidator
 ) : LicenseManager {
 
@@ -60,10 +61,6 @@ class LicenseManagerImpl @Inject constructor(
         // Срок действия первичного кода из коробки: 30 дней
         private const val DEFAULT_TRIAL_DAYS = 30
         private const val DAY_IN_MS = 24L * 60 * 60 * 1000L
-
-        // TODO(server): соль перенести на сервер вместе с алгоритмом проверки
-        // контрольной суммы (пункт аудита #2) — сейчас она извлекаема из APK.
-        private const val CODE_SALT = "JARVIS_EARCLIP_2026_ASHGABAT"
     }
 
     private val masterKey = MasterKey.Builder(context)
@@ -107,9 +104,10 @@ class LicenseManagerImpl @Inject constructor(
         val verdict = validator.validate(
             cleanCode = cleanCode,
             remoteConfig = remote,
+            serverValidator = serverValidator,
+            currentHardwareId = hardwareId,
             usedMasterCodes = getUsedMasterCodes(),
-            codeBoundToHardwareId = securePrefs.getString(KEY_MASTER_CODE_HARDWARE, null),
-            currentHardwareId = hardwareId
+            codeBoundToHardwareId = securePrefs.getString(KEY_MASTER_CODE_HARDWARE, null)
         )
 
         when (verdict) {

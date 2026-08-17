@@ -4,11 +4,11 @@ package com.jarvis.assistant.core.license
  * Чистая логика валидации кодов активации (без Android — unit-тестируема).
  *
  * Два независимых пути:
- *  1. Обычные скретч-коды коробки — проверка контрольной суммы
- *     (TODO(server): алгоритм проверки перенести на сервер, чтобы соль и
- *     формула не извлекались реверс-инжинирингом из APK).
+ *  1. Обычные скретч-коды коробки — финальная проверка на СЕРВЕРЕ
+ *     ([LicenseServerValidator]). Клиентский алгоритм контрольной суммы
+ *     остался только как ВРЕМЕННЫЙ офлайн-fallback ([LocalChecksumVerifier],
+ *     TODO(server): удалить) — см. пункт аудита #2.
  *  2. Мастер-коды — ТОЛЬКО из удалённого конфига [LicenseRemoteConfig].
- *     Hardcoded мастер-коды удалены: без сервера они не работают.
  *
  * Одноразовость мастер-кода и привязка к hardware ID проверяются здесь же
  * (по данным, которые передаёт вызывающий слой), а финальное cross-device
@@ -18,7 +18,7 @@ class LicenseCodeValidator {
 
     /** Результат проверки кода. */
     sealed interface CodeVerdict {
-        /** Обычный скретч-код коробки — валиден по контрольной сумме. */
+        /** Обычный скретч-код коробки — валиден (сервер подтвердил или временный fallback). */
         data object BoxCodeValid : CodeVerdict
 
         /** Мастер-код из удалённого конфига — валиден и ещё не использован. */
@@ -27,23 +27,25 @@ class LicenseCodeValidator {
         /** Мастер-код уже был использован на этом устройстве. */
         data object MasterCodeAlreadyUsed : CodeVerdict
 
-        /** Код не прошёл проверку (неверная сумма / не в списке / конфиг недоступен). */
+        /** Код не прошёл проверку (сервер отклонил / не в списке / fallback не прошёл). */
         data object Invalid : CodeVerdict
     }
 
     /**
-     * @param cleanCode     код, приведённый к каноническому виду (верхний регистр, без пробелов/дефисов)
-     * @param remoteConfig  удалённый конфиг лицензий; null — источник недоступен
+     * @param cleanCode       код, приведённый к каноническому виду (верхний регистр, без пробелов/дефисов)
+     * @param remoteConfig    удалённый конфиг лицензий; null — источник недоступен
+     * @param serverValidator серверная валидация box-кодов (источник правды)
+     * @param currentHardwareId hardware ID текущего устройства
      * @param usedMasterCodes коды, уже использованные на этом устройстве
      * @param codeBoundToHardwareId hardware ID, к которому код уже привязан (если есть)
-     * @param currentHardwareId     hardware ID текущего устройства
      */
-    fun validate(
+    suspend fun validate(
         cleanCode: String,
         remoteConfig: LicenseConfigData?,
+        serverValidator: LicenseServerValidator,
+        currentHardwareId: String,
         usedMasterCodes: Set<String>,
-        codeBoundToHardwareId: String?,
-        currentHardwareId: String
+        codeBoundToHardwareId: String?
     ): CodeVerdict {
         if (cleanCode.length < MIN_CODE_LENGTH) return CodeVerdict.Invalid
 
@@ -58,32 +60,23 @@ class LicenseCodeValidator {
             }
         }
 
-        // 2. Обычные скретч-коды коробки — контрольная сумма.
-        // TODO(server): перенести алгоритм на сервер (пункт аудита #2):
-        // сейчас соль и формула извлекаемы из APK.
-        return if (validateBoxChecksum(cleanCode)) CodeVerdict.BoxCodeValid else CodeVerdict.Invalid
-    }
-
-    private fun validateBoxChecksum(cleanCode: String): Boolean {
-        // Документированный формат скретч-кода коробки: 12-16 символов.
-        // Коды короче (включая бывшие мастер-коды вроде JARVIS2026) — не box-коды.
-        if (cleanCode.length < MIN_BOX_CODE_LENGTH || cleanCode.length > MAX_BOX_CODE_LENGTH) return false
-
-        // Алгоритм контрольной суммы: сумма символов с весами.
-        // Префиксные поблажки (startsWith JRV/JARVIS) УДАЛЕНЫ: они позволяли
-        // любому коду с префиксом «JARVIS» проходить валидацию.
-        var sum = 0
-        for (i in cleanCode.indices) {
-            val charCode = cleanCode[i].code
-            sum += charCode * (i + 1)
+        // 2. Box-коды: сервер — источник правды (пункт аудита #2).
+        return when (val server = serverValidator.validate(cleanCode, currentHardwareId)) {
+            is ServerValidationResult.Valid -> CodeVerdict.BoxCodeValid
+            is ServerValidationResult.Invalid -> CodeVerdict.Invalid
+            ServerValidationResult.ServiceUnavailable -> {
+                // ВРЕМЕННЫЙ офлайн-fallback (TODO(server): удалить вместе с
+                // LocalChecksumVerifier, когда сервер будет развёрнут).
+                if (LocalChecksumVerifier.passes(cleanCode)) {
+                    CodeVerdict.BoxCodeValid
+                } else {
+                    CodeVerdict.Invalid
+                }
+            }
         }
-        // Проверяем делимость контрольной суммы
-        return sum % 7 == 0
     }
 
     private companion object {
         const val MIN_CODE_LENGTH = 8
-        const val MIN_BOX_CODE_LENGTH = 12
-        const val MAX_BOX_CODE_LENGTH = 16
     }
 }

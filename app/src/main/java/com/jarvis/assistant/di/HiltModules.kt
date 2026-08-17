@@ -48,10 +48,12 @@ import com.jarvis.assistant.core.constants.AppConstants
 import com.jarvis.assistant.core.dispatcher.CoroutineDispatchers
 import com.jarvis.assistant.core.dispatcher.DefaultCoroutineDispatchers
 import com.jarvis.assistant.core.license.HttpLicenseRemoteConfig
+import com.jarvis.assistant.core.license.HttpLicenseServerValidator
 import com.jarvis.assistant.core.license.LicenseCodeValidator
 import com.jarvis.assistant.core.license.LicenseManager
 import com.jarvis.assistant.core.license.LicenseManagerImpl
 import com.jarvis.assistant.core.license.LicenseRemoteConfig
+import com.jarvis.assistant.core.license.LicenseServerValidator
 import com.jarvis.assistant.core.network.LiveNetworkMonitor
 import com.jarvis.assistant.core.network.NetworkMonitor
 import com.jarvis.assistant.core.security.SecurityManager
@@ -116,6 +118,10 @@ abstract class SecurityAndNetworkBindingModule {
     @Binds
     @Singleton
     abstract fun bindLicenseRemoteConfig(impl: HttpLicenseRemoteConfig): LicenseRemoteConfig
+
+    @Binds
+    @Singleton
+    abstract fun bindLicenseServerValidator(impl: HttpLicenseServerValidator): LicenseServerValidator
 
     @Binds
     @Singleton
