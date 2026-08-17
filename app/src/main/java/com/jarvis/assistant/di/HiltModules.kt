@@ -59,6 +59,7 @@ import com.jarvis.assistant.core.network.NetworkMonitor
 import com.jarvis.assistant.core.security.SecurityManager
 import com.jarvis.assistant.core.security.SecurityManagerImpl
 import com.jarvis.assistant.data.local.JarvisDatabase
+import com.jarvis.assistant.data.local.JarvisMigrations
 import com.jarvis.assistant.data.local.dao.MessageDao
 import com.jarvis.assistant.data.remote.interceptor.AuthInterceptor
 import com.jarvis.assistant.data.repository.AIRepositoryImpl
@@ -225,8 +226,11 @@ object DatabaseModule {
             context,
             JarvisDatabase::class.java,
             AppConstants.DATABASE_NAME
-        ).fallbackToDestructiveMigration()
-         .build()
+        )
+            // Пункт аудита #7: миграции вместо молчаливого стирания данных.
+            // Без подходящей миграции Room бросит исключение, а не пересоздаст БД.
+            .addMigrations(*JarvisMigrations.ALL)
+            .build()
     }
 
     @Provides

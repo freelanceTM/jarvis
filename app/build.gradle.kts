@@ -6,6 +6,12 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+// Экспорт схем Room в app/schemas — обязательно для миграций и MigrationTestHelper
+// (см. JarvisMigrations.kt, пункт аудита #7).
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 android {
     namespace = "com.jarvis.assistant"
     compileSdk = 34
@@ -104,4 +110,10 @@ dependencies {
     implementation(libs.androidx.security.crypto)
 
     testImplementation(libs.junit)
+
+    // Инструментальные тесты (androidTest): миграции Room, критичные потоки.
+    androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.test.runner)
 }

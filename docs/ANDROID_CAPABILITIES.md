@@ -454,6 +454,21 @@ EmbeddingProvider
 с объяснением причины — никаких «примерных» векторов, которые незаметно
 исказили бы поиск по памяти.
 
+## Миграции Room (процесс — обязателен)
+
+`exportSchema=true`, схемы экспортируются в `app/schemas/` и коммитятся.
+`fallbackToDestructiveMigration` **удалён**: при несовпадении схемы Room
+бросает исключение вместо молчаливого стирания данных.
+
+Любое изменение схемы БД обязано сопровождаться:
+1. `version++` в `JarvisDatabase`;
+2. миграцией `MIGRATION_X_Y` в `JarvisMigrations.ALL`;
+3. обновлённой экспортированной схемой (`app/schemas/…/N.json`);
+4. тестом в `JarvisDatabaseMigrationTest` (`MigrationTestHelper`).
+
+Проверка миграций — инструментальные тесты: `./gradlew connectedDebugAndroidTest`
+(нужен эмулятор/устройство; в CI добавляется отдельным job'ом).
+
 ## Не поддерживается сознательно
 
 * Root / accessibility abuse для обхода системных ограничений.

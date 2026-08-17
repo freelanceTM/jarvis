@@ -19,7 +19,10 @@ import com.jarvis.assistant.data.local.entity.MessageEntity
         AutomationEntity::class
     ],
     version = 5,
-    exportSchema = false
+    // Пункт аудита #7: схема экспортируется в app/schemas/ — обязательное
+    // условие для миграций и MigrationTestHelper. ЛЮБОЕ изменение схемы
+    // обязано сопровождаться миграцией в JarvisMigrations (см. документацию там).
+    exportSchema = true
 )
 abstract class JarvisDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
