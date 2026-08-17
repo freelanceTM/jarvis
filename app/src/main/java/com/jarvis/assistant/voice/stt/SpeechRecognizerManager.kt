@@ -1,5 +1,6 @@
 package com.jarvis.assistant.voice.stt
 
+import com.jarvis.assistant.R
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -87,7 +88,7 @@ class SpeechRecognizerManager @Inject constructor(
         } catch (e: Exception) {
             isListening = false
             Log.e(TAG, "Failed to start speech recognizer: ${e.localizedMessage}")
-            _speechState.value = SpeechRecognitionEvent.RecognitionError("Не удалось открыть микрофон", -1)
+            _speechState.value = SpeechRecognitionEvent.RecognitionError(context.getString(R.string.ne_udalos_otkryt_mikrofon), -1)
         }
     }
 
@@ -138,11 +139,11 @@ class SpeechRecognizerManager @Inject constructor(
 
         isListening = false
         val friendlyMessage = when (error) {
-            SpeechRecognizer.ERROR_NO_MATCH -> "Я не расслышал запрос."
-            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Вы ничего не сказали."
-            SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Нет подключения к интернету."
-            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Нет разрешения на микрофон."
-            else -> "Ошибка распознавания речи ($error)."
+            SpeechRecognizer.ERROR_NO_MATCH -> context.getString(R.string.ya_ne_rasslyshal_zapros)
+            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> context.getString(R.string.vy_nichego_ne_skazali)
+            SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> context.getString(R.string.net_podklyucheniya_k_internetu)
+            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> context.getString(R.string.net_razresheniya_na_mikrofon)
+            else -> context.getString(R.string.oshibka_raspoznavaniya_rechi, error)
         }
         _speechState.value = SpeechRecognitionEvent.RecognitionError(friendlyMessage, error)
     }

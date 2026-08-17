@@ -154,4 +154,36 @@
     <string name="operaciya_otmenena_sir">Операция отменена, сэр.</string>
     <string name="pozhaluysta_vvedite_kod">Пожалуйста, введите код активации со скретч-карты из коробки.</string>
     <string name="vysota_tona_poyasnenie">Высота тона (Pitch): %1$sx (Ниже = глубже голос)</string>
+
+    <!-- ===== Voice layer (audit #17) ===== -->
+    <string name="jarvis_na_pauze">JARVIS на паузе</string>
+    <string name="jarvis_slushaet_v_naushnike">JARVIS слушает (в наушнике)…</string>
+    <string name="jarvis_slushaet">JARVIS слушает…</string>
+    <string name="analiz_golosa">Анализ голоса…</string>
+    <string name="vremya_ozhidaniya_isteklo">Время ожидания истекло. Операция отменена, сэр.</string>
+    <string name="vy_nichego_ne_skazali">Вы ничего не сказали.</string>
+    <string name="naushniki_otklyucheny_ozhidanie">Наушники отключены. Ожидание…</string>
+    <string name="ne_ponyal_skazhite_da_ili_net">Не понял. Скажите да или нет.</string>
+    <string name="ne_udalos_otkryt_mikrofon">Не удалось открыть микрофон</string>
+    <string name="net_podklyucheniya_k_internetu">Нет подключения к интернету.</string>
+    <string name="net_razresheniya_na_mikrofon">Нет разрешения на микрофон.</string>
+    <string name="ozhidanie_podtverzhdeniya">Ожидание подтверждения (Да/Нет)…</string>
+    <string name="ozvuchivanie_otveta">Озвучивание ответа…</string>
+    <string name="oshibka_raspoznavaniya_rechi">Ошибка распознавания речи (%1$d).</string>
+    <string name="oshibka_svyazi_s_ai">Ошибка связи с AI</string>
+    <string name="podklyuchite_naushniki">Подключите наушники</string>
+    <string name="provodnye_naushniki">Проводные наушники</string>
+    <string name="rezhim_perevodchika_aktivirovan">Режим синхронного переводчика в ухе активирован. Слушаю собеседника, сэр.</string>
+    <string name="slushayu_prodolzhenie_dialoga">Слушаю продолжение диалога…</string>
+    <string name="fonovoe_raspoznavanie_klyuchevogo_slova">Фоновое распознавание ключевого слова и голосовые ответы</string>
+    <string name="ya_ne_rasslyshal_zapros">Я не расслышал запрос.</string>
+    <string name="bluetooth_garnitura">Bluetooth Гарнитура</string>
+    <string name="bluetooth_naushnik">Bluetooth Наушник</string>
+
+    <!-- ===== License & UseCase (audit #17) ===== -->
+    <string name="nevernyy_kod_aktivacii">Неверный код активации. Проверьте код на карточке в коробке наушников.</string>
+    <string name="kod_uzhe_ispolzovan">Этот код уже был использован на другом устройстве, сэр.</string>
+    <string name="jarvis_uspeshno_aktivirovan">JARVIS Earclip успешно активирован! Первые 30 дней использования включены бесплатно, сэр.</string>
+    <string name="pustoy_zapros">Пустой запрос</string>
+    <string name="zapros_ne_mozhet_byt_pustym">Запрос не может быть пустым</string>
 </resources>

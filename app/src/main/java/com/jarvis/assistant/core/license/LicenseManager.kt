@@ -1,5 +1,6 @@
 package com.jarvis.assistant.core.license
 
+import com.jarvis.assistant.R
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Build
@@ -113,12 +114,12 @@ class LicenseManagerImpl @Inject constructor(
         when (verdict) {
             is LicenseCodeValidator.CodeVerdict.Invalid ->
                 return ActivationResult.InvalidCode(
-                    "Неверный код активации. Проверьте код на карточке в коробке наушников."
+                    context.getString(R.string.nevernyy_kod_aktivacii)
                 )
 
             is LicenseCodeValidator.CodeVerdict.MasterCodeAlreadyUsed ->
                 return ActivationResult.InvalidCode(
-                    "Этот код уже был использован на другом устройстве, сэр."
+                    context.getString(R.string.kod_uzhe_ispolzovan)
                 )
 
             is LicenseCodeValidator.CodeVerdict.MasterCodeValid -> {
@@ -146,7 +147,7 @@ class LicenseManagerImpl @Inject constructor(
 
         return ActivationResult.Success(
             licenseInfo = newInfo,
-            message = "JARVIS Earclip успешно активирован! Первые 30 дней использования включены бесплатно, сэр."
+            message = context.getString(R.string.jarvis_uspeshno_aktivirovan)
         )
     }
 

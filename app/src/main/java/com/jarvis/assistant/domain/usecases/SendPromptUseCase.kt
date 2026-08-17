@@ -1,5 +1,7 @@
 package com.jarvis.assistant.domain.usecases
 
+import android.content.Context
+import com.jarvis.assistant.R
 import com.jarvis.assistant.agent.memory.manager.JarvisMemoryManager
 import com.jarvis.assistant.agent.pipeline.AgentPipeline
 import com.jarvis.assistant.core.result.Resource
@@ -7,6 +9,7 @@ import com.jarvis.assistant.domain.models.Message
 import com.jarvis.assistant.domain.models.MessageRole
 import com.jarvis.assistant.domain.models.PromptExecutionResult
 import com.jarvis.assistant.domain.repository.MessageRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
 /**
@@ -18,6 +21,7 @@ import javax.inject.Inject
  * — в едином конвейере [AgentPipeline].
  */
 class SendPromptUseCase @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val messageRepository: MessageRepository,
     private val memoryManager: JarvisMemoryManager,
     private val agentPipeline: AgentPipeline
@@ -25,7 +29,7 @@ class SendPromptUseCase @Inject constructor(
     suspend operator fun invoke(userPrompt: String): Resource<PromptExecutionResult> {
         val trimmedPrompt = userPrompt.trim()
         if (trimmedPrompt.isEmpty()) {
-            return Resource.Error(IllegalArgumentException("Пустой запрос"), "Запрос не может быть пустым")
+            return Resource.Error(IllegalArgumentException(context.getString(R.string.pustoy_zapros)), context.getString(R.string.zapros_ne_mozhet_byt_pustym))
         }
 
         // 1. Фиксируем последнюю реплику (для анафоры) и разрешаем контекст.
@@ -59,7 +63,7 @@ class SendPromptUseCase @Inject constructor(
                 }
             }
         } else if (result is Resource.Error) {
-            saveAssistantMessage(result.message ?: "Ошибка выполнения запроса")
+            saveAssistantMessage(result.message ?: context.getString(R.string.oshibka_vypolneniya_zaprosa))
         }
 
         return result

@@ -1,5 +1,6 @@
 package com.jarvis.assistant.voice.audio
 
+import com.jarvis.assistant.R
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
@@ -57,7 +58,7 @@ class BluetoothAudioRouter @Inject constructor(
                 bluetoothHeadset = proxy as? BluetoothHeadset
                 val connectedDevices = bluetoothHeadset?.connectedDevices.orEmpty()
                 if (connectedDevices.isNotEmpty()) {
-                    val name = connectedDevices.first().name ?: "Bluetooth Гарнитура"
+                    val name = connectedDevices.first().name ?: context.getString(R.string.bluetooth_garnitura)
                     _audioState.value = BluetoothAudioState.Connected(name, isSingleEarbud = true)
                     _isHeadsetPlugged.value = true
                     routeAudioToEarbud()
@@ -82,7 +83,7 @@ class BluetoothAudioRouter @Inject constructor(
             when (intent?.action) {
                 BluetoothDevice.ACTION_ACL_CONNECTED -> {
                     val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
-                    val name = device?.name ?: "Bluetooth Наушник"
+                    val name = device?.name ?: this@BluetoothAudioRouter.context.getString(R.string.bluetooth_naushnik)
                     _audioState.value = BluetoothAudioState.Connected(name, isSingleEarbud = true)
                     _isHeadsetPlugged.value = true
                     routeAudioToEarbud()
@@ -98,7 +99,7 @@ class BluetoothAudioRouter @Inject constructor(
                     val isPlugged = (state == 1) || isBluetoothConnected()
                     _isHeadsetPlugged.value = isPlugged
                     if (state == 1) {
-                        _audioState.value = BluetoothAudioState.Connected("Проводные наушники")
+                        _audioState.value = BluetoothAudioState.Connected(this@BluetoothAudioRouter.context.getString(R.string.provodnye_naushniki))
                         routeAudioToEarbud()
                         triggerHeadphoneAutomation()
                     } else if (!isBluetoothConnected()) {

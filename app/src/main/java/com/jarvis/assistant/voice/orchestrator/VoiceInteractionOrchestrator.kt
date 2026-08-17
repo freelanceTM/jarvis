@@ -1,5 +1,6 @@
 package com.jarvis.assistant.voice.orchestrator
 
+import com.jarvis.assistant.R
 import android.content.Context
 import android.media.ToneGenerator
 import android.media.AudioManager
@@ -131,7 +132,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
         if (isHeadsetOnlyMode && !bluetoothAudioRouter.isHeadsetConnected()) {
             _currentMode.value = OrchestratorMode.PAUSED_CALL_OR_SLEEP
-            _assistantState.value = VoiceAssistantState.Error("Подключите наушники для работы")
+            _assistantState.value = VoiceAssistantState.Error(context.getString(R.string.podklyuchite_naushniki_dlya_raboty))
             return
         }
 
@@ -163,7 +164,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         if (isHeadsetOnlyMode) {
                             stopAll()
                             _currentMode.value = OrchestratorMode.PAUSED_CALL_OR_SLEEP
-                            _assistantState.value = VoiceAssistantState.Error("Наушники отключены. Ожидание...")
+                            _assistantState.value = VoiceAssistantState.Error(context.getString(R.string.naushniki_otklyucheny_ozhidanie))
                         } else {
                             startStandbyMode()
                         }
@@ -200,7 +201,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
         if (isHeadsetOnlyMode && !bluetoothAudioRouter.isHeadsetConnected()) {
             _currentMode.value = OrchestratorMode.PAUSED_CALL_OR_SLEEP
-            _assistantState.value = VoiceAssistantState.Error("Подключите наушники")
+            _assistantState.value = VoiceAssistantState.Error(context.getString(R.string.podklyuchite_naushniki))
             return
         }
 
@@ -227,7 +228,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
         wakeWordDetector.stopListening()
 
         _currentMode.value = OrchestratorMode.LIVE_EAR_INTERPRETER
-        val msg = "Режим синхронного переводчика в ухе активирован. Слушаю собеседника, сэр."
+        val msg = context.getString(R.string.rezhim_perevodchika_aktivirovan)
         _assistantState.value = VoiceAssistantState.Speaking(msg)
         bluetoothAudioRouter.routeAudioToEarbud()
         textToSpeechManager.speak(msg, speechRate, speechPitch)
@@ -438,7 +439,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                                 confirmationTimeoutJob = scope.launch {
                                     delay(CONFIRMATION_TIMEOUT_MS)
                                     if (_currentMode.value == OrchestratorMode.AWAITING_CONFIRMATION) {
-                                        val timeoutMsg = "Время ожидания истекло. Операция отменена, сэр."
+                                        val timeoutMsg = context.getString(R.string.vremya_ozhidaniya_isteklo)
                                         _lastAnswer.value = timeoutMsg
                                         _assistantState.value = VoiceAssistantState.Speaking(timeoutMsg)
                                         textToSpeechManager.speak(timeoutMsg, speechRate, speechPitch)
@@ -461,7 +462,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         }
                     }
                     is Resource.Error -> {
-                        val errorMsg = result.message ?: "Ошибка связи с AI"
+                        val errorMsg = result.message ?: context.getString(R.string.oshibka_svyazi_s_ai)
                         _lastAnswer.value = "Ошибка: $errorMsg"
                         _currentMode.value = OrchestratorMode.STANDBY_WAKE_WORD
                         _assistantState.value = VoiceAssistantState.Error(errorMsg)
@@ -532,14 +533,14 @@ class VoiceInteractionOrchestrator @Inject constructor(
                 pendingToolCall = null
                                         pendingConfirmationToken = null
                 if (cancelled != null) toolExecutor.removePendingConfirmation(cancelled)
-                val cancelMsg = "Операция отменена, сэр."
+                val cancelMsg = context.getString(R.string.operaciya_otmenena_sir)
                 _lastAnswer.value = cancelMsg
                 _currentMode.value = OrchestratorMode.TTS_SPEAKING
                 _assistantState.value = VoiceAssistantState.Speaking(cancelMsg)
                 textToSpeechManager.speak(cancelMsg, speechRate, speechPitch)
             }
             else -> {
-                val retryMsg = "Не понял. Скажите да или нет."
+                val retryMsg = context.getString(R.string.ne_ponyal_skazhite_da_ili_net)
                 _assistantState.value = VoiceAssistantState.Speaking(retryMsg)
                 textToSpeechManager.speak(retryMsg, speechRate, speechPitch)
 
@@ -547,7 +548,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                 confirmationTimeoutJob = scope.launch {
                     delay(CONFIRMATION_TIMEOUT_MS)
                     if (_currentMode.value == OrchestratorMode.AWAITING_CONFIRMATION) {
-                        val timeoutMsg = "Время ожидания истекло. Операция отменена, сэр."
+                        val timeoutMsg = context.getString(R.string.vremya_ozhidaniya_isteklo)
                         _lastAnswer.value = timeoutMsg
                         _assistantState.value = VoiceAssistantState.Speaking(timeoutMsg)
                         textToSpeechManager.speak(timeoutMsg, speechRate, speechPitch)

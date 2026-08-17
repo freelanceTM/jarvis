@@ -1,5 +1,6 @@
 package com.jarvis.assistant.voice.service
 
+import com.jarvis.assistant.R
 import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
@@ -105,7 +106,7 @@ private const val WAKELOCK_TIMEOUT_MS = 8 * 60 * 60 * 1000L
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        startServiceForeground(buildNotification("JARVIS слушает..."))
+        startServiceForeground(buildNotification(getString(R.string.jarvis_slushaet)))
         acquireWakeLock()
         registerTelephonyListener()
         registerSystemReceivers()
@@ -116,12 +117,12 @@ private const val WAKELOCK_TIMEOUT_MS = 8 * 60 * 60 * 1000L
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START, ACTION_RESUME -> {
-                startServiceForeground(buildNotification("JARVIS слушает..."))
+                startServiceForeground(buildNotification(getString(R.string.jarvis_slushaet)))
                 orchestrator.startServicePipeline()
             }
             ACTION_PAUSE -> {
                 orchestrator.stopServicePipeline()
-                updateNotification("JARVIS на паузе")
+                updateNotification(getString(R.string.jarvis_na_pauze))
             }
             ACTION_STOP -> {
                 orchestrator.stopServicePipeline()
@@ -214,13 +215,13 @@ private const val WAKELOCK_TIMEOUT_MS = 8 * 60 * 60 * 1000L
         serviceScope.launch {
             orchestrator.currentMode.collectLatest { mode ->
                 val statusText = when (mode) {
-                    OrchestratorMode.STANDBY_WAKE_WORD -> "JARVIS слушает (в наушнике)..."
-                    OrchestratorMode.VERIFYING_KEYWORD -> "Анализ голоса..."
+                    OrchestratorMode.STANDBY_WAKE_WORD -> getString(R.string.jarvis_slushaet_v_naushnike)
+                    OrchestratorMode.VERIFYING_KEYWORD -> getString(R.string.analiz_golosa)
                     OrchestratorMode.LISTENING_USER_QUERY -> "Слушаю ваш запрос..."
-                    OrchestratorMode.CONTINUOUS_CONVERSATION -> "Слушаю продолжение диалога..."
+                    OrchestratorMode.CONTINUOUS_CONVERSATION -> getString(R.string.slushayu_prodolzhenie_dialoga)
                     OrchestratorMode.AI_THINKING -> "Выполнение команды..."
-                    OrchestratorMode.TTS_SPEAKING -> "Озвучивание ответа..."
-                    OrchestratorMode.AWAITING_CONFIRMATION -> "Ожидание подтверждения (Да/Нет)..."
+                    OrchestratorMode.TTS_SPEAKING -> getString(R.string.ozvuchivanie_otveta)
+                    OrchestratorMode.AWAITING_CONFIRMATION -> getString(R.string.ozhidanie_podtverzhdeniya)
                     OrchestratorMode.LIVE_EAR_INTERPRETER -> "🎧 Синхронный переводчик в ухе активен..."
                     OrchestratorMode.PAUSED_CALL_OR_SLEEP -> "Наушники отключены / Пауза"
                 }
@@ -263,7 +264,7 @@ private const val WAKELOCK_TIMEOUT_MS = 8 * 60 * 60 * 1000L
                 CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Фоновое распознавание ключевого слова и голосовые ответы"
+                description = getString(R.string.fonovoe_raspoznavanie_klyuchevogo_slova)
                 setShowBadge(false)
             }
             val manager = getSystemService(NotificationManager::class.java)
