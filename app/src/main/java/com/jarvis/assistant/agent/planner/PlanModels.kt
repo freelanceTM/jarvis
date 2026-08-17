@@ -16,7 +16,18 @@ data class PlanStep(
     val toolCall: ToolCall,
     val description: String = "",
     val condition: PlanCondition = PlanCondition.Always,
-    val isCritical: Boolean = true
+    val isCritical: Boolean = true,
+
+    /**
+     * VERIFY-фаза: после успешного выполнения шага агент читает экран
+     * (accessibility.screen_reader) и проверяет, что этот текст реально
+     * присутствует. Только тогда шаг считается достигнувшим цели.
+     *
+     * Пример: шаг «Открыть YouTube» с verifyScreenContains = "поиск" — если
+     * после открытия на экране нет поля поиска, шаг НЕ засчитывается и
+     * запускается REPLAN.
+     */
+    val verifyScreenContains: String? = null
 )
 
 typealias ExecutionStep = PlanStep

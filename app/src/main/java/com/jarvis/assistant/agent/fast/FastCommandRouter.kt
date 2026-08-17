@@ -388,6 +388,13 @@ class FastCommandRouter @Inject constructor() {
             }
 
             if (app.isNotEmpty()) {
+                // «Открой YouTube и найди UFC» — это НЕ одиночный запуск приложения:
+                // уходим в планировщик, который построит UI-цепочку
+                // (открыть → поле поиска → ввод → VERIFY результата).
+                if (q.contains("найди") || q.contains("поищи") || q.contains("ищи") || q.contains("найти")) {
+                    return FastRouteResult.ForwardToLlm
+                }
+
                 val appTitle = when (app) {
                     "telegram" -> "Telegram"
                     "youtube" -> "YouTube"

@@ -246,4 +246,82 @@ class AgentCognitiveLoopTest {
     fun `MAX_REPLANS constant is two`() {
         assertEquals(2, AgentCognitiveLoop.MAX_REPLANS)
     }
+
+    // =========================================================================
+    // VERIFY phase: шаг засчитывается только после проверки экрана
+    // =========================================================================
+
+    @Test
+    fun `step with verify passes when expected text is on screen`() = runBlocking {
+        val parser = ToolCallParser(Json { ignoreUnknownKeys = true })
+        val planner = AlwaysReplanPlanner("device.backup", parser)
+        val openApp = ScriptedTool("device.open_app", listOf(ToolExecutionResult.success("YouTube открыт")))
+        // Экран после открытия: поле поиска и результаты присутствуют.
+        val screenReader = ScriptedTool(
+            "accessibility.screen_reader",
+            listOf(ToolExecutionResult.success("YouTube, поиск, UFC, бой вечера"))
+        )
+        val loop = buildLoop(setOf(openApp, screenReader), planner)
+
+        val plan = ExecutionPlan(
+            goal = "Открыть YouTube и найти UFC",
+            explanation = "",
+            steps = listOf(
+                PlanStep(
+                    toolCall = ToolCall("device.open_app", buildJsonObject { }),
+                    description = "Открыть YouTube",
+                    verifyScreenContains = "UFC"
+                )
+            )
+        )
+
+        val summary = loop.runPlan(plan)
+
+        assertTrue("Goal is verified when expected text is on screen", summary.isAllSuccessful)
+        assertEquals("VERIFY reads the screen exactly once", 1, screenReader.calls)
+        assertEquals("No replan needed when verify passes", 0, planner.replanCalls)
+    }
+
+    @Test
+    fun `step fails verification when expected text is missing and replans`() = runBlocking {
+        val parser = ToolCallParser(Json { ignoreUnknownKeys = true })
+        // Планировщик, который НЕ предлагает альтернатив (verify-провал честный).
+        val planner = object : CognitivePlanner(parser) {
+            override fun replan(
+                currentPlan: ExecutionPlan,
+                failedStep: PlanStep,
+                observation: StepObservation.StepFailed,
+                attemptNumber: Int
+            ): ExecutionPlan? = null
+        }
+        val openApp = ScriptedTool("device.open_app", listOf(ToolExecutionResult.success("YouTube открыт")))
+        // Экран открылся, но искомого текста НЕТ — цель не достигнута.
+        val screenReader = ScriptedTool(
+            "accessibility.screen_reader",
+            listOf(ToolExecutionResult.success("YouTube, главная страница, без результатов"))
+        )
+        val loop = buildLoop(setOf(openApp, screenReader), planner)
+
+        val plan = ExecutionPlan(
+            goal = "Открыть YouTube и найти UFC",
+            explanation = "",
+            steps = listOf(
+                PlanStep(
+                    toolCall = ToolCall("device.open_app", buildJsonObject { }),
+                    description = "Открыть YouTube",
+                    isCritical = false,
+                    verifyScreenContains = "UFC"
+                )
+            )
+        )
+
+        val summary = loop.runPlan(plan)
+
+        assertFalse("Verify failure must not report success", summary.isAllSuccessful)
+        assertEquals(1, screenReader.calls)
+        assertTrue(
+            "Voice summary must honestly report that goal was not confirmed",
+            summary.finalVoiceSummary.contains("не найден", ignoreCase = true)
+        )
+    }
 }

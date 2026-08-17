@@ -16,6 +16,7 @@ import com.jarvis.assistant.agent.weather.WeatherProvider
 import com.jarvis.assistant.agent.memory.dao.*
 import com.jarvis.assistant.agent.tools.accessibility.ScreenReaderTool
 import com.jarvis.assistant.agent.tools.accessibility.UiClickTool
+import com.jarvis.assistant.agent.tools.accessibility.UiTypeTextTool
 import com.jarvis.assistant.agent.tools.communication.*
 import com.jarvis.assistant.agent.tools.device.*
 import com.jarvis.assistant.agent.tools.intelligence.ForgetMemoryTool
@@ -165,6 +166,7 @@ abstract class SecurityAndNetworkBindingModule {
     // 7. Спец. возможности и UI управление (Accessibility)
     @Binds @IntoSet abstract fun bindScreenReaderTool(tool: ScreenReaderTool): JarvisTool
     @Binds @IntoSet abstract fun bindUiClickTool(tool: UiClickTool): JarvisTool
+    @Binds @IntoSet abstract fun bindUiTypeTextTool(tool: UiTypeTextTool): JarvisTool
 }
 
 @Module

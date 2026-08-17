@@ -31,6 +31,78 @@ open class CognitivePlanner @Inject constructor(
             .trim()
 
         // =========================================================================
+        // СЦЕНАРИЙ 0: «Открой <приложение> и найди/поищи <запрос>»
+        //
+        // Полноценная UI-цепочка вместо «открыл приложение = задача решена»:
+        //   OpenApp(app) → click(поле поиска) → type(query) → verify(query на экране)
+        // Последний шаг несёт verifyScreenContains — цикл OBSERVE→VERIFY подтвердит,
+        // что результат реально появился, иначе REPLAN.
+        // =========================================================================
+        val openSearchMatch = Regex(
+            """(?:открой|запусти|включи|откр)\s+(.+?)\s+(?:и\s+)?(?:найди|поищи|ищи|найти|поиск)\s+(.+)""",
+            RegexOption.IGNORE_CASE
+        ).find(q)
+        if (openSearchMatch != null) {
+            val appRaw = openSearchMatch.groupValues[1].trim()
+            val query = openSearchMatch.groupValues[2].trim()
+
+            val app = when {
+                appRaw.contains("телеграм") || appRaw.contains("telegram") || appRaw.contains("тг") || appRaw.contains("tg") -> "telegram"
+                appRaw.contains("ютуб") || appRaw.contains("youtube") || appRaw.contains("ют") -> "youtube"
+                appRaw.contains("ватсап") || appRaw.contains("whatsapp") || appRaw.contains("вацап") -> "whatsapp"
+                appRaw.contains("хром") || appRaw.contains("chrome") || appRaw.contains("браузер") -> "chrome"
+                appRaw.contains("спотифай") || appRaw.contains("spotify") -> "spotify"
+                else -> null
+            }
+
+            if (app != null && query.isNotEmpty()) {
+                return ExecutionPlan(
+                    goal = "Открыть $app и найти «$query»",
+                    explanation = "UI-цепочка: открыть приложение, найти поле поиска, ввести запрос, проверить результат на экране",
+                    steps = listOf(
+                        PlanStep(
+                            toolCall = ToolCall(
+                                toolId = "device.open_app",
+                                arguments = buildJsonObject { put("app_name", app) }
+                            ),
+                            description = "Открыть $app",
+                            condition = PlanCondition.Always,
+                            isCritical = true
+                        ),
+                        PlanStep(
+                            toolCall = ToolCall(
+                                toolId = "accessibility.ui_click",
+                                arguments = buildJsonObject { put("target_text", "поиск") }
+                            ),
+                            description = "Найти и нажать поле поиска в $app",
+                            condition = PlanCondition.Always,
+                            isCritical = false
+                        ),
+                        PlanStep(
+                            toolCall = ToolCall(
+                                toolId = "accessibility.type_text",
+                                arguments = buildJsonObject { put("text", query) }
+                            ),
+                            description = "Ввести запрос «$query» в поле поиска",
+                            condition = PlanCondition.Always,
+                            isCritical = false
+                        ),
+                        PlanStep(
+                            toolCall = ToolCall(
+                                toolId = "accessibility.screen_reader",
+                                arguments = buildJsonObject { }
+                            ),
+                            description = "Проверить, что результаты поиска по «$query» появились на экране",
+                            condition = PlanCondition.Always,
+                            isCritical = true,
+                            verifyScreenContains = query
+                        )
+                    )
+                )
+            }
+        }
+
+        // =========================================================================
         // СЦЕНАРИЙ 1: «Я ухожу» / «Выхожу из дома» / «На выход»
         // =========================================================================
         if (q.contains("я ухожу") || q.contains("выхожу") || q.contains("вышел из дома") || 
@@ -583,6 +655,19 @@ open class CognitivePlanner @Inject constructor(
                         arguments = buildJsonObject { }
                     ),
                     description = "Чтение экрана для поиска '$target'",
+                    condition = PlanCondition.Always,
+                    isCritical = false
+                )
+            }
+            "accessibility.type_text" -> {
+                // Ввод не удался (нет редактируемого поля) — читаем экран,
+                // чтобы понять, что на нём реально есть.
+                PlanStep(
+                    toolCall = ToolCall(
+                        toolId = "accessibility.screen_reader",
+                        arguments = buildJsonObject { }
+                    ),
+                    description = "Чтение экрана: проверка доступных полей ввода",
                     condition = PlanCondition.Always,
                     isCritical = false
                 )

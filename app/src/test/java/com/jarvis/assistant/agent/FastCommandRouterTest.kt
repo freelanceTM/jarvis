@@ -142,6 +142,24 @@ class FastCommandRouterTest {
     }
     
     // ===========================================
+    // Open app + search (multi-step UI chain)
+    // ===========================================
+
+    @Test
+    fun `open app with search query is forwarded to planner instead of single open`() {
+        val result = router.route("открой youtube и найди ufc")
+        assertTrue(result is FastRouteResult.ForwardToLlm)
+    }
+
+    @Test
+    fun `open app without search stays local single open`() {
+        val result = router.route("открой youtube")
+        assertTrue(result is FastRouteResult.HandledLocally)
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.open_app", handled.toolCall?.toolId)
+    }
+
+    // ===========================================
     // Screenshot (honest two-branch behavior)
     // ===========================================
 

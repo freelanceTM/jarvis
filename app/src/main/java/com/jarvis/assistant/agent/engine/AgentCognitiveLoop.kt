@@ -2,6 +2,7 @@ package com.jarvis.assistant.agent.engine
 
 import android.util.Log
 import com.jarvis.assistant.agent.executor.ToolExecutor
+import com.jarvis.assistant.agent.model.ToolCall
 import com.jarvis.assistant.agent.observation.AgentObservationEngine
 import com.jarvis.assistant.agent.observation.NextActionHint
 import com.jarvis.assistant.agent.observation.Observation
@@ -96,7 +97,51 @@ class AgentCognitiveLoop @Inject constructor(
             }
 
             if (observation.success) {
-                summaries.add(observation.summary)
+                // ------------------------------------------------------ VERIFY
+                // Цель шага считается достигнутой только после проверки:
+                // читаем экран и убеждаемся, что ожидаемое состояние реально
+                // наступило (например, поле поиска открылось). Без этого
+                // «Открыл YouTube» считалось бы успехом, даже если экран
+                // не загрузился или открылось другое приложение.
+                val expected = step.verifyScreenContains
+                val verified = if (expected != null) {
+                    verifyOnScreen(expected, stepObservations, step)
+                } else {
+                    true
+                }
+
+                if (verified) {
+                    summaries.add(observation.summary)
+                    currentStepIdx++
+                    continue
+                }
+
+                // VERIFY провален: инструмент отработал, но цели на экране нет.
+                isAllSuccessful = false
+                val verifyObservation = Observation(
+                    toolId = step.toolCall.toolId,
+                    success = false,
+                    stateChanged = false,
+                    summary = "Проверил экран: \"$expected\" не найден. Цель шага не подтверждена.",
+                    error = "VERIFY_FAILED",
+                    nextActionHint = NextActionHint.REPLAN
+                )
+                Log.w(TAG, "VERIFY failed for step '${step.description}': expected '$expected' not on screen")
+
+                val replanned = tryReplan(currentPlan, step, verifyObservation, replanAttempts)
+                if (replanned != null) {
+                    replanAttempts++
+                    Log.d(TAG, "Re-plan $replanAttempts/$MAX_REPLANS after verify failure: ${replanned.explanation}")
+                    currentPlan = replanned
+                    currentStepIdx = 0
+                    continue
+                }
+
+                summaries.add(verifyObservation.summary)
+                if (step.isCritical) {
+                    Log.e(TAG, "Critical step failed verification without viable re-plan. Halting plan execution.")
+                    break
+                }
                 currentStepIdx++
                 continue
             }
@@ -172,6 +217,31 @@ class AgentCognitiveLoop @Inject constructor(
             attemptNumber = attemptsSoFar + 1
         )
         return newPlan?.takeIf { it.steps.isNotEmpty() }
+    }
+
+    /**
+     * VERIFY: выполняет чтение экрана и проверяет наличие ожидаемого текста.
+     *
+     * @return true, если ожидаемый текст найден на экране (цель подтверждена).
+     */
+    private suspend fun verifyOnScreen(
+        expectedText: String,
+        stepObservations: MutableList<StepObservation>,
+        step: PlanStep
+    ): Boolean {
+        val readResult = toolExecutor.execute(
+            ToolCall(toolId = "accessibility.screen_reader", arguments = kotlinx.serialization.json.JsonObject(emptyMap()))
+        )
+        val screenContent = readResult.summary
+
+        return if (readResult.isSuccess && screenContent.contains(expectedText, ignoreCase = true)) {
+            Log.d(TAG, "VERIFY OK: '$expectedText' found on screen")
+            true
+        } else {
+            Log.w(TAG, "VERIFY failed: '$expectedText' not found. Screen: ${screenContent.take(120)}")
+            stepObservations.add(StepObservation.StepFailed(step, "VERIFY_FAILED: '$expectedText' не найден на экране"))
+            false
+        }
     }
 
     private fun buildVoiceSummary(

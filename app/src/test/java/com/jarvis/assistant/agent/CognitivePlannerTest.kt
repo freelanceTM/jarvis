@@ -99,6 +99,29 @@ class CognitivePlannerTest {
     // ===========================================
     
     @Test
+    fun `open app and search scenario builds UI chain with verify step`() {
+        val plan = planner.planForGoal("открой YouTube и найди UFC")
+
+        assertNotNull(plan)
+        assertEquals("Открыть youtube и найти «ufc»", plan!!.goal)
+        assertEquals(4, plan.steps.size)
+
+        assertEquals("device.open_app", plan.steps[0].toolCall.toolId)
+        assertEquals("accessibility.ui_click", plan.steps[1].toolCall.toolId)
+        assertEquals("accessibility.type_text", plan.steps[2].toolCall.toolId)
+        assertEquals("accessibility.screen_reader", plan.steps[3].toolCall.toolId)
+
+        // VERIFY-фаза: последний шаг проверяет, что результат реально на экране.
+        assertEquals("ufc", plan.steps[3].verifyScreenContains)
+    }
+
+    @Test
+    fun `open app and search unknown app returns null`() {
+        val plan = planner.planForGoal("открой нотоискатель и найди ufc")
+        assertNull(plan)
+    }
+
+    @Test
     fun `wake word is stripped from query`() {
         val plan1 = planner.planForGoal("джарвис, я ухожу")
         val plan2 = planner.planForGoal("я ухожу")

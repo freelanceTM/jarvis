@@ -2,6 +2,7 @@ package com.jarvis.assistant.agent.tools.accessibility
 
 import android.accessibilityservice.AccessibilityService
 import android.os.Build
+import android.os.Bundle
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -96,6 +97,49 @@ class JarvisAccessibilityService : AccessibilityService() {
 
             Log.w(TAG, "clickByText '$targetText': element not found")
             return false
+        }
+
+        /**
+         * Вводит текст в сфокусированное редактируемое поле (ACTION_SET_TEXT).
+         *
+         * Используется в цепочке «открой приложение → найди поле поиска →
+         * введи запрос → проверь результат». Если ни одно редактируемое поле
+         * не сфокусировано — ищем первое EditText-поле на экране и ставим
+         * фокус через ACTION_FOCUS перед вводом.
+         */
+        fun typeText(text: String): Boolean {
+            val rootNode = instance?.rootInActiveWindow ?: return false
+            if (text.isEmpty()) return false
+
+            val editable = findEditableNode(rootNode)
+                ?: run {
+                    Log.w(TAG, "typeText: no editable field found on screen")
+                    return false
+                }
+
+            val setTextArgs = Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+            }
+            val success = editable.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, setTextArgs)
+            Log.d(TAG, "typeText '$text' into editable field result: $success")
+            return success
+        }
+
+        private fun findEditableNode(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+            if (node == null) return null
+
+            // Сначала сфокусированное поле ввода.
+            val focused = node.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+            if (focused?.isEditable == true) return focused
+
+            if (node.isEditable) return node
+
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i)
+                val found = findEditableNode(child)
+                if (found != null) return found
+            }
+            return null
         }
 
         /**

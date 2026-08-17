@@ -194,6 +194,44 @@ weather(location=Берлин)  → геокодинг названного го
 Нет разрешения на локацию → `PERMISSION_REQUIRED` + предложение назвать город.
 Нет координат → `FAILURE (LOCATION_UNAVAILABLE)`. Фейковая погода не выдаётся.
 
+## Agent Cognitive Loop: PLAN → EXECUTE → OBSERVE → VERIFY → DONE/REPLAN
+
+Состояние агента при выполнении многошаговых планов:
+
+```
+PLAN
+ ↓
+EXECUTE (инструмент выполнен)
+ ↓
+OBSERVE (структурированное наблюдение: success/stateChanged/error/nextActionHint)
+ ↓
+VERIFY  (если шаг требует проверки: чтение экрана + поиск ожидаемого текста)
+ ↓
+SUCCESS?
+ ├── YES → DONE (следующий шаг / завершение плана)
+ └── NO  → REPLAN (до MAX_REPLANS=2, бюджет шагов MAX_TOTAL_STEPS=12)
+```
+
+Ключевое отличие от «голосового чат-бота»: инструмент может вернуть SUCCESS,
+но цель считается достигнутой только после VERIFY. Шаг плана может нести
+`verifyScreenContains` — тогда после выполнения агент читает экран
+(`accessibility.screen_reader`) и проверяет наличие ожидаемого текста.
+
+Пример — «Открой YouTube и найди UFC» (сценарий планировщика):
+
+```
+1. device.open_app(youtube)
+2. accessibility.ui_click("поиск")      — найти поле поиска
+3. accessibility.type_text("UFC")       — ввести запрос (ACTION_SET_TEXT)
+4. accessibility.screen_reader          — VERIFY: «UFC» на экране?
+                                          └─ нет → REPLAN (честно: цель не подтверждена)
+```
+
+`accessibility.type_text` — инструмент ввода текста через Accessibility
+(ACTION_SET_TEXT в сфокусированное/первое редактируемое поле). Если служба
+специальных возможностей выключена — `USER_ACTION_REQUIRED`; поля на экране
+нет — `FAILURE (NO_EDITABLE_FIELD)`.
+
 ## Не поддерживается сознательно
 
 * Root / accessibility abuse для обхода системных ограничений.
