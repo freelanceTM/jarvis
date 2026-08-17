@@ -89,6 +89,9 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private var pendingToolCall: ToolCall? = null
     private var pendingConfirmationPrompt: String = ""
 
+    /** Одноразовый токен подтверждения (пункт аудита #5). */
+    private var pendingConfirmationToken: String? = null
+
     private var speechRate = 1.05f
     private var speechPitch = 0.90f
     private var isHeadsetOnlyMode = false
@@ -205,6 +208,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
         silenceJob?.cancel()
         silenceJob = null
         pendingToolCall = null
+                                        pendingConfirmationToken = null
         toolExecutor.clearPendingConfirmation()
         isProcessingQuery.set(false)
 
@@ -419,6 +423,8 @@ class VoiceInteractionOrchestrator @Inject constructor(
                             is PromptExecutionResult.ConfirmationRequired -> {
                                 pendingToolCall = execution.toolCall
                                 pendingConfirmationPrompt = execution.promptMessage
+                                pendingConfirmationToken =
+                                    toolExecutor.peekPendingConfirmation()?.confirmationToken
 
                                 _lastAnswer.value = pendingConfirmationPrompt
                                 _currentMode.value = OrchestratorMode.AWAITING_CONFIRMATION
@@ -436,6 +442,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                                         textToSpeechManager.speak(timeoutMsg, speechRate, speechPitch)
                                         val timedOut = pendingToolCall
                                         pendingToolCall = null
+                                        pendingConfirmationToken = null
                                         if (timedOut != null) toolExecutor.removePendingConfirmation(timedOut)
                                         delay(2000)
                                         startStandbyMode()
@@ -481,7 +488,10 @@ class VoiceInteractionOrchestrator @Inject constructor(
         when {
             isYes && pendingToolCall != null -> {
                 val callToExecute = pendingToolCall!!
+                // Пункт аудита #5: сохраняем токен ДО сброса состояния.
+                val tokenToUse = pendingConfirmationToken
                 pendingToolCall = null
+                pendingConfirmationToken = null
                 // Пункт аудита #4: НЕ чистим всю очередь — executeWithBypass
                 // извлечёт из неё именно этот вызов, остальные останутся ждать.
 
@@ -489,7 +499,11 @@ class VoiceInteractionOrchestrator @Inject constructor(
                 _assistantState.value = VoiceAssistantState.Thinking
 
                 scope.launch {
-                    val result = toolExecutor.executeWithBypass(callToExecute)
+                    val result = toolExecutor.executeWithBypass(
+                        call = callToExecute,
+                        confirmationToken = tokenToUse,
+                        source = "voice_orchestrator"
+                    )
                     val voiceResponse = when {
                         result.isSuccess -> "${result.summary}, сэр."
                         // Разрешение/системный UI/неподдерживаемая возможность —
@@ -506,6 +520,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     toolExecutor.peekPendingConfirmation()?.let { next ->
                         pendingToolCall = next.toolCall
                         pendingConfirmationPrompt = next.promptMessage
+                        pendingConfirmationToken = next.confirmationToken
                         _currentMode.value = OrchestratorMode.AWAITING_CONFIRMATION
                     }
                 }
@@ -513,6 +528,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
             isNo -> {
                 val cancelled = pendingToolCall
                 pendingToolCall = null
+                                        pendingConfirmationToken = null
                 if (cancelled != null) toolExecutor.removePendingConfirmation(cancelled)
                 val cancelMsg = "Операция отменена, сэр."
                 _lastAnswer.value = cancelMsg
@@ -535,6 +551,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         textToSpeechManager.speak(timeoutMsg, speechRate, speechPitch)
                         val timedOut = pendingToolCall
                         pendingToolCall = null
+                                        pendingConfirmationToken = null
                         if (timedOut != null) toolExecutor.removePendingConfirmation(timedOut)
                         delay(2000)
                         startStandbyMode()
@@ -598,6 +615,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
         confirmationTimeoutJob?.cancel()
         confirmationTimeoutJob = null
         pendingToolCall = null
+                                        pendingConfirmationToken = null
         toolExecutor.clearPendingConfirmation()
         isProcessingQuery.set(false)
         aiJob?.cancel()
@@ -636,6 +654,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
         confirmationTimeoutJob?.cancel()
         confirmationTimeoutJob = null
         pendingToolCall = null
+                                        pendingConfirmationToken = null
         toolExecutor.clearPendingConfirmation()
         isProcessingQuery.set(false)
         aiJob?.cancel()

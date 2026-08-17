@@ -95,7 +95,7 @@ class ToolExecutorConfirmationQueueTest {
     }
 
     @Test
-    fun `executeWithBypass removes confirmed call from queue`() = runBlocking {
+    fun `executeWithBypass with valid token removes and executes confirmed call`() = runBlocking {
         val executor = buildExecutor()
         val first = call("communication.sms")
         val second = call("communication.call")
@@ -103,8 +103,13 @@ class ToolExecutorConfirmationQueueTest {
         executor.execute(first)
         executor.execute(second)
 
-        // Пользователь подтвердил второй → bypass выполняет и извлекает его.
-        val result = executor.executeWithBypass(second)
+        // Пользователь подтвердил второй → bypass с его токеном выполняет и извлекает.
+        val token = executor.findPendingConfirmation(second.callId)?.confirmationToken!!
+        val result = executor.executeWithBypass(
+            call = second,
+            confirmationToken = token,
+            source = "test"
+        )
 
         assertTrue(result.isSuccess)
         assertEquals(1, executor.pendingConfirmationCount())
@@ -171,14 +176,68 @@ class ToolExecutorConfirmationQueueTest {
     }
 
     @Test
-    fun `bypass without pending call logs warning but executes`() = runBlocking {
+    fun `bypass without token is rejected`() = runBlocking {
         val executor = buildExecutor()
         val c = call("communication.sms")
 
-        // Вызов не был в очереди — bypass предупредит, но выполнит (совместимость).
-        val result = executor.executeWithBypass(c)
+        // Пункт аудита #5: bypass без токена НЕ выполняется.
+        val result = executor.executeWithBypass(
+            call = c,
+            confirmationToken = null,
+            source = "test"
+        )
+
+        assertFalse(result.isSuccess)
+        assertEquals("CONFIRMATION_TOKEN_INVALID", result.error)
+        assertEquals(0, executor.pendingConfirmationCount())
+    }
+
+    @Test
+    fun `bypass with wrong token is rejected and call stays in queue`() = runBlocking {
+        val executor = buildExecutor()
+        val c = call("communication.sms")
+        executor.execute(c)
+
+        val result = executor.executeWithBypass(
+            call = c,
+            confirmationToken = "wrong-token",
+            source = "test"
+        )
+
+        assertFalse(result.isSuccess)
+        assertEquals("CONFIRMATION_TOKEN_INVALID", result.error)
+        // Вызов остался в очереди — можно подтвердить правильным токеном.
+        assertEquals(1, executor.pendingConfirmationCount())
+    }
+
+    @Test
+    fun `bypass with valid token executes`() = runBlocking {
+        val executor = buildExecutor()
+        val c = call("communication.sms")
+        executor.execute(c)
+
+        val token = executor.peekPendingConfirmation()?.confirmationToken!!
+        val result = executor.executeWithBypass(call = c, confirmationToken = token, source = "test")
 
         assertTrue(result.isSuccess)
         assertEquals(0, executor.pendingConfirmationCount())
+    }
+
+    @Test
+    fun `token is unique per confirmation request`() = runBlocking {
+        val executor = buildExecutor()
+        val first = call("communication.sms")
+        val second = call("communication.call")
+
+        executor.execute(first)
+        executor.execute(second)
+
+        val firstToken = executor.findPendingConfirmation(first.callId)!!.confirmationToken
+        val secondToken = executor.findPendingConfirmation(second.callId)!!.confirmationToken
+
+        // У разных запросов разные одноразовые токены.
+        assertTrue(firstToken.isNotBlank())
+        assertTrue(secondToken.isNotBlank())
+        assertTrue(firstToken != secondToken)
     }
 }

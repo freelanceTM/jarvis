@@ -25,7 +25,13 @@ import javax.inject.Inject
 /** Отложенное действие, ожидающее подтверждения пользователя в чате. */
 data class PendingConfirmationUi(
     val toolCall: ToolCall,
-    val promptMessage: String
+    val promptMessage: String,
+
+    /**
+     * Одноразовый токен подтверждения (пункт аудита #5): получается из очереди
+     * ToolExecutor и передаётся в executeWithBypass для проверки.
+     */
+    val confirmationToken: String
 )
 
 data class ChatUiState(
@@ -128,12 +134,19 @@ class ChatViewModel @Inject constructor(
                     when (val exec = result.data) {
                         is PromptExecutionResult.ConfirmationRequired -> {
                             // Показываем карточку подтверждения вместо простого озвучивания.
+                            // Токен берём из очереди ToolExecutor (пункт аудита #5).
+                            val token = toolExecutor.peekPendingConfirmation()?.confirmationToken
                             _uiState.update {
                                 it.copy(
-                                    pendingConfirmation = PendingConfirmationUi(
-                                        toolCall = exec.toolCall,
-                                        promptMessage = exec.promptMessage
-                                    )
+                                    pendingConfirmation = if (token != null) {
+                                        PendingConfirmationUi(
+                                            toolCall = exec.toolCall,
+                                            promptMessage = exec.promptMessage,
+                                            confirmationToken = token
+                                        )
+                                    } else {
+                                        null
+                                    }
                                 )
                             }
                             textToSpeechManager.speak(exec.promptMessage, speechRate, speechPitch)
@@ -164,7 +177,11 @@ class ChatViewModel @Inject constructor(
         _uiState.update { it.copy(pendingConfirmation = null, isSending = true) }
 
         viewModelScope.launch {
-            val result = toolExecutor.executeWithBypass(pending.toolCall)
+            val result = toolExecutor.executeWithBypass(
+                call = pending.toolCall,
+                confirmationToken = pending.confirmationToken,
+                source = "chat_ui"
+            )
             val voiceResponse = when {
                 result.isSuccess -> "${result.summary}, сэр."
                 result.isBlockedByAndroid -> result.summary
@@ -186,7 +203,8 @@ class ChatViewModel @Inject constructor(
                     it.copy(
                         pendingConfirmation = PendingConfirmationUi(
                             toolCall = next.toolCall,
-                            promptMessage = next.promptMessage
+                            promptMessage = next.promptMessage,
+                            confirmationToken = next.confirmationToken
                         )
                     )
                 }
@@ -218,7 +236,8 @@ class ChatViewModel @Inject constructor(
                     it.copy(
                         pendingConfirmation = PendingConfirmationUi(
                             toolCall = next.toolCall,
-                            promptMessage = next.promptMessage
+                            promptMessage = next.promptMessage,
+                            confirmationToken = next.confirmationToken
                         )
                     )
                 }

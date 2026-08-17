@@ -8,6 +8,7 @@ import com.jarvis.assistant.agent.model.ToolExecutionStatus
 import com.jarvis.assistant.agent.registry.ToolRegistry
 import com.jarvis.assistant.agent.safety.ToolPermissionManager
 import kotlinx.coroutines.*
+import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -15,7 +16,17 @@ import javax.inject.Singleton
 /** Вызов инструмента, ожидающий подтверждения пользователя (элемент очереди). */
 data class PendingConfirmationRequest(
     val toolCall: ToolCall,
-    val promptMessage: String
+    val promptMessage: String,
+
+    /**
+     * Одноразовый криптографический токен подтверждения (пункт аудита #5).
+     *
+     * Генерируется при постановке в очередь и передаётся в UI/голосовой флоу
+     * ТОЛЬКО через [peekPendingConfirmation]. [executeWithBypass] выполняет
+     * вызов только если токен совпадает — подделать «подтверждение» извне
+     * нельзя (вызывающий не знает токен, пока не получил его из очереди).
+     */
+    val confirmationToken: String = UUID.randomUUID().toString()
 )
 
 @Singleton
@@ -47,6 +58,10 @@ class ToolExecutor @Inject constructor(
 
     fun hasPendingConfirmations(): Boolean = !pendingConfirmations.isEmpty()
 
+    /** @return запись по callId (для UI: получить токен не-головного элемента) или null. */
+    fun findPendingConfirmation(callId: String): PendingConfirmationRequest? =
+        pendingConfirmations.firstOrNull { it.toolCall.callId == callId }
+
     /** Количество ожидающих подтверждения вызовов (для диагностики). */
     fun pendingConfirmationCount(): Int = pendingConfirmations.size
 
@@ -75,6 +90,43 @@ class ToolExecutor @Inject constructor(
      *
      * @return true, если вызов был в очереди и извлечён.
      */
+    /**
+     * Потребляет запись из очереди: ищет вызов по callId И совпадение токена.
+     *
+     * @return true, если запись найдена с ВАЛИДНЫМ токеном (или токен совпал)
+     *         и удалена; false — запись отсутствует или токен не совпал.
+     */
+    private fun consumePendingConfirmation(call: ToolCall, confirmationToken: String?): Boolean {
+        if (confirmationToken == null) return false
+        val iterator = pendingConfirmations.iterator()
+        while (iterator.hasNext()) {
+            val request = iterator.next()
+            if (request.toolCall.callId == call.callId) {
+                return if (request.confirmationToken == confirmationToken) {
+                    iterator.remove()
+                    true
+                } else {
+                    Log.w(TAG, "Токен подтверждения НЕ совпал для ${call.toolId} (${call.callId})")
+                    false
+                }
+            }
+        }
+        return false
+    }
+
+    /**
+     * Обязательный audit-лог bypass-вызовов (пункт аудита #5).
+     * Формат: [AUDIT] timestamp | source | toolId | callId | tokenValid | outcome
+     */
+    private fun logBypassAudit(source: String, call: ToolCall, tokenValid: Boolean) {
+        val outcome = if (tokenValid) "EXECUTED" else "REJECTED"
+        Log.i(
+            TAG,
+            "[AUDIT] ${System.currentTimeMillis()} | source=$source | tool=${call.toolId} | " +
+                "callId=${call.callId} | tokenValid=$tokenValid | outcome=$outcome"
+        )
+    }
+
     fun removePendingConfirmation(call: ToolCall): Boolean {
         // Итератор ConcurrentLinkedQueue weakly-consistent и поддерживает remove().
         val iterator = pendingConfirmations.iterator()
@@ -143,14 +195,33 @@ class ToolExecutor @Inject constructor(
     /**
      * Выполняет инструмент БЕЗ повторной проверки PermissionManager (после голосового/UI-подтверждения пользователя)
      *
-     * Пункт аудита #4: вызов извлекается из очереди подтверждений. Если его там
-     * нет — логируется предупреждение (подозрительный bypass), но вызов
-     * выполняется для обратной совместимости с существующими флоу.
+     * Пункт аудита #5 (HIGH): каждый bypass-вызов
+     *  1) фиксируется в audit-логе (timestamp, toolCall, источник, валидность токена);
+     *  2) выполняется ТОЛЬКО при совпадении одноразового токена подтверждения,
+     *     полученного из очереди через [peekPendingConfirmation].
+     *
+     * @param confirmationToken одноразовый токен из PendingConfirmationRequest.
+     *                          null/неверный → вызов ОТКЛОНЯЕТСЯ (failure).
+     * @param source            источник вызова ("voice_orchestrator", "chat_ui", ...).
      */
-    suspend fun executeWithBypass(call: ToolCall): ToolExecutionResult = withContext(Dispatchers.IO) {
-        if (!removePendingConfirmation(call)) {
-            Log.w(TAG, "executeWithBypass без ожидающего подтверждения: ${call.toolId} (${call.callId})")
+    suspend fun executeWithBypass(
+        call: ToolCall,
+        confirmationToken: String?,
+        source: String
+    ): ToolExecutionResult = withContext(Dispatchers.IO) {
+        // 1. Audit-лог: фиксируем ПОПЫТКУ до проверки токена.
+        val tokenValid = consumePendingConfirmation(call, confirmationToken)
+        logBypassAudit(source = source, call = call, tokenValid = tokenValid)
+
+        // 2. Токен не совпал — отказ. Пункт аудита #5: bypass без реального
+        //    подтверждения НЕ выполняется.
+        if (!tokenValid) {
+            return@withContext ToolExecutionResult.failure(
+                summary = "Действие не подтверждено: выполнение без валидного подтверждения запрещено, сэр.",
+                error = "CONFIRMATION_TOKEN_INVALID"
+            )
         }
+
         val tool = registry.getTool(call.toolId)
             ?: return@withContext ToolExecutionResult.failure(
                 summary = "Инструмент '${call.toolId}' не найден",
