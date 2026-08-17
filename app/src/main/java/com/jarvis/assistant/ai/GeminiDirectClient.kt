@@ -210,26 +210,31 @@ class UniversalAIClient @Inject constructor(
             }
         } else {
             val code = response.code
-            Log.w("UniversalAIClient", "Google Gemini HTTP $code. Attempting transparent geo-fallback...")
+            Log.w("UniversalAIClient", "Google Gemini HTTP $code")
 
-            // Transparent Fallback to OpenRouter free tier upon regional Geo-blocking
-            return try {
-                callOpenAiCompatible(
+            // Пункт аудита #3 (CRITICAL): НИКОГДА не отправляем ключ пользователя
+            // (например, Gemini AIza...) в чужой сервис. Fallback к OpenRouter
+            // допустим ТОЛЬКО с ключом, который реально OpenRouter-совместим
+            // (sk-or-...). Такой ключ обрабатывается в complete() напрямую и
+            // сюда не попадает, но guard защищает на будущее при изменении
+            // маршрутизации.
+            if (AiKeyPolicy.canFallbackToOpenRouter(apiKey)) {
+                return callOpenAiCompatible(
                     endpointUrl = "https://openrouter.ai/api/v1/chat/completions",
                     model = "meta-llama/llama-3.3-70b-instruct:free",
-                    apiKey = apiKey, // OpenRouter or current key
+                    apiKey = apiKey,
                     prompt = prompt,
                     systemPrompt = systemPrompt,
                     history = history
                 )
-            } catch (_: Exception) {
-                val userMsg = when (code) {
-                    400, 403 -> "Google Gemini заблокирован в вашем регионе (HTTP $code). Рекомендуется использовать бесплатный ключ OpenRouter (sk-or-...) или Groq (gsk_...) в настройках."
-                    429 -> "Лимит запросов Gemini исчерпан. Пожалуйста, подождите 30 секунд."
-                    else -> "Ошибка сервера AI ($code)."
-                }
-                Resource.Error(IllegalStateException("HTTP $code: $responseBody"), userMsg)
             }
+
+            // Ключ не подходит OpenRouter — fallback НЕ выполняется:
+            // показываем пользователю понятное объяснение.
+            return Resource.Error(
+                IllegalStateException("HTTP $code: $responseBody"),
+                AiKeyPolicy.geminiBlockedMessage(code)
+            )
         }
     }
 

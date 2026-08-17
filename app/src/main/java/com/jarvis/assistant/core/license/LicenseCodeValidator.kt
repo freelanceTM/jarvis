@@ -61,7 +61,7 @@ class LicenseCodeValidator {
         }
 
         // 2. Box-коды: сервер — источник правды (пункт аудита #2).
-        return when (val server = serverValidator.validate(cleanCode, currentHardwareId)) {
+        return when (serverValidator.validate(cleanCode, currentHardwareId)) {
             is ServerValidationResult.Valid -> CodeVerdict.BoxCodeValid
             is ServerValidationResult.Invalid -> CodeVerdict.Invalid
             ServerValidationResult.ServiceUnavailable -> {
