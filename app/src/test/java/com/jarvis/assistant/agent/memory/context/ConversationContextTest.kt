@@ -21,13 +21,42 @@ class ConversationContextTest {
     }
 
     @Test
-    fun `write to him without known contact asks for clarification`() {
-        val context = ConversationContext(lastApp = "Telegram")
+    fun `write to him without any context asks for clarification`() {
+        val context = ConversationContext()
 
         val resolution = resolver.resolve("напиши ему", context)
 
         assertTrue("Expected clarification, got $resolution", resolution is ReferenceResolution.NeedsClarification)
         assertEquals("Кому именно, сэр?", (resolution as ReferenceResolution.NeedsClarification).question)
+    }
+
+    @Test
+    fun `write to him after opening telegram resolves to the app channel`() {
+        // «Открой Telegram» → «Напиши ему сообщение»: без контакта адресат —
+        // приложение-канал, в которое пишем.
+        val context = ConversationContext(lastApp = "Telegram")
+
+        val resolution = resolver.resolve("напиши ему сообщение", context)
+
+        assertTrue("Expected resolution to Telegram, got $resolution", resolution is ReferenceResolution.Resolved)
+        resolution as ReferenceResolution.Resolved
+        assertEquals(ContextSlot.APP, resolution.slot)
+        assertEquals("Telegram", resolution.value)
+        assertTrue(resolution.rewrittenQuery.contains("в Telegram"))
+    }
+
+    @Test
+    fun `write to her after calling mom resolves mom in dative case`() {
+        // «Позвони маме» → lastContact=мама → «Напиши ей» → ей = маме.
+        val context = ConversationContext(lastContact = "мама")
+
+        val resolution = resolver.resolve("напиши ей", context)
+
+        assertTrue("Expected resolution to мама, got $resolution", resolution is ReferenceResolution.Resolved)
+        resolution as ReferenceResolution.Resolved
+        assertEquals("мама", resolution.value)
+        assertEquals(ContextSlot.CONTACT, resolution.slot)
+        assertEquals("напиши маме", resolution.rewrittenQuery)
     }
 
     @Test

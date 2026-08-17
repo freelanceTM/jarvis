@@ -13,6 +13,9 @@ import com.jarvis.assistant.agent.translator.LlmTranslationProvider
 import com.jarvis.assistant.agent.translator.TranslationProvider
 import com.jarvis.assistant.agent.weather.OpenMeteoWeatherProvider
 import com.jarvis.assistant.agent.weather.WeatherProvider
+import com.jarvis.assistant.agent.memory.context.BasicMorphologyResolver
+import com.jarvis.assistant.agent.memory.context.MorphologyResolver
+import com.jarvis.assistant.agent.memory.context.ReferenceResolver
 import com.jarvis.assistant.agent.memory.dao.*
 import com.jarvis.assistant.agent.tools.accessibility.ScreenReaderTool
 import com.jarvis.assistant.agent.tools.accessibility.UiClickTool
@@ -75,6 +78,15 @@ object DispatcherModule {
     @Provides
     @Singleton
     fun provideCoroutineDispatchers(): CoroutineDispatchers = DefaultCoroutineDispatchers()
+
+    @Provides
+    @Singleton
+    fun provideMorphologyResolver(): MorphologyResolver = BasicMorphologyResolver()
+
+    @Provides
+    @Singleton
+    fun provideReferenceResolver(morphology: MorphologyResolver): ReferenceResolver =
+        ReferenceResolver(morphology)
 }
 
 @Module

@@ -48,6 +48,9 @@ class SendPromptUseCase @Inject constructor(
 
         // 1. Разрешение анафоры и контекста местоимений (Multi-Turn Context Memory)
         // Пример: "Кто президент Франции?" ➔ "Эмманюэль Макрон". След.: "Сколько ему лет?" ➔ "Сколько лет Эмманюэль Макрон"
+        // Сначала фиксируем последнюю реплику пользователя в рабочей памяти,
+        // чтобы ссылки «это/оно/напиши ему» могли разрешаться по ней.
+        memoryManager.workingMemory.setLastMessage(trimmedPrompt)
         val resolvedPrompt = memoryManager.workingMemory.resolveContextualQuery(trimmedPrompt)
 
         // 2. Слой 2 (Episodic Memory): Сохранение входящего запроса в Room

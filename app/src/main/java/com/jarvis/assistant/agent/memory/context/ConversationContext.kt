@@ -10,7 +10,8 @@ enum class ContextSlot {
     PERSON,
     FILE,
     LOCATION,
-    TOPIC
+    TOPIC,
+    CONVERSATION
 }
 
 /**
@@ -53,6 +54,10 @@ sealed interface ReferenceResolution {
  * Заменяет подход «одна строка lastEntity + набор regex-замен» на явные слоты.
  * Regex здесь используется только для ДЕТЕКЦИИ ссылки, а не для попытки решить
  * кореференцию русского языка подстановкой строк.
+ *
+ * Слоты соответствуют модели Entity: person → [lastPerson]/[lastContact],
+ * application → [lastApp], location → [lastLocation], object → [lastFile]/[lastTopic],
+ * conversation → [lastConversation]. [lastMessage] — последняя реплика пользователя.
  */
 data class ConversationContext(
     val lastApp: String? = null,
@@ -62,7 +67,9 @@ data class ConversationContext(
     val lastLocation: String? = null,
     val lastAction: String? = null,
     val activeTask: String? = null,
-    val lastTopic: String? = null
+    val lastTopic: String? = null,
+    val lastConversation: String? = null,
+    val lastMessage: String? = null
 ) {
     fun valueFor(slot: ContextSlot): String? = when (slot) {
         ContextSlot.APP -> lastApp
@@ -71,6 +78,7 @@ data class ConversationContext(
         ContextSlot.FILE -> lastFile
         ContextSlot.LOCATION -> lastLocation
         ContextSlot.TOPIC -> lastTopic
+        ContextSlot.CONVERSATION -> lastConversation
     }
 
     fun with(slot: ContextSlot, value: String): ConversationContext {
@@ -83,11 +91,12 @@ data class ConversationContext(
             ContextSlot.FILE -> copy(lastFile = clean)
             ContextSlot.LOCATION -> copy(lastLocation = clean)
             ContextSlot.TOPIC -> copy(lastTopic = clean)
+            ContextSlot.CONVERSATION -> copy(lastConversation = clean)
         }
     }
 
     fun isEmpty(): Boolean = listOfNotNull(
-        lastApp, lastContact, lastPerson, lastFile, lastLocation, lastTopic
+        lastApp, lastContact, lastPerson, lastFile, lastLocation, lastTopic, lastConversation
     ).isEmpty()
 
     fun summary(): String {
@@ -98,6 +107,7 @@ data class ConversationContext(
             lastLocation?.let { add("место: $it") }
             lastFile?.let { add("файл: $it") }
             lastTopic?.let { add("тема: $it") }
+            lastConversation?.let { add("диалог: $it") }
             activeTask?.let { add("текущая задача: $it") }
             lastAction?.let { add("последнее действие: $it") }
         }

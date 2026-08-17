@@ -1,7 +1,5 @@
 package com.jarvis.assistant.agent.memory.context
 
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Разрешение отсылок в диалоге поверх [ConversationContext].
@@ -10,9 +8,17 @@ import javax.inject.Singleton
  * языка набором regex-замен. Regex используется только чтобы **обнаружить**
  * тип ссылки; дальше решение принимается по структурированным слотам, а при
  * отсутствии подходящего слота агент задаёт уточняющий вопрос.
+ *
+ * Падежная форма подстановки («ей» → «маме», а не «мама») делегируется
+ * [MorphologyResolver] — отдельному NLP-модулю. В v0.2 это честная
+ * минимальная реализация [BasicMorphologyResolver].
+ *
+ * Hilt-привязка — через @Provides в HiltModules (конструктор с дефолтом
+ * удобен для unit-тестов).
  */
-@Singleton
-class ReferenceResolver @Inject constructor() {
+class ReferenceResolver(
+    private val morphology: MorphologyResolver = BasicMorphologyResolver()
+) {
 
     fun detectReference(query: String): ReferenceKind? {
         val q = " ${query.lowercase().replace('ё', 'е').trim()} "
@@ -41,10 +47,25 @@ class ReferenceResolver @Inject constructor() {
                     ReferenceResolution.Resolved(
                         slot = if (context.lastContact != null) ContextSlot.CONTACT else ContextSlot.PERSON,
                         value = recipient,
-                        rewrittenQuery = substitute(query, RECIPIENT_PRONOUNS, recipient)
+                        rewrittenQuery = substitute(
+                            query,
+                            RECIPIENT_PRONOUNS,
+                            morphology.dative(recipient)
+                        )
                     )
                 } else {
-                    ReferenceResolution.NeedsClarification(kind, "Кому именно, сэр?")
+                    // «Открой Telegram» → «Напиши ему сообщение»: без известного
+                    // контакта адресатом может быть приложение-канал (чат в Telegram).
+                    val channel = context.lastApp
+                    if (channel != null && isMessagingVerb(query)) {
+                        ReferenceResolution.Resolved(
+                            slot = ContextSlot.APP,
+                            value = channel,
+                            rewrittenQuery = substitute(query, RECIPIENT_PRONOUNS, "в $channel")
+                        )
+                    } else {
+                        ReferenceResolution.NeedsClarification(kind, "Кому именно, сэр?")
+                    }
                 }
             }
 
@@ -78,7 +99,11 @@ class ReferenceResolver @Inject constructor() {
                 val obj = context.lastFile ?: context.lastTopic ?: context.lastApp
                 if (obj != null) {
                     ReferenceResolution.Resolved(
-                        slot = if (context.lastFile != null) ContextSlot.FILE else ContextSlot.TOPIC,
+                        slot = when {
+                            context.lastFile != null -> ContextSlot.FILE
+                            context.lastTopic != null -> ContextSlot.TOPIC
+                            else -> ContextSlot.APP
+                        },
                         value = obj,
                         rewrittenQuery = substitute(query, OBJECT_PRONOUNS, obj)
                     )
@@ -87,6 +112,11 @@ class ReferenceResolver @Inject constructor() {
                 }
             }
         }
+    }
+
+    private fun isMessagingVerb(query: String): Boolean {
+        val q = query.lowercase()
+        return listOf("напиши", "написать", "отправь", "отправить", "скинь", "сообщи").any { q.contains(it) }
     }
 
     private fun substitute(query: String, pronouns: List<String>, replacement: String): String {

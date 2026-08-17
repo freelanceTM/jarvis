@@ -73,6 +73,24 @@ class WorkingMemory @Inject constructor(
 
     fun getLastAction(): String? = context.lastAction
 
+    fun setLastMessage(message: String) {
+        val clean = message.trim()
+        if (clean.isBlank()) return
+        context = context.copy(lastMessage = clean)
+        contextStore["last_message"] = clean
+    }
+
+    fun getLastMessage(): String? = context.lastMessage
+
+    fun setLastConversation(conversation: String) {
+        val clean = conversation.trim()
+        if (clean.isBlank()) return
+        context = context.with(ContextSlot.CONVERSATION, clean)
+        contextStore["last_conversation"] = clean
+    }
+
+    fun getLastConversation(): String? = context.lastConversation
+
     fun setActiveTask(task: String?) {
         context = context.copy(activeTask = task)
     }
