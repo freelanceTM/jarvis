@@ -1,20 +1,20 @@
 package com.jarvis.assistant.agent
 
-import com.jarvis.assistant.agent.memory.semantic.SemanticFeatureEngine
+import com.jarvis.assistant.agent.memory.semantic.SemanticTextMatcher
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 
 /**
- * Unit tests for SemanticFeatureEngine
+ * Unit tests for SemanticTextMatcher
  */
-class SemanticFeatureEngineTest {
+class SemanticTextMatcherTest {
     
-    private lateinit var engine: SemanticFeatureEngine
+    private lateinit var engine: SemanticTextMatcher
     
     @Before
     fun setup() {
-        engine = SemanticFeatureEngine()
+        engine = SemanticTextMatcher()
     }
     
     @Test

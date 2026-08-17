@@ -73,7 +73,7 @@ class WorkflowExecutorTest {
             DummyTool("device.flashlight"),
             DummyTool("device.open_app")
         )
-        val registry = ToolRegistry(tools, com.jarvis.assistant.agent.discovery.ToolDiscoveryEngine(com.jarvis.assistant.agent.memory.semantic.SemanticFeatureEngine()))
+        val registry = ToolRegistry(tools, com.jarvis.assistant.agent.discovery.ToolDiscoveryEngine(com.jarvis.assistant.agent.memory.semantic.SemanticTextMatcher()))
         // ToolPermissionManager теперь работает поверх capability-реестра;
         // в чистом unit-тесте Android-контекст недоступен, поэтому пропускаем
         // проверку возможностей через null-реестр не получится — используем

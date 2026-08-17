@@ -10,7 +10,7 @@ import com.jarvis.assistant.agent.memory.extractor.AutonomousMemoryExtractor
 import com.jarvis.assistant.agent.memory.model.ForgetResult
 import com.jarvis.assistant.agent.memory.model.MemoryItem
 import com.jarvis.assistant.agent.memory.model.MemoryType
-import com.jarvis.assistant.agent.memory.semantic.SemanticFeatureEngine
+import com.jarvis.assistant.agent.memory.semantic.SemanticTextMatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -30,7 +30,7 @@ class JarvisMemoryManager @Inject constructor(
     private val factDao: FactDao,
     private val preferenceDao: PreferenceDao,
     private val procedureDao: ProcedureDao,
-    private val featureEngine: SemanticFeatureEngine,
+    private val featureEngine: SemanticTextMatcher,
     private val memoryExtractor: AutonomousMemoryExtractor
 ) {
     /**

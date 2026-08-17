@@ -1,7 +1,7 @@
 package com.jarvis.assistant.agent.discovery
 
 import com.jarvis.assistant.agent.core.JarvisTool
-import com.jarvis.assistant.agent.memory.semantic.SemanticFeatureEngine
+import com.jarvis.assistant.agent.memory.semantic.SemanticTextMatcher
 import com.jarvis.assistant.agent.model.ToolDefinition
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,7 +20,7 @@ import kotlin.math.min
  */
 @Singleton
 class ToolDiscoveryEngine @Inject constructor(
-    private val featureEngine: SemanticFeatureEngine
+    private val featureEngine: SemanticTextMatcher
 ) {
     /**
      * Выбирает топ релевантных инструментов для запроса

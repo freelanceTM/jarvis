@@ -6,11 +6,10 @@ import javax.inject.Singleton
 import kotlin.math.sqrt
 
 /**
- * Semantic Feature Engine.
+ * Semantic Text Matcher — ЧЕСТНОЕ имя лексико-семантического матчера.
  *
- * ЧЕСТНОЕ НАЗВАНИЕ: это НЕ ML-embedding модель. Здесь нет обученной нейросети
- * и никаких выученных представлений. Это лексико-семантический признаковый
- * вектор, построенный вручную:
+ * Это НЕ ML-embedding модель. Здесь нет обученной нейросети
+ * и никаких выученных представлений. Это ручной вектор:
  *
  *  1. фиксированные концептуальные подпространства (ручной словарь корней);
  *  2. проекция синонимов на те же координаты (SynonymDictionary);
@@ -23,12 +22,13 @@ import kotlin.math.sqrt
  * незнакомые слова, не отражает контекст предложения).
  *
  * Настоящие embeddings подключаются отдельным слоем через
- * [com.jarvis.assistant.agent.memory.semantic.EmbeddingModel], не заменяя этот класс.
+ * [com.jarvis.assistant.agent.memory.semantic.EmbeddingProvider]
+ * (LocalEmbeddingProvider / RemoteEmbeddingProvider), не заменяя этот класс.
  *
  * Стоимость: < 0.5 мс, полностью офлайн, 0 МБ моделей.
  */
 @Singleton
-class SemanticFeatureEngine @Inject constructor() {
+class SemanticTextMatcher @Inject constructor() {
 
     companion object {
         private const val VECTOR_DIM = 128

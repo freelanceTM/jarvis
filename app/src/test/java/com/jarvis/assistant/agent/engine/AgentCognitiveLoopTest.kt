@@ -8,7 +8,7 @@ import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.memory.WorkingMemory
 import com.jarvis.assistant.agent.memory.context.AnaphoraContextEngine
 import com.jarvis.assistant.agent.memory.context.ReferenceResolver
-import com.jarvis.assistant.agent.memory.semantic.SemanticFeatureEngine
+import com.jarvis.assistant.agent.memory.semantic.SemanticTextMatcher
 import com.jarvis.assistant.agent.model.ToolCall
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
@@ -90,7 +90,7 @@ class AgentCognitiveLoopTest {
         tools: Set<JarvisTool>,
         planner: CognitivePlanner
     ): AgentCognitiveLoop {
-        val registry = ToolRegistry(tools, ToolDiscoveryEngine(SemanticFeatureEngine()))
+        val registry = ToolRegistry(tools, ToolDiscoveryEngine(SemanticTextMatcher()))
         val executor = ToolExecutor(registry, ToolPermissionManager(FakeCapabilityRegistry.create()))
         val workingMemory = WorkingMemory(AnaphoraContextEngine(), ReferenceResolver())
         return AgentCognitiveLoop(planner, executor, AgentObservationEngine(workingMemory))

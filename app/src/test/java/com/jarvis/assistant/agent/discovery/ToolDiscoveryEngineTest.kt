@@ -2,7 +2,7 @@ package com.jarvis.assistant.agent.discovery
 
 import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.core.ToolCategory
-import com.jarvis.assistant.agent.memory.semantic.SemanticFeatureEngine
+import com.jarvis.assistant.agent.memory.semantic.SemanticTextMatcher
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
 import kotlinx.serialization.json.JsonObject
@@ -14,7 +14,7 @@ import org.junit.Test
 class ToolDiscoveryEngineTest {
 
     private lateinit var engine: ToolDiscoveryEngine
-    private lateinit var featureEngine: SemanticFeatureEngine
+    private lateinit var featureEngine: SemanticTextMatcher
     private lateinit var mockTools: List<JarvisTool>
 
     class DummyTool(
@@ -29,7 +29,7 @@ class ToolDiscoveryEngineTest {
 
     @Before
     fun setUp() {
-        featureEngine = SemanticFeatureEngine()
+        featureEngine = SemanticTextMatcher()
         engine = ToolDiscoveryEngine(featureEngine)
 
         mockTools = listOf(
