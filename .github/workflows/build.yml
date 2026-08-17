@@ -33,7 +33,8 @@ jobs:
           fi
           echo "Building in: $PROJECT_DIR"
           cd "$PROJECT_DIR"
-          gradle testDebugUnitTest assembleDebug --stacktrace
+          # Пункт аудита #12: lint в CI — warningsAsErrors + baseline блокируют НОВЫЕ warnings.
+          gradle testDebugUnitTest lint assembleDebug --stacktrace
 
       - name: Upload JARVIS APK Artifact
         uses: actions/upload-artifact@v4

@@ -68,6 +68,15 @@ android {
         }
     }
 
+    // Пункт аудита #12: lint блокирует НОВЫЕ warnings/errors.
+    // Текущие 86 pre-existing warnings зафиксированы в lint-baseline.xml —
+    // они не ломают сборку, но любой НОВЫЙ warning теперь фейлит lint.
+    lint {
+        warningsAsErrors = true
+        baseline = file("lint-baseline.xml")
+        abortOnError = true
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

@@ -481,6 +481,15 @@ EmbeddingProvider
 Запуск: `./gradlew connectedDebugAndroidTest` (требует эмулятора/устройства;
 в CI — отдельный job).
 
+## Линт в CI (warningsAsErrors)
+
+Пункт аудита #12: lint включён в CI (`gradle testDebugUnitTest lint assembleDebug`)
+и настроен на `warningsAsErrors=true` с `lint-baseline.xml`:
+- 87 pre-existing warnings зафиксированы в baseline и не ломают сборку;
+- ЛЮБОЙ новый warning/error теперь фейлит lint и CI;
+- при исправлении старых warnings их записи удаляются из baseline (он пересоздаётся
+  автоматически при первом запуске после изменений).
+
 ## Не поддерживается сознательно
 
 * Root / accessibility abuse для обхода системных ограничений.
