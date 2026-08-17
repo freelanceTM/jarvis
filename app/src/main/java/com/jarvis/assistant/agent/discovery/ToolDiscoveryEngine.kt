@@ -52,6 +52,10 @@ class ToolDiscoveryEngine @Inject constructor(
 
         val scoredTools = mutableListOf<Pair<JarvisTool, Float>>()
 
+        // Пункт аудита #15: один переиспользуемый буфер для векторов инструментов —
+        // queryVector живёт отдельно (выделен выше), его не трогаем.
+        val toolVectorBuffer = FloatArray(SemanticTextMatcher.VECTOR_DIM)
+
         for ((tool, docTokens) in toolCorpus) {
             val toolText = docTokens.joinToString(" ")
 
@@ -100,7 +104,8 @@ class ToolDiscoveryEngine @Inject constructor(
             }
 
             // D. Vector Cosine Similarity (Фоновый семантический компонент)
-            val toolVector = featureEngine.featurize(toolText)
+            // Пункт аудита #15: zero-аллокация — заполняем переиспользуемый буфер.
+            val toolVector = featureEngine.featurizeInto(toolText, toolVectorBuffer)
             val semanticScore = featureEngine.computeCosineSimilarity(queryVector, toolVector)
 
             // Защита от ложных срабатываний: если нет ни одного лексического/синонимического/fuzzy совпадения -> скор 0

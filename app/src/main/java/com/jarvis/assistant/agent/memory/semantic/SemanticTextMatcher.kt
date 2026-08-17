@@ -31,7 +31,7 @@ import kotlin.math.sqrt
 class SemanticTextMatcher @Inject constructor() {
 
     companion object {
-        private const val VECTOR_DIM = 128
+        const val VECTOR_DIM = 128
         private const val CLUSTER_WEIGHT = 3.5f
         private const val SYNONYM_WEIGHT = 2.5f
         private const val WORD_WEIGHT = 1.2f
@@ -121,9 +121,23 @@ class SemanticTextMatcher @Inject constructor() {
 
     /**
      * Строит нормализованный лексико-семантический вектор размерности 128.
+     *
+     * Пункт аудита #15: выделяет новый массив на каждый вызов — для горячих
+     * циклов используйте [featurizeInto] с переиспользуемым буфером.
      */
-    fun featurize(text: String): FloatArray {
-        val vector = FloatArray(VECTOR_DIM)
+    fun featurize(text: String): FloatArray =
+        featurizeInto(text, FloatArray(VECTOR_DIM))
+
+    /**
+     * Пункт аудита #15: заполняет ПЕРЕДАННЫЙ буфер (zero-аллокация при
+     * переиспользовании) и возвращает его.
+     *
+     * ВАЖНО: результат валиден только пока буфер не переиспользован —
+     * НЕ храните его между вызовами в цикле, если вызываете featurizeInto
+     * повторно с тем же массивом.
+     */
+    fun featurizeInto(text: String, vector: FloatArray): FloatArray {
+        vector.fill(0f)
         val normalized = text.lowercase().trim()
         if (normalized.isEmpty()) return vector
 

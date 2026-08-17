@@ -91,4 +91,45 @@ class SemanticTextMatcherTest {
         val similarity = engine.computeCosineSimilarity(vec1, vec2)
         assertEquals(1.0f, similarity, 0.001f)
     }
+
+    // ===========================================
+    // Пункт аудита #15: featurizeInto (переиспользуемый буфер)
+    // ===========================================
+
+    @Test
+    fun `featurizeInto matches featurize exactly`() {
+        val text = "включи фонарик и сделай громче"
+        val expected = engine.featurize(text)
+
+        val buffer = FloatArray(SemanticTextMatcher.VECTOR_DIM)
+        val actual = engine.featurizeInto(text, buffer)
+
+        // Тот же объект буфера возвращается.
+        assertTrue(actual === buffer)
+        // Значения идентичны featurize.
+        assertTrue(expected.contentEquals(actual))
+    }
+
+    @Test
+    fun `featurizeInto resets buffer between calls`() {
+        val buffer = FloatArray(SemanticTextMatcher.VECTOR_DIM)
+
+        engine.featurizeInto("включи фонарик", buffer)
+        val first = buffer.copyOf()
+
+        engine.featurizeInto("погода в берлине", buffer)
+        val second = buffer.copyOf()
+
+        // Разные тексты → разные векторы; буфер переиспользуется без «хвостов».
+        assertTrue(!first.contentEquals(second))
+        assertTrue(engine.computeCosineSimilarity(first, second) < 0.9f)
+    }
+
+    @Test
+    fun `featurizeInto with empty text returns zero vector`() {
+        val buffer = FloatArray(SemanticTextMatcher.VECTOR_DIM) { 1f }
+        val result = engine.featurizeInto("", buffer)
+
+        assertTrue(result.all { it == 0f })
+    }
 }
