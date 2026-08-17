@@ -24,11 +24,60 @@ class MediaIntentParserTest {
             "поставь музыку",
             "запусти музыку",
             "вруби музыку",
-            "включи трек",
-            "продолжи музыку"
+            "включи трек"
         ).forEach { phrase ->
             assertEquals("Phrase: $phrase", MediaIntent.PLAY_MEDIA, MediaIntentParser.parse(phrase))
         }
+    }
+
+    @Test
+    fun `resume phrases map to RESUME_MEDIA not PLAY`() {
+        listOf(
+            "продолжи музыку",
+            "продолжи воспроизведение",
+            "возобнови музыку",
+            "продолжай",
+            "continue"
+        ).forEach { phrase ->
+            assertEquals("Phrase: $phrase", MediaIntent.RESUME_MEDIA, MediaIntentParser.parse(phrase))
+        }
+    }
+
+    @Test
+    fun `media volume up maps to VOLUME_UP`() {
+        listOf(
+            "сделай музыку громче",
+            "прибавь звук музыки",
+            "музыку громче",
+            "прибавь громкость трека"
+        ).forEach { phrase ->
+            assertEquals("Phrase: $phrase", MediaIntent.VOLUME_UP, MediaIntentParser.parse(phrase))
+        }
+    }
+
+    @Test
+    fun `media volume down maps to VOLUME_DOWN`() {
+        listOf(
+            "сделай музыку тише",
+            "убавь звук музыки",
+            "музыку тише",
+            "уменьши громкость трека"
+        ).forEach { phrase ->
+            assertEquals("Phrase: $phrase", MediaIntent.VOLUME_DOWN, MediaIntentParser.parse(phrase))
+        }
+    }
+
+    @Test
+    fun `generic volume without media context is not a media intent`() {
+        // «сделай громче» без медиа-контекста — это device.volume, а не media.
+        assertNull(MediaIntentParser.parse("сделай громче"))
+        assertNull(MediaIntentParser.parse("прибавь громкость"))
+        assertNull(MediaIntentParser.parse("тише"))
+    }
+
+    @Test
+    fun `resume after pause is RESUME not PAUSE`() {
+        assertEquals(MediaIntent.RESUME_MEDIA, MediaIntentParser.parse("продолжи после паузы"))
     }
 
     @Test
@@ -77,6 +126,20 @@ class MediaIntentParserTest {
         assertEquals(MediaIntent.PREVIOUS_TRACK, MediaIntentParser.normalizeAction("prev"))
         assertEquals(MediaIntent.PLAY_MEDIA, MediaIntentParser.normalizeAction("play"))
         assertEquals(MediaIntent.TOGGLE_PLAY_PAUSE, MediaIntentParser.normalizeAction("play_pause"))
+        assertEquals(MediaIntent.RESUME_MEDIA, MediaIntentParser.normalizeAction("resume"))
+        assertEquals(MediaIntent.RESUME_MEDIA, MediaIntentParser.normalizeAction("continue"))
+        assertEquals(MediaIntent.VOLUME_UP, MediaIntentParser.normalizeAction("volume_up"))
+        assertEquals(MediaIntent.VOLUME_UP, MediaIntentParser.normalizeAction("up"))
+        assertEquals(MediaIntent.VOLUME_DOWN, MediaIntentParser.normalizeAction("volume_down"))
+        assertEquals(MediaIntent.VOLUME_DOWN, MediaIntentParser.normalizeAction("down"))
+    }
+
+    @Test
+    fun `full intent model covers all eight required intents`() {
+        assertEquals(
+            listOf("play", "pause", "resume", "play_pause", "next", "previous", "stop", "volume_up", "volume_down"),
+            MediaIntent.entries.map { it.action }
+        )
     }
 
     @Test

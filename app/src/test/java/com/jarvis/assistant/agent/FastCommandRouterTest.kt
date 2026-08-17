@@ -142,6 +142,100 @@ class FastCommandRouterTest {
     }
     
     // ===========================================
+    // Media intents (PLAY/PAUSE/RESUME/NEXT/PREVIOUS/STOP/VOLUME)
+    // ===========================================
+
+    @Test
+    fun `play music routes to media control play`() {
+        val result = router.route("включи музыку")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("media.control", handled.toolCall?.toolId)
+        assertEquals("play", handled.toolCall?.arguments?.get("action")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `play music never routes to next`() {
+        val result = router.route("включи музыку")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("media.control", handled.toolCall?.toolId)
+        assertEquals("play", handled.toolCall?.arguments?.get("action")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `resume music routes to media control resume`() {
+        val result = router.route("продолжи музыку")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("media.control", handled.toolCall?.toolId)
+        assertEquals("resume", handled.toolCall?.arguments?.get("action")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `next track routes to media control next`() {
+        val result = router.route("следующий трек")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("media.control", handled.toolCall?.toolId)
+        assertEquals("next", handled.toolCall?.arguments?.get("action")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `pause routes to media control pause`() {
+        val result = router.route("поставь на паузу")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("media.control", handled.toolCall?.toolId)
+        assertEquals("pause", handled.toolCall?.arguments?.get("action")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `stop music routes to media control stop`() {
+        val result = router.route("выключи музыку")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("media.control", handled.toolCall?.toolId)
+        assertEquals("stop", handled.toolCall?.arguments?.get("action")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `media louder routes to device volume up`() {
+        val result = router.route("сделай музыку громче")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.volume", handled.toolCall?.toolId)
+        assertEquals("up", handled.toolCall?.arguments?.get("action")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `media quieter routes to device volume down`() {
+        val result = router.route("сделай музыку тише")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.volume", handled.toolCall?.toolId)
+        assertEquals("down", handled.toolCall?.arguments?.get("action")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `generic louder stays on device volume via volume section`() {
+        val result = router.route("сделай громче")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("device.volume", handled.toolCall?.toolId)
+        assertEquals("up", handled.toolCall?.arguments?.get("action")?.jsonPrimitive?.content)
+    }
+
+    // ===========================================
     // Weather (no hardcoded city: GPS / geocoder flow)
     // ===========================================
 

@@ -148,13 +148,33 @@ class FastCommandRouter @Inject constructor() {
         // 3. Управление медиа и музыкой (через нормализацию намерения)
         // Важно: "включи музыку" -> PLAY_MEDIA, а не NEXT_TRACK.
         MediaIntentParser.parse(q)?.let { mediaIntent ->
+            // Громкость медиа («сделай музыку громче») — это device.volume,
+            // а не media.control.
+            if (mediaIntent == MediaIntent.VOLUME_UP || mediaIntent == MediaIntent.VOLUME_DOWN) {
+                return FastRouteResult.HandledLocally(
+                    toolCall = ToolCall(
+                        toolId = "device.volume",
+                        arguments = buildJsonObject {
+                            put("action", if (mediaIntent == MediaIntent.VOLUME_UP) "up" else "down")
+                        }
+                    ),
+                    immediateVoiceResponse = if (mediaIntent == MediaIntent.VOLUME_UP) {
+                        "Делаю музыку громче, сэр."
+                    } else {
+                        "Делаю музыку тише, сэр."
+                    }
+                )
+            }
+
             val voice = when (mediaIntent) {
                 MediaIntent.PLAY_MEDIA -> "Включаю музыку, сэр."
                 MediaIntent.PAUSE_MEDIA -> "Музыка поставлена на паузу, сэр."
+                MediaIntent.RESUME_MEDIA -> "Продолжаю воспроизведение, сэр."
                 MediaIntent.NEXT_TRACK -> "Включаю следующий трек, сэр."
                 MediaIntent.PREVIOUS_TRACK -> "Переключаю назад, сэр."
                 MediaIntent.STOP_MEDIA -> "Останавливаю воспроизведение, сэр."
                 MediaIntent.TOGGLE_PLAY_PAUSE -> "Переключаю воспроизведение, сэр."
+                MediaIntent.VOLUME_UP, MediaIntent.VOLUME_DOWN -> "Изменяю громкость, сэр."
             }
             return FastRouteResult.HandledLocally(
                 toolCall = ToolCall(

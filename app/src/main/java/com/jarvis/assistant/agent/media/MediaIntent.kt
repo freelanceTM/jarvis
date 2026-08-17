@@ -3,24 +3,43 @@ package com.jarvis.assistant.agent.media
 /**
  * Нормализованное медиа-намерение.
  *
- * Раньше фраза «включи музыку» превращалась в действие NEXT_TRACK, потому что
- * маппинг шёл напрямую «фраза → произвольное действие». Теперь между ними есть
+ * Полная модель intent v0.2:
+ *
+ *   PLAY         «включи музыку»
+ *   PAUSE        «поставь на паузу»
+ *   RESUME       «продолжи» (после паузы — в отличие от PLAY не «запустить заново»)
+ *   NEXT         «следующий трек»
+ *   PREVIOUS     «предыдущий трек»
+ *   STOP         «выключи музыку»
+ *   TOGGLE       «плей/пауза» (переключение состояния)
+ *   VOLUME_UP    «сделай музыку громче»
+ *   VOLUME_DOWN  «сделай музыку тише»
+ *
+ * Раньше фраза «включи музыку» могла превращаться в NEXT_TRACK, потому что
+ * маппинг шёл напрямую «фраза → произвольное действие». Теперь между ними
  * явный слой намерения: фраза → MediaIntent → аргумент инструмента.
+ * Каждый интент маппится на конкретное действие без «угадывания».
  */
 enum class MediaIntent(val action: String) {
     PLAY_MEDIA("play"),
     PAUSE_MEDIA("pause"),
+    RESUME_MEDIA("resume"),
     TOGGLE_PLAY_PAUSE("play_pause"),
     NEXT_TRACK("next"),
     PREVIOUS_TRACK("previous"),
-    STOP_MEDIA("stop")
+    STOP_MEDIA("stop"),
+    VOLUME_UP("volume_up"),
+    VOLUME_DOWN("volume_down")
 }
 
 /**
  * Разбор русских и английских формулировок в [MediaIntent].
  *
- * Правила намеренно упорядочены: более специфичные конструкции («следующий трек»)
- * проверяются раньше общих («включи»), иначе «включи следующий трек» уедет в PLAY.
+ * Правила намеренно упорядочены: более специфичные конструкции («следующий
+ * трек») проверяются раньше общих («включи»), иначе «включи следующий трек»
+ * уедет в PLAY. Громкость распознаётся только в медиа-контексте
+ * («сделай музыку громче») — общее «сделай громче» обрабатывается
+ * отдельным тулом громкости.
  */
 object MediaIntentParser {
 
@@ -28,7 +47,7 @@ object MediaIntentParser {
         val q = rawPhrase.lowercase().trim()
         if (q.isEmpty()) return null
 
-        // 1. Переключение вперёд
+        // 1. Переключение вперёд (самое специфичное)
         if (NEXT_PATTERNS.any { q.contains(it) }) return MediaIntent.NEXT_TRACK
 
         // 2. Переключение назад
@@ -37,13 +56,23 @@ object MediaIntentParser {
         // 3. Остановка (стоп «жёстче» паузы)
         if (STOP_PATTERNS.any { q.contains(it) }) return MediaIntent.STOP_MEDIA
 
-        // 4. Пауза
+        // 4. Продолжить после паузы (RESUME — отдельный интент от PLAY;
+        //    проверяется раньше PAUSE, чтобы «продолжи после паузы» не уехало в паузу)
+        if (RESUME_PATTERNS.any { q.contains(it) }) return MediaIntent.RESUME_MEDIA
+
+        // 5. Пауза
         if (PAUSE_PATTERNS.any { q.contains(it) }) return MediaIntent.PAUSE_MEDIA
 
-        // 5. Воспроизведение. «включи музыку» — это именно PLAY_MEDIA.
+        // 6. Громкость медиа (только при медиа-контексте: музык/трек/песн/плеер)
+        if (hasMediaContext(q)) {
+            if (VOLUME_UP_PATTERNS.any { q.contains(it) }) return MediaIntent.VOLUME_UP
+            if (VOLUME_DOWN_PATTERNS.any { q.contains(it) }) return MediaIntent.VOLUME_DOWN
+        }
+
+        // 7. Воспроизведение. «включи музыку» — это именно PLAY_MEDIA.
         if (PLAY_PATTERNS.any { q.contains(it) }) return MediaIntent.PLAY_MEDIA
 
-        // 6. Общее переключение состояния
+        // 8. Общее переключение состояния
         if (TOGGLE_PATTERNS.any { q.contains(it) }) return MediaIntent.TOGGLE_PLAY_PAUSE
 
         return null
@@ -59,10 +88,19 @@ object MediaIntentParser {
         return when (a) {
             "prev" -> MediaIntent.PREVIOUS_TRACK
             "playpause", "play-pause", "toggle" -> MediaIntent.TOGGLE_PLAY_PAUSE
-            "resume", "continue" -> MediaIntent.PLAY_MEDIA
+            "resume", "continue" -> MediaIntent.RESUME_MEDIA
+            "up", "volume-up" -> MediaIntent.VOLUME_UP
+            "down", "volume-down" -> MediaIntent.VOLUME_DOWN
             else -> parse(a)
         }
     }
+
+    private fun hasMediaContext(q: String): Boolean =
+        MEDIA_CONTEXT_WORDS.any { q.contains(it) }
+
+    private val MEDIA_CONTEXT_WORDS = listOf(
+        "музык", "трек", "песн", "плеер", "мелоди", "звук", "music", "song", "track", "audio"
+    )
 
     private val NEXT_PATTERNS = listOf(
         "следующий трек", "следующая песня", "следующую песню", "следующий",
@@ -85,10 +123,25 @@ object MediaIntentParser {
         "притормози музыку", "pause"
     )
 
+    private val RESUME_PATTERNS = listOf(
+        "продолжи музыку", "продолжи воспроизведение", "продолжай музыку",
+        "возобнови музыку", "возобнови воспроизведение", "продолжи", "продолжай",
+        "continue music", "continue", "resume"
+    )
+
+    private val VOLUME_UP_PATTERNS = listOf(
+        "громче", "прибавь звук", "прибавь громкость", "сделай громче",
+        "увеличь громкость", "louder", "volume up"
+    )
+
+    private val VOLUME_DOWN_PATTERNS = listOf(
+        "тише", "убавь звук", "убавь громкость", "сделай тише",
+        "уменьши громкость", "quieter", "volume down"
+    )
+
     private val PLAY_PATTERNS = listOf(
         "включи музыку", "включить музыку", "включи песню", "включи трек",
         "поставь музыку", "запусти музыку", "играй музыку", "играй",
-        "продолжи воспроизведение", "продолжи музыку", "возобнови",
         "вруби музыку", "play music", "play"
     )
 

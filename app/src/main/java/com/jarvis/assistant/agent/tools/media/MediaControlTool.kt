@@ -60,13 +60,40 @@ class MediaControlTool @Inject constructor(
                 error = "UNKNOWN_MEDIA_ACTION"
             )
 
+        // Громкость медиа — отдельная ветка: регулируется через системный
+        // AudioManager, а не media-клавишами.
+        if (intent == MediaIntent.VOLUME_UP || intent == MediaIntent.VOLUME_DOWN) {
+            return try {
+                val direction = if (intent == MediaIntent.VOLUME_UP) {
+                    AudioManager.ADJUST_RAISE
+                } else {
+                    AudioManager.ADJUST_LOWER
+                }
+                audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0)
+                ToolExecutionResult.success(
+                    summary = if (intent == MediaIntent.VOLUME_UP) {
+                        "Громкость музыки увеличена"
+                    } else {
+                        "Громкость музыки уменьшена"
+                    },
+                    data = buildJsonObject { put("intent", intent.name) }
+                )
+            } catch (e: Exception) {
+                ToolExecutionResult.failure("Ошибка регулировки громкости: ${e.localizedMessage}", "MEDIA_ERROR")
+            }
+        }
+
         val keyCode = when (intent) {
             MediaIntent.PAUSE_MEDIA -> KeyEvent.KEYCODE_MEDIA_PAUSE
-            MediaIntent.PLAY_MEDIA -> KeyEvent.KEYCODE_MEDIA_PLAY
+            MediaIntent.PLAY_MEDIA, MediaIntent.RESUME_MEDIA -> KeyEvent.KEYCODE_MEDIA_PLAY
             MediaIntent.NEXT_TRACK -> KeyEvent.KEYCODE_MEDIA_NEXT
             MediaIntent.PREVIOUS_TRACK -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
             MediaIntent.STOP_MEDIA -> KeyEvent.KEYCODE_MEDIA_STOP
             MediaIntent.TOGGLE_PLAY_PAUSE -> KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+            MediaIntent.VOLUME_UP, MediaIntent.VOLUME_DOWN -> return ToolExecutionResult.failure(
+                summary = "Некорректный вызов громкости через media.control",
+                error = "INVALID_VOLUME_CALL"
+            )
         }
 
         return try {
@@ -76,10 +103,12 @@ class MediaControlTool @Inject constructor(
             val actionLabel = when (intent) {
                 MediaIntent.PAUSE_MEDIA -> "Музыка поставлена на паузу"
                 MediaIntent.PLAY_MEDIA -> "Воспроизведение запущено"
+                MediaIntent.RESUME_MEDIA -> "Воспроизведение продолжено"
                 MediaIntent.NEXT_TRACK -> "Переключено на следующий трек"
                 MediaIntent.PREVIOUS_TRACK -> "Переключено на предыдущий трек"
                 MediaIntent.STOP_MEDIA -> "Воспроизведение остановлено"
                 MediaIntent.TOGGLE_PLAY_PAUSE -> "Воспроизведение переключено"
+                MediaIntent.VOLUME_UP, MediaIntent.VOLUME_DOWN -> "Громкость изменена"
             }
 
             ToolExecutionResult.success(
