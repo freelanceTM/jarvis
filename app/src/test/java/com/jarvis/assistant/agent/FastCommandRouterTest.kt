@@ -142,6 +142,63 @@ class FastCommandRouterTest {
     }
     
     // ===========================================
+    // Weather (no hardcoded city: GPS / geocoder flow)
+    // ===========================================
+
+    @Test
+    fun `weather without city routes with empty arguments for location provider`() {
+        val result = router.route("какая погода")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("intelligence.weather", handled.toolCall?.toolId)
+        assertTrue("Без города аргументы пустые — тул берёт GPS-локацию", handled.toolCall?.arguments?.isEmpty() == true)
+    }
+
+    @Test
+    fun `weather with city routes location to geocoder`() {
+        val result = router.route("какая погода в Берлине")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("intelligence.weather", handled.toolCall?.toolId)
+        assertEquals("Берлин", handled.toolCall?.arguments?.get("location")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `weather in ashgabat is routed as named city not hardcoded`() {
+        val result = router.route("погода в Ашхабаде")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("intelligence.weather", handled.toolCall?.toolId)
+        assertEquals("Ашхабад", handled.toolCall?.arguments?.get("location")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `weather with current location keyword routes empty arguments`() {
+        val result = router.route("погода здесь")
+        assertTrue(result is FastRouteResult.HandledLocally)
+
+        val handled = result as FastRouteResult.HandledLocally
+        assertEquals("intelligence.weather", handled.toolCall?.toolId)
+        assertTrue(handled.toolCall?.arguments?.isEmpty() == true)
+    }
+
+    @Test
+    fun `pogodi wait phrase is not routed as weather`() {
+        val result = router.route("погоди, подумай")
+        assertTrue(result is FastRouteResult.ForwardToLlm)
+    }
+
+    @Test
+    fun `pogodi is never weather even with weather word nearby`() {
+        val result = router.route("погоди, погода потом")
+        val toolId = (result as? FastRouteResult.HandledLocally)?.toolCall?.toolId
+        assertNotEquals("«погоди» не должен открывать погоду", "intelligence.weather", toolId)
+    }
+
+    // ===========================================
     // Open app + search (multi-step UI chain)
     // ===========================================
 

@@ -184,12 +184,25 @@ DangerLevel: **MEDIUM**, подтверждение обязательно.
 
 ## Погода (`intelligence.weather`)
 
-Никакого зашитого города. Локация — **параметр**:
+Никакого зашитого города (бывший hardcode «Ashgabat» полностью отсутствует).
+Локация — **параметр**, оба пути из ТЗ:
 
 ```
-weather()                 → текущее местоположение (LocationProvider)
-weather(location=Берлин)  → геокодинг названного города
+«Какая погода?»           → LocationProvider (GPS/NETWORK last known)
+                                ↓
+                            WeatherProvider (Open-Meteo, forecast по координатам)
+                                ↓
+                            Weather
+«Какая погода в Берлине?» → Geocoder (open-meteo geocoding)
+                                ↓
+                            WeatherProvider
+                                ↓
+                            Weather
 ```
+
+Команда «погода» маршрутизируется офлайн-роутером (< 10 мс, без LLM):
+город после «в/во» извлекается и передаётся параметром `location`;
+без города — пустые аргументы, тул сам берёт текущее местоположение.
 
 Нет разрешения на локацию → `PERMISSION_REQUIRED` + предложение назвать город.
 Нет координат → `FAILURE (LOCATION_UNAVAILABLE)`. Фейковая погода не выдаётся.

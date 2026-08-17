@@ -267,6 +267,31 @@ class FastCommandRouter @Inject constructor() {
             )
         }
 
+        // 5.2 Погода
+        // Честный флоу v0.2 (никакого зашитого города):
+        //   «Какая погода?»          → LocationProvider (GPS) → WeatherProvider
+        //   «Погода в Берлине?»      → Geocoder → WeatherProvider
+        // Город после «в/во» передаётся параметром location; без города —
+        // пустые аргументы, тул сам определит местоположение.
+        if ((q.contains("погод") && !q.contains("погоди")) || q.contains("weather")) {
+            // \p{L} — любые буквы (кириллица + латиница), \w матчит только ASCII.
+            val cityMatch = Regex("""погод\p{L}*\s+(?:в|во)\s+([\p{L}\-]{2,40})""").find(q)
+            val city = cityMatch?.groupValues?.get(1)?.trim()
+                ?.let(::normalizeCityName)
+                ?.takeIf { it.isNotBlank() && it != "На" }
+
+            val arguments = if (city != null && !isCurrentLocationKeyword(city)) {
+                buildJsonObject { put("location", city) }
+            } else {
+                buildJsonObject { }
+            }
+
+            return FastRouteResult.HandledLocally(
+                toolCall = ToolCall(toolId = "intelligence.weather", arguments = arguments),
+                immediateVoiceResponse = "Запрашиваю погоду, сэр."
+            )
+        }
+
         // 6. Батарея
         if (q.contains("батаре") || q.contains("заряд") || q.contains("аккумулятор") || q.contains("сколько процентов")) {
             return FastRouteResult.HandledLocally(
@@ -469,5 +494,33 @@ class FastCommandRouter @Inject constructor() {
             query.contains("вруби") || query.contains("включай") -> "enable"
         query.contains("переключи") || query.contains("переключить") -> "toggle"
         else -> "status"
+    }
+
+    /** Слова «здесь/тут/рядом» — не город, а указание на текущее местоположение. */
+    private fun isCurrentLocationKeyword(value: String): Boolean {
+        val v = value.lowercase()
+        return v in setOf(
+            "current_location", "current", "здесь", "тут", "рядом",
+            "текущее местоположение", "мое местоположение", "моё местоположение"
+        )
+    }
+
+    /**
+     * Лёгкая нормализация названия города из падежной формы в именительную:
+     * «в Берлине» → «Берлин», «в Ашхабаде» → «Ашхабад».
+     *
+     * Безопасные ограничения: убираем конечное «е» только если перед ним
+     * согласная (не «в»/«й» и не гласная): «Москве» и «Дубае» не трогаем —
+     * геокодер разберётся по неточному совпадению.
+     */
+    private fun normalizeCityName(raw: String): String {
+        var city = raw.replaceFirstChar { it.uppercase() }
+        if (city.length > 4 && city.endsWith("е")) {
+            val prev = city[city.length - 2].lowercaseChar()
+            if (prev.isLetter() && prev !in "вйаеёиоуыэюя") {
+                city = city.dropLast(1)
+            }
+        }
+        return city
     }
 }
