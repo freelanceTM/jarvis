@@ -469,6 +469,18 @@ EmbeddingProvider
 Проверка миграций — инструментальные тесты: `./gradlew connectedDebugAndroidTest`
 (нужен эмулятор/устройство; в CI добавляется отдельным job'ом).
 
+## Инструментальные тесты (androidTest)
+
+Критичные потоки покрыты instrumented-тестами (пункт аудита #11):
+- `JarvisDatabaseMigrationTest` — миграции Room (MigrationTestHelper);
+- `CallSmsHonestyInstrumentedTest` — звонки/SMS без разрешений возвращают
+  PERMISSION_REQUIRED / USER_ACTION_REQUIRED, а НЕ SUCCESS;
+- `AccessibilityHonestyInstrumentedTest` — без включённой службы спец.
+  возможностей все три тула возвращают USER_ACTION_REQUIRED.
+
+Запуск: `./gradlew connectedDebugAndroidTest` (требует эмулятора/устройства;
+в CI — отдельный job).
+
 ## Не поддерживается сознательно
 
 * Root / accessibility abuse для обхода системных ограничений.
