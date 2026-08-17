@@ -186,4 +186,21 @@
     <string name="jarvis_uspeshno_aktivirovan">JARVIS Earclip успешно активирован! Первые 30 дней использования включены бесплатно, сэр.</string>
     <string name="pustoy_zapros">Пустой запрос</string>
     <string name="zapros_ne_mozhet_byt_pustym">Запрос не может быть пустым</string>
+
+    <!-- ===== Tool summaries (audit #17, phase 3) ===== -->
+    <string name="bluetooth_net_adaptera">На этом устройстве нет Bluetooth-адаптера</string>
+    <string name="bluetooth_seychas_vklyuchen">Bluetooth сейчас включён.</string>
+    <string name="bluetooth_seychas_vyklyuchen">Bluetooth сейчас выключен.</string>
+    <string name="otkryvayu_nastroyki_bluetooth">%1$s Открываю настройки Bluetooth.</string>
+    <string name="neizvestnoe_deystvie">Неизвестное действие: %1$s</string>
+    <string name="nuzhno_razreshenie_bluetooth">Нужно разрешение на доступ к Bluetooth, чтобы прочитать его состояние</string>
+    <string name="bluetooth_adapter_nedostupen">Bluetooth-адаптер недоступен</string>
+    <string name="sistema_otklonila_dostup_bluetooth">Система отклонила доступ к списку сопряжённых устройств</string>
+    <string name="bluetooth_vklyuchen">Bluetooth включён</string>
+    <string name="bluetooth_vyklyuchen">Bluetooth выключен</string>
+    <string name="sopryazhennyh_ustroystv">. Сопряжённых устройств: %1$d</string>
+    <string name="net_sopryazhennyh_ustroystv">. Нет сопряжённых устройств</string>
+    <string name="bluetooth_uzhe_vklyuchen">Bluetooth уже включён, сэр.</string>
+    <string name="bluetooth_uzhe_vyklyuchen">Bluetooth уже выключен, сэр.</string>
+    <string name="chtoby_upravlyat_bluetooth">Чтобы управлять Bluetooth, нужно разрешение на доступ к Bluetooth</string>
 </resources>

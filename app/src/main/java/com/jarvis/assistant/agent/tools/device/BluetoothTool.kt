@@ -1,5 +1,6 @@
 package com.jarvis.assistant.agent.tools.device
 
+import com.jarvis.assistant.R
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -82,7 +83,7 @@ class BluetoothTool @Inject constructor(
 
         if (!capabilities.hasBluetoothHardware()) {
             return ToolExecutionResult.unsupported(
-                summary = "На этом устройстве нет Bluetooth-адаптера",
+                summary = context.getString(R.string.bluetooth_net_adaptera),
                 reason = "BLUETOOTH_NOT_SUPPORTED"
             )
         }
@@ -96,18 +97,18 @@ class BluetoothTool @Inject constructor(
                 } catch (_: SecurityException) {
                     false
                 }
-                val statePhrase = if (enabled) "Bluetooth сейчас включён." else "Bluetooth сейчас выключен."
-                openSettings("$statePhrase Открываю настройки Bluetooth.")
+                val statePhrase = if (enabled) context.getString(R.string.bluetooth_seychas_vklyuchen) else context.getString(R.string.bluetooth_seychas_vyklyuchen)
+                openSettings(context.getString(R.string.otkryvayu_nastroyki_bluetooth, statePhrase))
             }
             "enable", "disable", "toggle" -> requestToggle(action)
-            else -> ToolExecutionResult.failure("Неизвестное действие: $action", "UNKNOWN_ACTION")
+            else -> ToolExecutionResult.failure(context.getString(R.string.neizvestnoe_deystvie, action), "UNKNOWN_ACTION")
         }
     }
 
     private fun readStatus(): ToolExecutionResult {
         when (val status = capabilities.statusOf(DeviceCapability.READ_BLUETOOTH_STATE)) {
             is CapabilityStatus.PermissionRequired -> return ToolExecutionResult.permissionRequired(
-                summary = "Нужно разрешение на доступ к Bluetooth, чтобы прочитать его состояние",
+                summary = context.getString(R.string.nuzhno_razreshenie_bluetooth),
                 permissions = status.permissions
             )
             is CapabilityStatus.Unsupported -> return ToolExecutionResult.unsupported(
@@ -119,7 +120,7 @@ class BluetoothTool @Inject constructor(
 
         val adapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager)?.adapter
             ?: return ToolExecutionResult.unsupported(
-                summary = "Bluetooth-адаптер недоступен",
+                summary = context.getString(R.string.bluetooth_adapter_nedostupen),
                 reason = "BLUETOOTH_NOT_SUPPORTED"
             )
 
@@ -130,16 +131,16 @@ class BluetoothTool @Inject constructor(
             adapter.bondedDevices?.size
         } catch (e: SecurityException) {
             return ToolExecutionResult.permissionRequired(
-                summary = "Система отклонила доступ к списку сопряжённых устройств",
+                summary = context.getString(R.string.sistema_otklonila_dostup_bluetooth),
                 permissions = capabilities.bluetoothReadPermissions(),
                 data = buildJsonObject { put("enabled", isEnabled) }
             )
         }
 
         val summary = buildString {
-            append(if (isEnabled) "Bluetooth включён" else "Bluetooth выключен")
+            append(if (isEnabled) context.getString(R.string.bluetooth_vklyuchen) else context.getString(R.string.bluetooth_vyklyuchen))
             if (isEnabled && bondedCount != null) {
-                append(if (bondedCount > 0) ". Сопряжённых устройств: $bondedCount" else ". Нет сопряжённых устройств")
+                append(if (bondedCount > 0) context.getString(R.string.sopryazhennyh_ustroystv, bondedCount) else context.getString(R.string.net_sopryazhennyh_ustroystv))
             }
         }
 
@@ -168,7 +169,7 @@ class BluetoothTool @Inject constructor(
         val wantsEnable = action == "enable" || (action == "toggle" && !isEnabled)
         if (wantsEnable == isEnabled && action != "toggle") {
             return ToolExecutionResult.success(
-                summary = if (isEnabled) "Bluetooth уже включён, сэр." else "Bluetooth уже выключен, сэр.",
+                summary = if (isEnabled) context.getString(R.string.bluetooth_uzhe_vklyuchen) else context.getString(R.string.bluetooth_uzhe_vyklyuchen),
                 data = buildJsonObject { put("enabled", isEnabled) }
             )
         }
@@ -177,7 +178,7 @@ class BluetoothTool @Inject constructor(
 
         return when (toggleStatus) {
             is CapabilityStatus.PermissionRequired -> ToolExecutionResult.permissionRequired(
-                summary = "Чтобы управлять Bluetooth, нужно разрешение на доступ к Bluetooth",
+                summary = context.getString(R.string.chtoby_upravlyat_bluetooth),
                 permissions = toggleStatus.permissions,
                 data = buildJsonObject { put("enabled", isEnabled) }
             )
