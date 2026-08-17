@@ -38,7 +38,9 @@ object BatteryOptimizationHelper {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
                     context.startActivity(fallback)
-                } catch (_: Exception) { }
+                } catch (e: Exception) {
+                    Log.e(TAG, "openBatterySettings: не удалось открыть настройки батареи", e)
+                }
             }
         }
     }
@@ -89,7 +91,9 @@ object BatteryOptimizationHelper {
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(intent)
                 return true
-            } catch (_: Exception) { }
+            } catch (e: Exception) {
+                Log.e(TAG, "openOptimizationSettings: не удалось открыть настройки оптимизации", e)
+            }
         }
 
         return false

@@ -106,7 +106,9 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private fun initToneGenerator() {
         try {
             toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 85)
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "initToneGenerator: не удалось инициализировать ToneGenerator", e)
+        }
     }
 
     private fun observePipelines() {
@@ -628,13 +630,17 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private fun playWakeChime() {
         try {
             toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 80)
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "playWakeChime: не удалось проиграть звук", e)
+        }
     }
 
     private fun playCancelChime() {
         try {
             toneGenerator?.startTone(ToneGenerator.TONE_PROP_NACK, 70)
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "playCancelChime: не удалось проиграть звук", e)
+        }
     }
 
     fun pauseForPhoneCall() {
@@ -670,7 +676,9 @@ class VoiceInteractionOrchestrator @Inject constructor(
         orchestratorJob.cancel()
         try {
             toneGenerator?.release()
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "releaseToneGenerator: не удалось освободить ToneGenerator", e)
+        }
         toneGenerator = null
     }
 }

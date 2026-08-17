@@ -1,5 +1,6 @@
 package com.jarvis.assistant.agent.parser
 
+import android.util.Log
 import com.jarvis.assistant.agent.model.ToolCall
 import kotlinx.serialization.json.*
 import javax.inject.Inject
@@ -9,6 +10,7 @@ import javax.inject.Singleton
 class ToolCallParser @Inject constructor(
     private val json: Json
 ) {
+    private val TAG = "ToolCallParser"
     /**
      * Извлекает список структурированных вызовов инструментов из ответа LLM
      */
@@ -52,7 +54,9 @@ class ToolCallParser @Inject constructor(
                         return listOf(ToolCall(toolId = toolId.trim(), arguments = argsObj))
                     }
                 }
-            } catch (_: Exception) { }
+            } catch (e: Exception) {
+                Log.e(TAG, "parse: не удалось разобрать tool_calls", e)
+            }
         }
 
         return emptyList()

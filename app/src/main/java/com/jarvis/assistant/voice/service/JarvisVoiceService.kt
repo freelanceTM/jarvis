@@ -16,6 +16,7 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.util.Log
 import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
 import androidx.annotation.RequiresApi
@@ -58,7 +59,8 @@ class JarvisVoiceService : Service() {
         const val NOTIFICATION_ID = 1001
         
         // WakeLock timeout: 8 часов (для длительной фоновой работы)
-        private const val WAKELOCK_TIMEOUT_MS = 8 * 60 * 60 * 1000L
+                private const val TAG = "JarvisVoiceService"
+private const val WAKELOCK_TIMEOUT_MS = 8 * 60 * 60 * 1000L
 
         const val ACTION_START = "com.jarvis.action.START_SERVICE"
         const val ACTION_STOP = "com.jarvis.action.STOP_SERVICE"
@@ -140,7 +142,10 @@ class JarvisVoiceService : Service() {
             if (level > 0) {
                 workingMemory.put("battery_percent", level)
             }
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            // Пункт аудита #8: логируем, а не глотаем молча.
+            Log.e(TAG, "initWorkingMemoryDefaults: не удалось прочитать уровень батареи", e)
+        }
     }
 
     private fun registerSystemReceivers() {
@@ -153,7 +158,9 @@ class JarvisVoiceService : Service() {
                 addAction(WifiManager.WIFI_STATE_CHANGED_ACTION)
             }
             registerReceiver(systemEventReceiver, filter)
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "registerSystemReceivers: не удалось зарегистрировать ресиверы", e)
+        }
     }
 
     /**
@@ -174,7 +181,9 @@ class JarvisVoiceService : Service() {
             // Для Android < 12 PhoneStateListener deprecated, но всё ещё работает
             // Однако мы его не используем, т.к. minSdk = 29 (Android 10)
             // и на практике большинство устройств уже на Android 12+
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "registerTelephonyListener: не удалось зарегистрировать слушатель звонков", e)
+        }
     }
 
     private fun unregisterTelephonyListener() {
@@ -184,7 +193,9 @@ class JarvisVoiceService : Service() {
                     telephonyManager?.unregisterTelephonyCallback(callback)
                 }
             }
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "unregisterTelephonyListener: не удалось отменить регистрацию", e)
+        }
     }
 
     private fun startServiceForeground(notification: Notification) {
@@ -239,7 +250,9 @@ class JarvisVoiceService : Service() {
             if (wakeLock?.isHeld == true) {
                 wakeLock?.release()
             }
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "releaseWakeLock: не удалось освободить wake lock", e)
+        }
         wakeLock = null
     }
 
@@ -296,7 +309,9 @@ class JarvisVoiceService : Service() {
         
         try {
             unregisterReceiver(systemEventReceiver)
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "onDestroy: не удалось отменить ресивер", e)
+        }
         
         unregisterTelephonyListener()
         telephonyExecutor.shutdown()

@@ -131,7 +131,9 @@ class BluetoothAudioRouter @Inject constructor(
             }
             context.registerReceiver(connectionReceiver, filter)
             checkHeadsetConnection()
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "registerConnectionReceiver: не удалось зарегистрировать ресивер", e)
+        }
     }
 
     private fun triggerHeadphoneAutomation() {

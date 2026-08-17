@@ -2,6 +2,7 @@ package com.jarvis.assistant.voice.tts
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.util.Log
 import android.media.MediaPlayer
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +20,7 @@ class NeuralVoicePlayer @Inject constructor(
     @ApplicationContext private val context: Context,
     private val okHttpClient: OkHttpClient
 ) {
+    private val TAG = "NeuralVoicePlayer"
     private var currentPlayer: MediaPlayer? = null
 
     /**
@@ -55,7 +57,9 @@ class NeuralVoicePlayer @Inject constructor(
                 }
                 return@withContext true
             }
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "play: не удалось воспроизвести аудио", e)
+        }
 
         return@withContext false
     }
@@ -94,7 +98,9 @@ class NeuralVoicePlayer @Inject constructor(
         try {
             currentPlayer?.stop()
             currentPlayer?.release()
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "stop: не удалось остановить плеер", e)
+        }
         currentPlayer = null
     }
 }

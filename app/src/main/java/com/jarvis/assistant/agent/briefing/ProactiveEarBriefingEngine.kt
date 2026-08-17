@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.BatteryManager
 import android.content.Intent
 import android.content.IntentFilter
+import android.util.Log
 import com.jarvis.assistant.agent.memory.manager.JarvisMemoryManager
 import com.jarvis.assistant.agent.tools.intelligence.WeatherTool
 import com.jarvis.assistant.core.network.NetworkMonitor
@@ -36,6 +37,7 @@ class ProactiveEarBriefingEngine @Inject constructor(
     private val networkMonitor: NetworkMonitor,
     private val weatherTool: WeatherTool
 ) {
+    private val TAG = "EarBriefing"
 
     suspend fun generateBriefing(): String = withContext(Dispatchers.IO) {
         val userName = settingsRepository.userNameFlow.first().ifBlank { "сэр" }
@@ -87,7 +89,9 @@ class ProactiveEarBriefingEngine @Inject constructor(
             if (memories.isNotEmpty()) {
                 sb.append("Напоминание: ${memories.first().content}. ")
             }
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "buildBriefing: не удалось получить напоминания", e)
+        }
 
         sb.append("Я готов к работе.")
         return@withContext sb.toString().trim()

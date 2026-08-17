@@ -284,7 +284,9 @@ class ToolExecutor @Inject constructor(
             if (result.rollbackData != null) {
                 try {
                     tool.rollback(result.data ?: kotlinx.serialization.json.JsonObject(emptyMap()), result.rollbackData)
-                } catch (_: Exception) { }
+                } catch (e: Exception) {
+                    Log.w(TAG, "performRollback: сбой отката для ${tool.toolId}", e)
+                }
             }
         }
     }

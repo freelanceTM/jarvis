@@ -99,7 +99,9 @@ class SpeechRecognizerManager @Inject constructor(
             speechRecognizer?.stopListening()
             speechRecognizer?.cancel()
             speechRecognizer?.destroy()
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "stopListening: не удалось остановить распознаватель", e)
+        }
         speechRecognizer = null
     }
 

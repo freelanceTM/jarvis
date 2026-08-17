@@ -5,6 +5,7 @@ import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -47,6 +48,8 @@ interface WakeWordDetector {
 class AlisaStyleWakeWordEngine @Inject constructor(
     @ApplicationContext private val context: Context
 ) : WakeWordDetector {
+
+    private val TAG = "AlisaWakeWord"
 
     private val _events = MutableSharedFlow<WakeWordEvent>(extraBufferCapacity = 16)
     override val events: SharedFlow<WakeWordEvent> = _events.asSharedFlow()
@@ -191,7 +194,9 @@ class AlisaStyleWakeWordEngine @Inject constructor(
                 audioRecord?.stop()
             }
             audioRecord?.release()
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "stopListening: не удалось остановить AudioRecord", e)
+        }
         audioRecord = null
     }
 

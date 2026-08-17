@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioDeviceInfo
+import android.util.Log
 import android.media.AudioManager
 import android.os.Build
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -18,6 +19,7 @@ import javax.inject.Singleton
 class BluetoothAudioManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    private val TAG = "BluetoothAudioManager"
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
 
     private val _isBluetoothHeadsetConnected = MutableStateFlow(false)
@@ -39,7 +41,9 @@ class BluetoothAudioManager @Inject constructor(
         try {
             val filter = IntentFilter(AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED)
             context.registerReceiver(scoReceiver, filter)
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "startScoReceiver: не удалось зарегистрировать SCO-ресивер", e)
+        }
     }
 
     private fun checkConnectedDevices() {
@@ -59,7 +63,9 @@ class BluetoothAudioManager @Inject constructor(
                 am.startBluetoothSco()
                 am.isBluetoothScoOn = true
             }
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "startBluetoothSco: не удалось запустить SCO", e)
+        }
     }
 
     fun stopBluetoothSco() {
@@ -69,7 +75,9 @@ class BluetoothAudioManager @Inject constructor(
                 am.stopBluetoothSco()
                 am.mode = AudioManager.MODE_NORMAL
             }
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "stopBluetoothSco: не удалось остановить SCO", e)
+        }
     }
 
     fun requestAudioFocus(): Boolean {
@@ -84,6 +92,8 @@ class BluetoothAudioManager @Inject constructor(
     fun abandonAudioFocus() {
         try {
             audioManager?.abandonAudioFocus(null)
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "abandonAudioFocus: не удалось освободить audio focus", e)
+        }
     }
 }
