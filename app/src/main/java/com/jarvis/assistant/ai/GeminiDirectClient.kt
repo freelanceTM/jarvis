@@ -6,6 +6,7 @@ import com.jarvis.assistant.core.security.SecurityManager
 import com.jarvis.assistant.domain.models.Message
 import com.jarvis.assistant.domain.models.MessageRole
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -98,57 +99,107 @@ class UniversalAIClient @Inject constructor(
             )
         }
 
-        try {
-            if (apiKey.startsWith("sk-or-")) {
-                // OpenRouter: Llama 3.3 70B (сверхбыстрый и умный)
-                return@withContext callOpenAiCompatible(
-                    endpointUrl = "https://openrouter.ai/api/v1/chat/completions",
-                    model = modelOverride ?: "meta-llama/llama-3.3-70b-instruct:free",
+        // Пункт аудита #9: exponential backoff retry (до 3 попыток) для
+        // transient сетевых ошибок и HTTP 408/429/5xx.
+        var lastFailure: Resource.Error? = null
+        for (attempt in 1..AiRetryPolicy.MAX_ATTEMPTS) {
+            try {
+                val result = routeByKey(
                     apiKey = apiKey,
+                    modelOverride = modelOverride,
                     prompt = prompt,
                     systemPrompt = systemPrompt,
                     history = history
                 )
-            } else if (apiKey.startsWith("gsk_")) {
-                // Groq: 500 токенов/сек (мгновенный отклик 150мс)
-                val groqModel = if (modelOverride != null && !modelOverride.contains("/")) {
-                    modelOverride
-                } else {
-                    "llama-3.3-70b-versatile"
+
+                // HTTP-ошибка с transient-кодом (429/5xx) — тоже ретраим.
+                if (result is Resource.Error &&
+                    AiRetryPolicy.isTransientHttpError(result.exception.message) &&
+                    attempt < AiRetryPolicy.MAX_ATTEMPTS
+                ) {
+                    lastFailure = result
+                    Log.w("UniversalAIClient", "Transient HTTP error (${result.exception.message}), retry $attempt/${AiRetryPolicy.MAX_ATTEMPTS}")
+                    delay(AiRetryPolicy.backoffDelayMs(attempt))
+                    continue
                 }
-                return@withContext callOpenAiCompatible(
-                    endpointUrl = "https://api.groq.com/openai/v1/chat/completions",
-                    model = groqModel,
-                    apiKey = apiKey,
-                    prompt = prompt,
-                    systemPrompt = systemPrompt,
-                    history = history
-                )
-            } else if (apiKey.startsWith("sk-")) {
-                // OpenAI GPT-4o Mini
-                val openAiModel = if (modelOverride != null && !modelOverride.contains("/")) {
-                    modelOverride
-                } else {
-                    "gpt-4o-mini"
+
+                return@withContext result
+            } catch (e: SocketTimeoutException) {
+                if (attempt < AiRetryPolicy.MAX_ATTEMPTS) {
+                    Log.w("UniversalAIClient", "Socket timeout, retry $attempt/${AiRetryPolicy.MAX_ATTEMPTS}")
+                    delay(AiRetryPolicy.backoffDelayMs(attempt))
+                    continue
                 }
-                return@withContext callOpenAiCompatible(
-                    endpointUrl = "https://api.openai.com/v1/chat/completions",
-                    model = openAiModel,
-                    apiKey = apiKey,
-                    prompt = prompt,
-                    systemPrompt = systemPrompt,
-                    history = history
-                )
-            } else {
-                return@withContext callDirectGemini(apiKey, prompt, systemPrompt, history, modelOverride)
+                return@withContext Resource.Error(e, AiRetryPolicy.friendlyMessage(e))
+            } catch (e: IOException) {
+                if (attempt < AiRetryPolicy.MAX_ATTEMPTS) {
+                    Log.w("UniversalAIClient", "IOException, retry $attempt/${AiRetryPolicy.MAX_ATTEMPTS}")
+                    delay(AiRetryPolicy.backoffDelayMs(attempt))
+                    continue
+                }
+                return@withContext Resource.Error(e, AiRetryPolicy.friendlyMessage(e))
+            } catch (e: Exception) {
+                // Нетранзиентная ошибка — retry бессмысленен.
+                return@withContext Resource.Error(e, "Ошибка AI: ${e.localizedMessage}")
             }
-        } catch (e: SocketTimeoutException) {
-            Resource.Error(e, "Таймаут подключения к AI. Проверьте интернет.")
-        } catch (e: IOException) {
-            Resource.Error(e, "Ошибка сети при связи с AI.")
-        } catch (e: Exception) {
-            Resource.Error(e, "Ошибка AI: ${e.localizedMessage}")
         }
+
+        // Недостижимо, но Kotlin требует return.
+        lastFailure ?: Resource.Error(Exception("Неизвестная ошибка AI"), "Ошибка AI")
+    }
+
+    /** Маршрутизация запроса к провайдеру по префиксу ключа. */
+    private suspend fun routeByKey(
+        apiKey: String,
+        modelOverride: String?,
+        prompt: String,
+        systemPrompt: String,
+        history: List<Message>
+    ): Resource<String> = when {
+        apiKey.startsWith("sk-or-") -> {
+            // OpenRouter: Llama 3.3 70B (сверхбыстрый и умный)
+            callOpenAiCompatible(
+                endpointUrl = "https://openrouter.ai/api/v1/chat/completions",
+                model = modelOverride ?: "meta-llama/llama-3.3-70b-instruct:free",
+                apiKey = apiKey,
+                prompt = prompt,
+                systemPrompt = systemPrompt,
+                history = history
+            )
+        }
+        apiKey.startsWith("gsk_") -> {
+            // Groq: 500 токенов/сек (мгновенный отклик 150мс)
+            val groqModel = if (modelOverride != null && !modelOverride.contains("/")) {
+                modelOverride
+            } else {
+                "llama-3.3-70b-versatile"
+            }
+            callOpenAiCompatible(
+                endpointUrl = "https://api.groq.com/openai/v1/chat/completions",
+                model = groqModel,
+                apiKey = apiKey,
+                prompt = prompt,
+                systemPrompt = systemPrompt,
+                history = history
+            )
+        }
+        apiKey.startsWith("sk-") -> {
+            // OpenAI GPT-4o Mini
+            val openAiModel = if (modelOverride != null && !modelOverride.contains("/")) {
+                modelOverride
+            } else {
+                "gpt-4o-mini"
+            }
+            callOpenAiCompatible(
+                endpointUrl = "https://api.openai.com/v1/chat/completions",
+                model = openAiModel,
+                apiKey = apiKey,
+                prompt = prompt,
+                systemPrompt = systemPrompt,
+                history = history
+            )
+        }
+        else -> callDirectGemini(apiKey, prompt, systemPrompt, history, modelOverride)
     }
 
     private fun callDirectGemini(
