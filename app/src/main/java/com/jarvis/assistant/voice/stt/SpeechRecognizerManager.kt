@@ -70,8 +70,12 @@ class SpeechRecognizerManager @Inject constructor(
 
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageTag)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, languageTag)
+                // languageTag = "auto" → не фиксируем язык: система распознаёт
+                // на языке устройства / по умолчанию (режим AUTO переводчика).
+                if (languageTag != "auto") {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageTag)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, languageTag)
+                }
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                 putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)

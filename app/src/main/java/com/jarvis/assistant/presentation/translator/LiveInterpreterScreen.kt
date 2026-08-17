@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.jarvis.assistant.agent.translator.InterpreterPreset
 import com.jarvis.assistant.agent.translator.LiveTranslatorEngine
 import com.jarvis.assistant.presentation.theme.*
 
@@ -189,6 +190,37 @@ fun LiveInterpreterScreen(
                 }
             }
 
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 1.1 Быстрые режимы переводчика: AUTO / RU→TM / TM→RU / EN→RU / RU→EN
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                InterpreterPreset.all.forEach { preset ->
+                    val isActive = uiState.preset == preset
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isActive) JarvisCyanPrimary.copy(alpha = 0.18f) else JarvisSurface,
+                        border = BorderStroke(
+                            1.dp,
+                            if (isActive) JarvisCyanPrimary else JarvisSurfaceVariant
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { viewModel.applyPreset(preset) }
+                    ) {
+                        Text(
+                            text = preset.label,
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = if (isActive) JarvisCyanPrimary else TextSecondary,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(vertical = 7.dp, horizontal = 4.dp)
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(14.dp))
 
             // 2. Active Status & Partial Recognition Banner
@@ -210,10 +242,13 @@ fun LiveInterpreterScreen(
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = if (uiState.partialRecognizedText.isNotBlank()) {
-                                "Слышу: \"${uiState.partialRecognizedText}\""
-                            } else {
-                                "Слушаю речь собеседника на ${uiState.sourceLanguage.displayName}..."
+                            text = when {
+                                uiState.partialRecognizedText.isNotBlank() ->
+                                    "Слышу: \"${uiState.partialRecognizedText}\""
+                                uiState.preset == InterpreterPreset.AUTO ->
+                                    "Слушаю собеседника (язык определяется автоматически)..."
+                                else ->
+                                    "Слушаю речь собеседника на ${uiState.sourceLanguage.displayName}..."
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             color = JarvisCyanPrimary
