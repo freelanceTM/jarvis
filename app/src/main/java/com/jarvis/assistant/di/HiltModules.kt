@@ -7,6 +7,13 @@ import com.jarvis.assistant.agent.automation.dao.AutomationDao
 import com.jarvis.assistant.agent.capability.CapabilityChecker
 import com.jarvis.assistant.agent.capability.DeviceCapabilityRegistry
 import com.jarvis.assistant.agent.core.JarvisTool
+import com.jarvis.assistant.agent.decision.AgentExecutor
+import com.jarvis.assistant.agent.decision.CloudAiExecutor
+import com.jarvis.assistant.agent.decision.CognitiveAgentExecutor
+import com.jarvis.assistant.agent.decision.ExecutionDecisionConfig
+import com.jarvis.assistant.agent.decision.LocalAiExecutor
+import com.jarvis.assistant.agent.decision.ProceduralLocalAiExecutor
+import com.jarvis.assistant.agent.decision.RepositoryCloudAiExecutor
 import com.jarvis.assistant.agent.location.LocationProvider
 import com.jarvis.assistant.agent.location.SystemLocationProvider
 import com.jarvis.assistant.agent.translator.LlmTranslationProvider
@@ -318,4 +325,39 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindSettingsRepository(impl: SettingsRepositoryImpl): SettingsRepository
+}
+
+/**
+ * Execution Decision Engine v0.2 (Этап 1).
+ *
+ * Сам [com.jarvis.assistant.agent.decision.ExecutionDecisionEngine] получает
+ * зависимости через @Inject-конструктор и является @Singleton — здесь
+ * связываются только порты с их адаптерами над существующими компонентами
+ * (WorkflowExecutor, AIRepository, CognitivePlanner + AgentCognitiveLoop).
+ */
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class ExecutionDecisionModule {
+    @Binds
+    @Singleton
+    abstract fun bindLocalAiExecutor(impl: ProceduralLocalAiExecutor): LocalAiExecutor
+
+    @Binds
+    @Singleton
+    abstract fun bindCloudAiExecutor(impl: RepositoryCloudAiExecutor): CloudAiExecutor
+
+    @Binds
+    @Singleton
+    abstract fun bindAgentExecutor(impl: CognitiveAgentExecutor): AgentExecutor
+
+    companion object {
+        /**
+         * TODO: deviceConfidenceThreshold требует калибровки на реальных логах.
+         * Значение по умолчанию подобрано так, чтобы сохранить текущее
+         * поведение FastCommandRouter (см. ExecutionDecisionConfig).
+         */
+        @Provides
+        @Singleton
+        fun provideExecutionDecisionConfig(): ExecutionDecisionConfig = ExecutionDecisionConfig()
+    }
 }

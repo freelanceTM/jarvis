@@ -3,6 +3,9 @@ package com.jarvis.assistant.domain.usecases
 import android.content.Context
 import com.jarvis.assistant.R
 import com.jarvis.assistant.agent.memory.manager.JarvisMemoryManager
+import com.jarvis.assistant.agent.decision.ExecutionRequest
+import com.jarvis.assistant.agent.decision.PrivacyLevel
+import com.jarvis.assistant.agent.decision.RequestSource
 import com.jarvis.assistant.agent.pipeline.AgentPipeline
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.domain.models.Message
@@ -26,7 +29,17 @@ class SendPromptUseCase @Inject constructor(
     private val memoryManager: JarvisMemoryManager,
     private val agentPipeline: AgentPipeline
 ) {
-    suspend operator fun invoke(userPrompt: String): Resource<PromptExecutionResult> {
+    /**
+     * @param source откуда пришёл запрос — голос (STT) или текстовый чат.
+     *               Участвует в решении [com.jarvis.assistant.agent.decision.ExecutionDecisionEngine].
+     * @param privacyLevel политика приватности запроса. По умолчанию NORMAL —
+     *               существующее поведение не меняется.
+     */
+    suspend operator fun invoke(
+        userPrompt: String,
+        source: RequestSource = RequestSource.CHAT,
+        privacyLevel: PrivacyLevel = PrivacyLevel.NORMAL
+    ): Resource<PromptExecutionResult> {
         val trimmedPrompt = userPrompt.trim()
         if (trimmedPrompt.isEmpty()) {
             return Resource.Error(IllegalArgumentException(context.getString(R.string.pustoy_zapros)), context.getString(R.string.zapros_ne_mozhet_byt_pustym))
@@ -49,7 +62,14 @@ class SendPromptUseCase @Inject constructor(
 
         // 3. Единый агентский конвейер.
         val history = messageRepository.getRecentMessages(limit = 10)
-        val result = agentPipeline.process(resolvedPrompt, history)
+        val result = agentPipeline.process(
+            ExecutionRequest(
+                text = resolvedPrompt,
+                source = source,
+                privacyLevel = privacyLevel,
+                history = history
+            )
+        )
 
         // 4. Сохраняем ответ ассистента.
         if (result is Resource.Success) {

@@ -5,6 +5,7 @@ import android.content.Context
 import android.media.ToneGenerator
 import android.media.AudioManager
 import android.util.Log
+import com.jarvis.assistant.agent.decision.RequestSource
 import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.model.ToolCall
 import com.jarvis.assistant.agent.translator.LiveTranslatorEngine
@@ -419,7 +420,8 @@ class VoiceInteractionOrchestrator @Inject constructor(
         aiJob?.cancel()
         aiJob = scope.launch {
             try {
-                val result = sendPromptUseCase(clean)
+                // Этап 1: источник запроса передаётся в ExecutionDecisionEngine.
+                val result = sendPromptUseCase(clean, source = RequestSource.VOICE)
                 when (result) {
                     is Resource.Success -> {
                         when (val execution = result.data) {
