@@ -2,7 +2,6 @@ package com.jarvis.assistant.agent.decision
 
 import android.util.Log
 import com.jarvis.assistant.agent.engine.AgentCognitiveLoop
-import com.jarvis.assistant.agent.memory.procedural.WorkflowExecutor
 import com.jarvis.assistant.agent.planner.CognitivePlanner
 import com.jarvis.assistant.agent.planner.ExecutionPlan
 import com.jarvis.assistant.agent.registry.ToolRegistry
@@ -22,31 +21,6 @@ import javax.inject.Singleton
  * то, что раньше делал [com.jarvis.assistant.agent.pipeline.AgentPipeline],
  * но за единым контрактом [ExecutionRequest] / [ExecutionResult].
  */
-
-/**
- * LOCAL AI = процедурная память (офлайн-сценарии пользователя).
- *
- * Нейросетевой локальной модели в проекте нет, поэтому [hasWebCapability]
- * честно возвращает false.
- */
-@Singleton
-class ProceduralLocalAiExecutor @Inject constructor(
-    private val workflowExecutor: WorkflowExecutor
-) : LocalAiExecutor {
-
-    override val hasWebCapability: Boolean = false
-
-    override suspend fun tryHandle(request: ExecutionRequest): LocalAiOutcome {
-        val result = workflowExecutor.tryExecuteWorkflow(request.text)
-            ?: return LocalAiOutcome.Uncertain
-
-        return if (result.isSuccess) {
-            LocalAiOutcome.Handled("${result.summary}, сэр.")
-        } else {
-            LocalAiOutcome.Failed(result.summary)
-        }
-    }
-}
 
 /**
  * CLOUD AI = существующий [AIRepository] (UniversalAIClient: OpenAI/Groq/

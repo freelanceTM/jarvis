@@ -12,8 +12,17 @@ import com.jarvis.assistant.agent.decision.CloudAiExecutor
 import com.jarvis.assistant.agent.decision.CognitiveAgentExecutor
 import com.jarvis.assistant.agent.decision.ExecutionDecisionConfig
 import com.jarvis.assistant.agent.decision.LocalAiExecutor
-import com.jarvis.assistant.agent.decision.ProceduralLocalAiExecutor
+import com.jarvis.assistant.agent.decision.CompositeLocalAiExecutor
 import com.jarvis.assistant.agent.decision.RepositoryCloudAiExecutor
+import com.jarvis.assistant.agent.localai.LocalAi
+import com.jarvis.assistant.agent.localai.LocalModelManager
+import com.jarvis.assistant.agent.localai.LocalModelSpec
+import com.jarvis.assistant.agent.localai.LocalPromptBuilder
+import com.jarvis.assistant.agent.localai.JarvisLocalPromptBuilder
+import com.jarvis.assistant.agent.localai.OnDeviceLocalAi
+import com.jarvis.assistant.agent.localai.mediapipe.DefaultMediaPipeRuntimeFactory
+import com.jarvis.assistant.agent.localai.mediapipe.MediaPipeModelManager
+import com.jarvis.assistant.agent.localai.mediapipe.MediaPipeRuntimeFactory
 import com.jarvis.assistant.agent.location.LocationProvider
 import com.jarvis.assistant.agent.location.SystemLocationProvider
 import com.jarvis.assistant.agent.translator.LlmTranslationProvider
@@ -340,7 +349,7 @@ abstract class RepositoryModule {
 abstract class ExecutionDecisionModule {
     @Binds
     @Singleton
-    abstract fun bindLocalAiExecutor(impl: ProceduralLocalAiExecutor): LocalAiExecutor
+    abstract fun bindLocalAiExecutor(impl: CompositeLocalAiExecutor): LocalAiExecutor
 
     @Binds
     @Singleton
@@ -359,5 +368,44 @@ abstract class ExecutionDecisionModule {
         @Provides
         @Singleton
         fun provideExecutionDecisionConfig(): ExecutionDecisionConfig = ExecutionDecisionConfig()
+    }
+}
+
+/**
+ * Local AI (Этап 2) — on-device LLM как execution backend.
+ *
+ * Модель НЕ грузится при старте: [MediaPipeModelManager] инициализируется
+ * лениво, при первом обращении к локальному пути. Все компоненты —
+ * @Singleton, чтобы нативный движок существовал в единственном экземпляре.
+ */
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class LocalAiModule {
+    @Binds
+    @Singleton
+    abstract fun bindLocalAi(impl: OnDeviceLocalAi): LocalAi
+
+    @Binds
+    @Singleton
+    abstract fun bindLocalPromptBuilder(impl: JarvisLocalPromptBuilder): LocalPromptBuilder
+
+    @Binds
+    @Singleton
+    abstract fun bindLocalModelManager(impl: MediaPipeModelManager): LocalModelManager
+
+    @Binds
+    @Singleton
+    abstract fun bindMediaPipeRuntimeFactory(
+        impl: DefaultMediaPipeRuntimeFactory
+    ): MediaPipeRuntimeFactory
+
+    companion object {
+        /**
+         * Спецификация локальной модели вынесена в DI: заменить модель можно
+         * здесь, не трогая runtime и decision engine.
+         */
+        @Provides
+        @Singleton
+        fun provideLocalModelSpec(): LocalModelSpec = LocalModelSpec.GEMMA3_1B_IT_INT4
     }
 }

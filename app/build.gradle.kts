@@ -27,6 +27,14 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // Этап 2: MediaPipe поставляет нативные библиотеки для 4 ABI
+        // (arm64-v8a 26 МБ, armeabi-v7a 19 МБ, x86 32 МБ, x86_64 29 МБ).
+        // Исключаем x86 — 32-битных x86-устройств и эмуляторов практически
+        // не осталось; x86_64 оставляем ради эмулятора на CI/разработке.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
     }
 
     buildTypes {
@@ -114,6 +122,11 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
+
+    // Этап 2 — Local AI: MediaPipe LLM Inference (on-device Gemma 3 1B).
+    // Native libs увеличивают APK: ~26 МБ (arm64-v8a). Сама модель (~529 МБ)
+    // в APK НЕ входит — см. docs/LOCAL_AI.md.
+    implementation(libs.mediapipe.tasks.genai)
 
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.security.crypto)
