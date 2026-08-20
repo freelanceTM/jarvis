@@ -91,9 +91,9 @@
     <string name="trebuetsya_aktivaciya">ТРЕБУЕТСЯ АКТИВАЦИЯ</string>
     <string name="prilozhenie_zablokirovano_bez_koda_iz_korobki_naushnikov">Приложение заблокировано без кода из коробки наушников.</string>
     <string name="prodlit_podpisku_na_30_dney_50_tmt">Продлить подписку на 30 дней (50 TMT)</string>
-    <string name="ai_api_klyuch">AI API Ключ</string>
-    <string name="podderzhivayutsya_klyuchi_openrouter_sk_or_google_gemini_aq_">Поддерживаются ключи OpenRouter (sk-or-…), Google Gemini (AQ…/AIza…), Groq (gsk_…) и OpenAI (sk-…).</string>
-    <string name="sk_or_ili_aq_ili_gsk">sk-or-… или AQ… или gsk_…</string>
+    <string name="ai_api_klyuch">Токен доступа JARVIS</string>
+    <string name="podderzhivayutsya_klyuchi_openrouter_sk_or_google_gemini_aq_">Токен выдаётся при активации. Ключи AI-провайдеров на устройстве не хранятся — облачные запросы идут через сервер JARVIS.</string>
+    <string name="sk_or_ili_aq_ili_gsk">Токен доступа</string>
     <string name="pokazat_skryt">Показать/скрыть</string>
     <string name="akusticheskiy_wake_word_slovo_dzharvis">Акустический Wake Word (Слово «Джарвис»)</string>
     <string name="dvuhetapnyy_kaskad_zcr_filtr_formant_rechi_stage_1_verifikac">Двухэтапный каскад: ZCR-фильтр формант речи (Stage 1) ➔ верификация ключевого слова (Stage 2).</string>

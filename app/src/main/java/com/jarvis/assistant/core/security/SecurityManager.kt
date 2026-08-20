@@ -12,12 +12,25 @@ import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Защищённое хранилище секретов клиента.
+ *
+ * Этап 3: вместо ключей AI-провайдеров (BYOK) хранится ОДИН токен доступа
+ * к JARVIS API. Ключи Groq/Gemini/OpenRouter на устройстве больше не хранятся
+ * и не используются — они живут исключительно на сервере.
+ */
 interface SecurityManager {
-    fun getApiKey(): String
-    fun saveApiKey(apiKey: String)
-    fun clearApiKey()
-    fun hasValidApiKey(): Boolean
-    val apiKeyFlow: Flow<String>
+
+    /** Токен доступа к JARVIS API (Bearer). */
+    fun getAccessToken(): String
+
+    fun saveAccessToken(token: String)
+
+    fun clearAccessToken()
+
+    fun hasValidAccessToken(): Boolean
+
+    val accessTokenFlow: Flow<String>
 }
 
 @Singleton
@@ -37,26 +50,34 @@ class SecurityManagerImpl @Inject constructor(
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
-    private val _apiKeyFlow = MutableStateFlow(getApiKey())
-    override val apiKeyFlow: Flow<String> = _apiKeyFlow.asStateFlow()
+    private val _accessTokenFlow = MutableStateFlow(getAccessToken())
+    override val accessTokenFlow: Flow<String> = _accessTokenFlow.asStateFlow()
 
-    override fun getApiKey(): String {
-        return securePrefs.getString(AppConstants.KEY_API_TOKEN, "").orEmpty()
+    init {
+        // Миграция Этапа 3: удаляем legacy-ключ AI-провайдера, если он остался
+        // от прошлых версий. Ключи провайдеров больше не должны лежать
+        // на устройстве ни в каком виде.
+        if (securePrefs.contains(AppConstants.LEGACY_KEY_PROVIDER_API)) {
+            securePrefs.edit().remove(AppConstants.LEGACY_KEY_PROVIDER_API).apply()
+        }
     }
 
-    override fun saveApiKey(apiKey: String) {
-        val trimmed = apiKey.trim()
-        securePrefs.edit().putString(AppConstants.KEY_API_TOKEN, trimmed).apply()
-        _apiKeyFlow.value = trimmed
+    override fun getAccessToken(): String =
+        securePrefs.getString(AppConstants.KEY_ACCESS_TOKEN, "").orEmpty()
+
+    override fun saveAccessToken(token: String) {
+        val trimmed = token.trim()
+        securePrefs.edit().putString(AppConstants.KEY_ACCESS_TOKEN, trimmed).apply()
+        _accessTokenFlow.value = trimmed
     }
 
-    override fun clearApiKey() {
-        securePrefs.edit().remove(AppConstants.KEY_API_TOKEN).apply()
-        _apiKeyFlow.value = ""
+    override fun clearAccessToken() {
+        securePrefs.edit().remove(AppConstants.KEY_ACCESS_TOKEN).apply()
+        _accessTokenFlow.value = ""
     }
 
-    override fun hasValidApiKey(): Boolean {
-        val key = getApiKey()
-        return key.isNotEmpty() && key.length >= 10
+    override fun hasValidAccessToken(): Boolean {
+        val token = getAccessToken()
+        return token.isNotEmpty() && token.length >= 10
     }
 }

@@ -78,7 +78,7 @@ class MainViewModel @Inject constructor(
                 _uiState.update { 
                     it.copy(
                         assistantState = state,
-                        isApiKeyConfigured = securityManager.hasValidApiKey()
+                        isApiKeyConfigured = securityManager.hasValidAccessToken()
                     )
                 }
             }
@@ -107,7 +107,7 @@ class MainViewModel @Inject constructor(
         when (event) {
             is MainUiEvent.ToggleBackgroundService -> toggleService()
             is MainUiEvent.ManualWakeWordTrigger -> {
-                if (!securityManager.hasValidApiKey()) {
+                if (!securityManager.hasValidAccessToken()) {
                     viewModelScope.launch { _effectChannel.send(MainUiEffect.NavigateToSettings) }
                     return
                 }
@@ -124,7 +124,7 @@ class MainViewModel @Inject constructor(
 
     private fun toggleService() {
         if (!_uiState.value.isBackgroundServiceActive) {
-            if (!securityManager.hasValidApiKey()) {
+            if (!securityManager.hasValidAccessToken()) {
                 viewModelScope.launch { _effectChannel.send(MainUiEffect.NavigateToSettings) }
                 return
             }

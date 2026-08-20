@@ -1,9 +1,14 @@
 package com.jarvis.assistant.core.constants
 
 object AppConstants {
-    // OpenAI Compatible API Defaults
-    const val DEFAULT_BASE_URL = "https://api.openai.com/v1/"
-    const val DEFAULT_MODEL = "gpt-4o-mini"
+    // JARVIS API (Этап 3). Ключи AI-провайдеров живут только на сервере.
+    const val JARVIS_API_BASE_URL = "https://api.jarvis.ai"
+
+    /**
+     * Модель выбирается сервером (AI Router), а не клиентом. Константа
+     * сохранена для обратной совместимости DataStore-настроек.
+     */
+    const val DEFAULT_MODEL = "server-managed"
     
     // Fallback System Prompt
     const val DEFAULT_SYSTEM_PROMPT = """Ты JARVIS — персональный AI-ассистент пользователя.
@@ -28,7 +33,15 @@ object AppConstants {
     
     // Security Preferences Key
     const val SECURE_PREFS_NAME = "jarvis_secure_prefs"
-    const val KEY_API_TOKEN = "enc_openai_api_key"
+
+    /** Токен доступа к JARVIS API (Этап 3). */
+    const val KEY_ACCESS_TOKEN = "enc_jarvis_access_token"
+
+    /**
+     * Legacy-ключ AI-провайдера (BYOK до Этапа 3).
+     * Больше не используется — удаляется при старте SecurityManagerImpl.
+     */
+    const val LEGACY_KEY_PROVIDER_API = "enc_openai_api_key"
     
     // Database
     const val DATABASE_NAME = "jarvis_database.db"

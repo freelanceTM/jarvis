@@ -1,0 +1,122 @@
+package com.jarvis.server.api
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+/**
+ * Публичный контракт JARVIS API v1.
+ *
+ * Контракт НЕ привязан к конкретному AI-провайдеру: клиент не знает и не может
+ * выбрать, кто выполнит запрос. Выбор провайдера — исключительно server-side.
+ */
+
+/** Источник запроса (зеркалит Android `RequestSource`). */
+enum class ApiRequestSource { VOICE, CHAT }
+
+/** Уровень приватности (зеркалит Android `PrivacyLevel`). */
+enum class ApiPrivacyLevel { NORMAL, PRIVATE, SENSITIVE }
+
+/** Как был выполнен запрос (зеркалит Android `ExecutionType`). */
+enum class ApiExecutionType { CLOUD_AI }
+
+/**
+ * Запрос на выполнение.
+ *
+ * Намеренно НЕТ поля `provider`: клиент не имеет права выбирать провайдера
+ * (пункт 29 ТЗ). Любое такое поле было бы проигнорировано.
+ */
+@Serializable
+data class AiExecutionRequest(
+    @SerialName("text") val text: String,
+
+    @SerialName("source") val source: ApiRequestSource = ApiRequestSource.CHAT,
+
+    @SerialName("privacyLevel") val privacyLevel: ApiPrivacyLevel = ApiPrivacyLevel.NORMAL,
+
+    @SerialName("requiresWeb") val requiresWeb: Boolean = false,
+
+    /**
+     * Клиентский correlation id. Если не передан — сервер сгенерирует свой.
+     * Позволяет сопоставить логи Android и сервера.
+     */
+    @SerialName("requestId") val requestId: String? = null,
+
+    /**
+     * Дополнительный контекст ассистента от клиента (Tool Discovery, персона).
+     *
+     * Зачем это нужно: Android-агент подмешивает описания доступных на КОНКРЕТНОМ
+     * устройстве инструментов, чтобы модель могла вернуть tool_calls. Сервер
+     * физически не знает набор инструментов данного телефона, поэтому контекст
+     * приходит от клиента.
+     *
+     * Ограничения безопасности:
+     *  - это НЕ выбор провайдера и НЕ выбор модели (они остаются server-side);
+     *  - длина валидируется наравне с [text];
+     *  - сервер добавляет свой базовый system prompt поверх, а не заменяет его.
+     */
+    @SerialName("systemContext") val systemContext: String? = null
+)
+
+/**
+ * Успешный ответ.
+ *
+ * Поле `provider` намеренно отсутствует: какой именно провайдер отработал —
+ * это server-side telemetry (пункт 3 ТЗ). Клиенту эта деталь не нужна и её
+ * раскрытие только привязало бы Android к инфраструктуре.
+ */
+@Serializable
+data class AiExecutionResponse(
+    @SerialName("success") val success: Boolean = true,
+    @SerialName("text") val text: String,
+    @SerialName("executionType") val executionType: ApiExecutionType = ApiExecutionType.CLOUD_AI,
+    @SerialName("requestId") val requestId: String
+)
+
+/** Тело ошибки — единый формат для всех сбоев. */
+@Serializable
+data class ApiErrorBody(
+    @SerialName("code") val code: String,
+    @SerialName("message") val message: String,
+    @SerialName("requestId") val requestId: String
+)
+
+@Serializable
+data class ApiErrorResponse(
+    @SerialName("success") val success: Boolean = false,
+    @SerialName("error") val error: ApiErrorBody
+)
+
+/**
+ * Machine-readable коды ошибок.
+ *
+ * Клиенту НИКОГДА не уходят: stack trace, ключи провайдеров, внутренние
+ * сообщения исключений, ошибки БД (пункт 5 ТЗ). [message] — это заранее
+ * заданный безопасный текст, а не `e.message`.
+ */
+enum class ApiErrorCode(val httpStatus: Int, val safeMessage: String) {
+    INVALID_REQUEST(400, "Request validation failed"),
+    UNAUTHORIZED(401, "Authentication required"),
+    FORBIDDEN(403, "Client is not allowed to perform this operation"),
+    RATE_LIMITED(429, "Rate limit exceeded"),
+    PRIVACY_POLICY_VIOLATION(403, "Request privacy level forbids cloud execution"),
+    PROVIDER_UNAVAILABLE(503, "AI provider unavailable"),
+    PROVIDER_TIMEOUT(504, "AI provider timeout"),
+    PROVIDER_ERROR(502, "AI provider error"),
+    ALL_PROVIDERS_UNAVAILABLE(503, "No AI provider is currently available"),
+    PAYLOAD_TOO_LARGE(413, "Request payload too large"),
+    INTERNAL_ERROR(500, "Internal server error");
+
+    fun toResponse(requestId: String, overrideMessage: String? = null) = ApiErrorResponse(
+        error = ApiErrorBody(
+            code = name,
+            message = overrideMessage ?: safeMessage,
+            requestId = requestId
+        )
+    )
+}
+
+/** Исключение уровня API — всегда несёт безопасный код. */
+class ApiException(
+    val code: ApiErrorCode,
+    val logDetail: String? = null
+) : Exception(code.safeMessage)

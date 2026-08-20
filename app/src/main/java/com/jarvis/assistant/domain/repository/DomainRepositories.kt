@@ -19,6 +19,22 @@ interface AIRepository {
         systemPrompt: String,
         history: List<Message> = emptyList()
     ): Resource<String>
+
+    /**
+     * Облачный запрос с контекстом решения (Этап 3).
+     *
+     * Контекст нужен серверу: JARVIS API применяет privacy-политику как вторую
+     * линию защиты и учитывает источник запроса. Значение по умолчанию
+     * делегирует базовой перегрузке, поэтому существующие реализации
+     * и вызывающие не ломаются.
+     */
+    suspend fun generateResponse(
+        prompt: String,
+        systemPrompt: String,
+        source: String,
+        privacyLevel: String,
+        requiresWeb: Boolean
+    ): Resource<String> = generateResponse(prompt, systemPrompt, emptyList())
 }
 
 interface SettingsRepository {

@@ -21,12 +21,13 @@ import javax.inject.Inject
 
 data class SettingsUiState(
     val userName: String = "Сэр",
-    val apiKey: String = "",
-    val isApiKeyHidden: Boolean = true,
+    /** Токен доступа к JARVIS API (Этап 3). Ключей провайдеров на устройстве нет. */
+    val accessToken: String = "",
+    val isAccessTokenHidden: Boolean = true,
     val systemPrompt: String = "",
     val speechRate: Float = 1.0f,
     val speechPitch: Float = 1.0f,
-    val selectedModel: String = "gpt-4o-mini",
+    val selectedModel: String = "server-managed",
     val isHeadsetOnlyMode: Boolean = false,
     val wakeWordSensitivity: Float = 0.65f,
     val automations: List<AutomationEntity> = emptyList(),
@@ -53,8 +54,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     private fun loadSettings() {
-        val currentKey = securityManager.getApiKey()
-        _uiState.update { it.copy(apiKey = currentKey) }
+        _uiState.update { it.copy(accessToken = securityManager.getAccessToken()) }
 
         viewModelScope.launch {
             getSettingsUseCase().collectLatest { settings ->
@@ -110,12 +110,12 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(userName = name) }
     }
 
-    fun onApiKeyChanged(key: String) {
-        _uiState.update { it.copy(apiKey = key) }
+    fun onAccessTokenChanged(token: String) {
+        _uiState.update { it.copy(accessToken = token) }
     }
 
-    fun toggleApiKeyVisibility() {
-        _uiState.update { it.copy(isApiKeyHidden = !it.isApiKeyHidden) }
+    fun toggleAccessTokenVisibility() {
+        _uiState.update { it.copy(isAccessTokenHidden = !it.isAccessTokenHidden) }
     }
 
     fun onSystemPromptChanged(prompt: String) {
@@ -151,7 +151,7 @@ class SettingsViewModel @Inject constructor(
     fun saveAllSettings() {
         viewModelScope.launch {
             val state = _uiState.value
-            securityManager.saveApiKey(state.apiKey)
+            securityManager.saveAccessToken(state.accessToken)
             saveSettingsUseCase.saveUserName(state.userName)
             saveSettingsUseCase.saveSystemPrompt(state.systemPrompt)
             saveSettingsUseCase.saveSpeechRate(state.speechRate)

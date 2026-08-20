@@ -9,7 +9,6 @@ import com.jarvis.assistant.core.network.NetworkMonitor
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.domain.repository.AIRepository
 import com.jarvis.assistant.domain.repository.SettingsRepository
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -23,11 +22,19 @@ import javax.inject.Singleton
  */
 
 /**
- * CLOUD AI = существующий [AIRepository] (UniversalAIClient: OpenAI/Groq/
- * OpenRouter/Gemini) + Tool Discovery-промпт из [ToolRegistry].
+ * CLOUD AI = JARVIS API (Этап 3).
  *
- * Один автоматический повтор через 2 секунды сохранён из AgentPipeline —
- * это существующее поведение, а не новый retry-framework.
+ * ```
+ * CloudAiExecutor → AIRepository → JarvisApiAiClient → JARVIS API
+ *                                        → AI Router → Provider Manager
+ * ```
+ *
+ * Клиент НЕ знает, какой провайдер выполнит запрос, и не хранит их ключи.
+ * Выбор провайдера, fallback между ними, retry и rate limiting — на сервере.
+ *
+ * Локальный повтор здесь СНЯТ: сервер уже делает controlled retry и fallback
+ * по нескольким провайдерам, поэтому клиентский повтор только удваивал бы
+ * нагрузку и расходовал лимит пользователя.
  */
 @Singleton
 class RepositoryCloudAiExecutor @Inject constructor(
@@ -39,13 +46,15 @@ class RepositoryCloudAiExecutor @Inject constructor(
 
     private companion object {
         const val TAG = "CloudAiExecutor"
-        const val RETRY_DELAY_MS = 2000L
     }
 
     override fun isAvailable(): Boolean = networkMonitor.isCurrentlyOnline()
 
     override suspend fun complete(request: ExecutionRequest): Resource<String> {
         val baseSystemPrompt = settingsRepository.systemPromptFlow.first()
+
+        // Tool Discovery остаётся на клиенте: сервер не знает, какие
+        // инструменты доступны на КОНКРЕТНОМ устройстве.
         val targetedToolsPrompt = toolRegistry.buildTargetedSystemPrompt(request.text)
 
         val fullSystemPrompt = buildString {
@@ -56,20 +65,16 @@ class RepositoryCloudAiExecutor @Inject constructor(
             }
         }
 
-        val first = aiRepository.generateResponse(
-            prompt = request.text,
-            systemPrompt = fullSystemPrompt,
-            history = request.history
-        )
-        if (first !is Resource.Error) return first
+        Log.d(TAG, "cloud request → JARVIS API | source=${request.source} | privacy=${request.privacyLevel}")
 
-        Log.w(TAG, "Cloud request failed, single retry in ${RETRY_DELAY_MS}ms")
-        delay(RETRY_DELAY_MS)
-
+        // Передаём контекст решения: сервер применит privacy-политику как
+        // вторую линию защиты, даже если клиент ошибётся.
         return aiRepository.generateResponse(
             prompt = request.text,
             systemPrompt = fullSystemPrompt,
-            history = request.history
+            source = request.source.name,
+            privacyLevel = request.privacyLevel.name,
+            requiresWeb = request.requiresWeb
         )
     }
 }

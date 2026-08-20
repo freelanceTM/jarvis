@@ -59,7 +59,7 @@ import com.jarvis.assistant.agent.tools.productivity.CreateAutomationTool
 import com.jarvis.assistant.agent.tools.productivity.EarBriefingTool
 import com.jarvis.assistant.agent.tools.system.*
 import com.jarvis.assistant.ai.AIClient
-import com.jarvis.assistant.ai.UniversalAIClient
+import com.jarvis.assistant.ai.JarvisApiAiClient
 import com.jarvis.assistant.core.constants.AppConstants
 import com.jarvis.assistant.core.dispatcher.CoroutineDispatchers
 import com.jarvis.assistant.core.dispatcher.DefaultCoroutineDispatchers
@@ -146,7 +146,7 @@ abstract class SecurityAndNetworkBindingModule {
 
     @Binds
     @Singleton
-    abstract fun bindAIClient(impl: UniversalAIClient): AIClient
+    abstract fun bindAIClient(impl: JarvisApiAiClient): AIClient
 
     @Binds
     @Singleton

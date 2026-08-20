@@ -1,9 +1,7 @@
 package com.jarvis.assistant.data.repository
 
-import android.util.Log
-import com.jarvis.assistant.agent.router.TaskRouter
-import com.jarvis.assistant.agent.tools.intelligence.WebSearchTool
 import com.jarvis.assistant.ai.AIClient
+import com.jarvis.assistant.ai.JarvisApiAiClient
 import com.jarvis.assistant.core.dispatcher.CoroutineDispatchers
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.domain.models.Message
@@ -12,16 +10,24 @@ import com.jarvis.assistant.domain.repository.SettingsRepository
 import com.jarvis.assistant.data.preferences.SettingsDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Облачный AI на Android (Этап 3).
+ *
+ * Что изменилось: раньше репозиторий сам выбирал модель через TaskRouter
+ * и сам обогащал промпт результатами web-поиска. Теперь это ответственность
+ * сервера (AI Router + Provider Manager), поэтому клиент только передаёт
+ * запрос и контекст инструментов.
+ *
+ * TaskRouter и WebSearchTool намеренно НЕ удалены из проекта: роутер
+ * по-прежнему используется в других местах, а WebSearchTool остаётся обычным
+ * JarvisTool, который агент может вызвать явно.
+ */
 @Singleton
 class AIRepositoryImpl @Inject constructor(
     private val aiClient: AIClient,
-    private val taskRouter: TaskRouter,
-    private val webSearchTool: WebSearchTool,
     private val dispatchers: CoroutineDispatchers
 ) : AIRepository {
 
@@ -29,31 +35,36 @@ class AIRepositoryImpl @Inject constructor(
         prompt: String,
         systemPrompt: String,
         history: List<Message>
-    ): Resource<String> {
-        return withContext(dispatchers.io) {
-            val routingDecision = taskRouter.routeTask(prompt)
-            Log.d("AIRepository", "TaskRouter: tier=${routingDecision.tier}, model=${routingDecision.targetModelId}, requiresWebSearch=${routingDecision.requiresWebSearch}")
+    ): Resource<String> = withContext(dispatchers.io) {
+        aiClient.complete(
+            prompt = prompt,
+            systemPrompt = systemPrompt,
+            history = history,
+            // Модель выбирает сервер — клиент её не навязывает.
+            modelOverride = null
+        )
+    }
 
-            var enrichedSystemPrompt = systemPrompt
-            if (routingDecision.requiresWebSearch) {
-                try {
-                    val searchResult = webSearchTool.execute(
-                        buildJsonObject { put("query", prompt) }
-                    )
-                    if (searchResult.isSuccess && searchResult.summary.isNotBlank()) {
-                        enrichedSystemPrompt += "\n\nРезультаты поиска в интернете:\n${searchResult.summary}\n\nИспользуй эту информацию для точного и актуального ответа."
-                    }
-                } catch (e: Exception) {
-                    Log.w("AIRepository", "Web search failed or timed out: ${e.localizedMessage}")
-                }
-            }
-
-            aiClient.complete(
+    /**
+     * Расширенный вызов с контекстом решения: источник, приватность, web.
+     * Используется ExecutionDecisionEngine через CloudAiExecutor.
+     */
+    override suspend fun generateResponse(
+        prompt: String,
+        systemPrompt: String,
+        source: String,
+        privacyLevel: String,
+        requiresWeb: Boolean
+    ): Resource<String> = withContext(dispatchers.io) {
+        when (val client = aiClient) {
+            is JarvisApiAiClient -> client.completeWithContext(
                 prompt = prompt,
-                systemPrompt = enrichedSystemPrompt,
-                history = history,
-                modelOverride = routingDecision.targetModelId
+                systemPrompt = systemPrompt,
+                source = source,
+                privacyLevel = privacyLevel,
+                requiresWeb = requiresWeb
             )
+            else -> client.complete(prompt, systemPrompt, emptyList(), null)
         }
     }
 }

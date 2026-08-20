@@ -36,6 +36,13 @@ jobs:
           # Пункт аудита #12: lint в CI — warningsAsErrors + baseline блокируют НОВЫЕ warnings.
           gradle testDebugUnitTest lint assembleDebug --stacktrace
 
+      - name: Test JARVIS API server (Этап 3)
+        run: |
+          PROJECT_DIR=$(find . -type f \( -name "settings.gradle.kts" -o -name "settings.gradle" \) -exec dirname {} \; | head -n 1)
+          cd "$PROJECT_DIR"
+          # :server — отдельный JVM-модуль; Android-сборка от него не зависит.
+          gradle :server:test :server:build --stacktrace
+
       - name: Upload JARVIS APK Artifact
         uses: actions/upload-artifact@v4
         with:

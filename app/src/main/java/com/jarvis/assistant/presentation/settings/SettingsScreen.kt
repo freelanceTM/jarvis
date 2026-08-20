@@ -200,16 +200,16 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     OutlinedTextField(
-                        value = uiState.apiKey,
-                        onValueChange = { viewModel.onApiKeyChanged(it) },
+                        value = uiState.accessToken,
+                        onValueChange = { viewModel.onAccessTokenChanged(it) },
                         label = { Text(stringResource(R.string.sk_or_ili_aq_ili_gsk)) },
                         modifier = Modifier.fillMaxWidth(),
-                        visualTransformation = if (uiState.isApiKeyHidden) PasswordVisualTransformation() else VisualTransformation.None,
+                        visualTransformation = if (uiState.isAccessTokenHidden) PasswordVisualTransformation() else VisualTransformation.None,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         trailingIcon = {
-                            IconButton(onClick = { viewModel.toggleApiKeyVisibility() }) {
+                            IconButton(onClick = { viewModel.toggleAccessTokenVisibility() }) {
                                 Icon(
-                                    imageVector = if (uiState.isApiKeyHidden) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    imageVector = if (uiState.isAccessTokenHidden) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                                     contentDescription = stringResource(R.string.pokazat_skryt),
                                     tint = TextSecondary
                                 )
