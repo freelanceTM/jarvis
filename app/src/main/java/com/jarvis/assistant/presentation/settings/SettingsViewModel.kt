@@ -6,6 +6,7 @@ import com.jarvis.assistant.agent.automation.dao.AutomationDao
 import com.jarvis.assistant.agent.automation.entity.AutomationEntity
 import com.jarvis.assistant.core.license.LicenseInfo
 import com.jarvis.assistant.core.license.LicenseManager
+import com.jarvis.assistant.core.security.AccessTokenPolicy
 import com.jarvis.assistant.core.security.SecurityManager
 import com.jarvis.assistant.domain.models.VoiceSettings
 import com.jarvis.assistant.domain.usecases.GetSettingsUseCase
@@ -24,6 +25,7 @@ data class SettingsUiState(
     /** Токен доступа к JARVIS API (Этап 3). Ключей провайдеров на устройстве нет. */
     val accessToken: String = "",
     val isAccessTokenHidden: Boolean = true,
+    val isAccessTokenInvalid: Boolean = false,
     val systemPrompt: String = "",
     val speechRate: Float = 1.0f,
     val speechPitch: Float = 1.0f,
@@ -89,11 +91,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun extendSubscription(days: Int = 30) {
-        val updated = licenseManager.extendSubscription(days)
-        _uiState.update { it.copy(licenseInfo = updated) }
-    }
-
     fun toggleAutomation(ruleId: String, isEnabled: Boolean) {
         viewModelScope.launch {
             automationDao.toggleEnabled(ruleId, isEnabled)
@@ -111,7 +108,13 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun onAccessTokenChanged(token: String) {
-        _uiState.update { it.copy(accessToken = token) }
+        _uiState.update {
+            it.copy(
+                accessToken = token,
+                isAccessTokenInvalid = false,
+                isSavedSuccess = false
+            )
+        }
     }
 
     fun toggleAccessTokenVisibility() {
@@ -151,7 +154,14 @@ class SettingsViewModel @Inject constructor(
     fun saveAllSettings() {
         viewModelScope.launch {
             val state = _uiState.value
-            securityManager.saveAccessToken(state.accessToken)
+            val token = state.accessToken.trim()
+            if (token.isNotEmpty() && !AccessTokenPolicy.isValid(token)) {
+                _uiState.update {
+                    it.copy(isAccessTokenInvalid = true, isSavedSuccess = false)
+                }
+                return@launch
+            }
+            securityManager.saveAccessToken(token)
             saveSettingsUseCase.saveUserName(state.userName)
             saveSettingsUseCase.saveSystemPrompt(state.systemPrompt)
             saveSettingsUseCase.saveSpeechRate(state.speechRate)

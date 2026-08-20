@@ -15,6 +15,7 @@ import com.jarvis.server.ratelimit.SlidingWindowRateLimiter
 import com.jarvis.server.router.AiRouter
 import com.jarvis.server.router.RouterResult
 import kotlinx.serialization.json.Json
+import java.nio.charset.StandardCharsets
 import java.util.UUID
 
 /** Входящий HTTP-запрос, независимый от конкретного HTTP-сервера. */
@@ -82,7 +83,9 @@ class JarvisApiHandler(
             request.path == PATH_EXECUTE && request.method == "POST" ->
                 handleExecute(request, requestId)
 
-            request.path == PATH_EXECUTE || request.path == PATH_ADMIN_METRICS ->
+            request.path == PATH_EXECUTE ||
+                request.path == PATH_ADMIN_METRICS ||
+                request.path == PATH_HEALTH ->
                 error(ApiErrorCode.INVALID_REQUEST, requestId, 405)
 
             else -> error(ApiErrorCode.INVALID_REQUEST, requestId, 404)
@@ -95,7 +98,7 @@ class JarvisApiHandler(
     ): HttpResponseContext {
         // ------------------------------------------------- 0. Размер тела
         if (request.contentLength > validation.maxBodyBytes ||
-            request.body.length > validation.maxBodyBytes
+            request.body.toByteArray(StandardCharsets.UTF_8).size > validation.maxBodyBytes
         ) {
             return error(ApiErrorCode.PAYLOAD_TOO_LARGE, requestId)
         }

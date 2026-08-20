@@ -18,6 +18,7 @@ import javax.inject.Singleton
  */
 sealed interface ContactResolution {
     data class Resolved(val phoneNumber: String, val displayName: String?) : ContactResolution
+    data class Ambiguous(val candidates: List<Pair<String, String>>) : ContactResolution
     data class PermissionRequired(val permissions: List<String>) : ContactResolution
     data class NotFound(val query: String) : ContactResolution
 }
@@ -37,7 +38,12 @@ class ContactResolver @Inject constructor(
 
         // 1. Уже похоже на телефонный номер.
         if (looksLikePhoneNumber(raw)) {
-            return ContactResolution.Resolved(normalizeNumber(raw), null)
+            val normalized = normalizeNumber(raw)
+            return if (isValidNormalizedNumber(normalized)) {
+                ContactResolution.Resolved(normalized, null)
+            } else {
+                ContactResolution.NotFound(raw)
+            }
         }
 
         // 2. Иначе нужен доступ к телефонной книге.
@@ -45,8 +51,7 @@ class ContactResolver @Inject constructor(
             return ContactResolution.PermissionRequired(listOf(Manifest.permission.READ_CONTACTS))
         }
 
-        val match = queryContact(raw)
-        return match ?: ContactResolution.NotFound(raw)
+        return queryContact(raw)
     }
 
     /** Возвращает до [limit] совпадений — используется ContactsTool. */
@@ -74,7 +79,8 @@ class ContactResolver @Inject constructor(
         return results
     }
 
-    private fun queryContact(name: String): ContactResolution.Resolved? {
+    private fun queryContact(name: String): ContactResolution {
+        val matches = mutableListOf<Pair<String, String>>()
         context.contentResolver.query(
             ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
             arrayOf(
@@ -85,19 +91,30 @@ class ContactResolver @Inject constructor(
             arrayOf("%$name%"),
             null
         )?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val numIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
-                val nameIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
-                if (numIdx != -1) {
-                    val number = cursor.getString(numIdx)
-                    val displayName = if (nameIdx != -1) cursor.getString(nameIdx) else null
-                    if (!number.isNullOrBlank()) {
-                        return ContactResolution.Resolved(normalizeNumber(number), displayName)
-                    }
-                }
+            val numIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+            val nameIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+            while (cursor.moveToNext() && matches.size < 20) {
+                if (numIdx == -1) continue
+                val number = cursor.getString(numIdx)?.let(::normalizeNumber).orEmpty()
+                if (number.isBlank()) continue
+                val displayName = if (nameIdx != -1) cursor.getString(nameIdx).orEmpty() else ""
+                matches += displayName to number
             }
         }
-        return null
+
+        val distinct = matches.distinctBy { it.second }
+        if (distinct.isEmpty()) return ContactResolution.NotFound(name)
+
+        // Точное имя безопасно приоритетнее частичного LIKE, но два разных
+        // номера с тем же именем всё равно требуют выбора пользователя.
+        val exact = distinct.filter { it.first.equals(name, ignoreCase = true) }
+        val candidates = if (exact.isNotEmpty()) exact else distinct
+        return if (candidates.size == 1) {
+            val (displayName, number) = candidates.single()
+            ContactResolution.Resolved(number, displayName.takeIf { it.isNotBlank() })
+        } else {
+            ContactResolution.Ambiguous(candidates.take(3))
+        }
     }
 
     companion object {
@@ -112,5 +129,8 @@ class ContactResolver @Inject constructor(
         }
 
         fun normalizeNumber(value: String): String = value.replace(Regex("[^0-9+]"), "")
+
+        fun isValidNormalizedNumber(value: String): Boolean =
+            Regex("^\\+?[0-9]{4,15}$").matches(value)
     }
 }

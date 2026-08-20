@@ -29,8 +29,8 @@ import javax.inject.Singleton
  *      ↓
  * ExecutionDecisionEngine
  *      ├── Device Tool  → ToolExecutor → JarvisTool
- *      ├── Local AI     → WorkflowExecutor (офлайн)
- *      ├── Cloud AI     → AIRepository → UniversalAIClient
+ *      ├── Local AI     → on-device Gemma / WorkflowExecutor (офлайн)
+ *      ├── Cloud AI     → AIRepository → JarvisApiAiClient → JARVIS API
  *      └── Agent        → CognitivePlanner → AgentCognitiveLoop
  *      ↓
  * ExecutionResult → PromptExecutionResult → Response / TTS
@@ -75,6 +75,9 @@ class AgentPipeline @Inject constructor(
         when (val result = decisionEngine.execute(request)) {
             is ExecutionResult.Success ->
                 Resource.Success(PromptExecutionResult.DirectAnswer(result.text))
+
+            is ExecutionResult.ClarificationRequired ->
+                Resource.Success(PromptExecutionResult.DirectAnswer(result.promptMessage))
 
             is ExecutionResult.ConfirmationRequired ->
                 Resource.Success(

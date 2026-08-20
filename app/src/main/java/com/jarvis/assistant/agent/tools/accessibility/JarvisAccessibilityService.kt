@@ -6,7 +6,6 @@ import android.os.Bundle
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import kotlinx.coroutines.delay
 
 /**
  * JarvisAccessibilityService
@@ -17,6 +16,8 @@ class JarvisAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val TAG = "JarvisAccessibility"
+        private const val MAX_SCREEN_TEXT_CHARS = 20_000
+        private const val MAX_SCREEN_NODES = 2_000
 
         var instance: JarvisAccessibilityService? = null
             private set
@@ -36,48 +37,31 @@ class JarvisAccessibilityService : AccessibilityService() {
         }
 
         /**
-         * Автономное переключение плитки в шторке быстрых настроек (Quick Settings) без касания экрана:
-         * 1. Раскрывает шторку быстрых настроек
-         * 2. Ищет плитку по ключевым словам ("Wi-Fi", "Bluetooth", "Фонарик")
-         * 3. Нажимает ACTION_CLICK
-         * 4. Закрывает шторку обратно (GLOBAL_ACTION_BACK)
-         */
-        suspend fun toggleQuickSettingTile(tileKeywords: List<String>): Boolean {
-            val service = instance ?: return false
-
-            // 1. Открываем Quick Settings
-            service.performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
-            delay(250)
-
-            val rootNode = service.rootInActiveWindow
-            var clicked = false
-
-            if (rootNode != null) {
-                for (kw in tileKeywords) {
-                    val target = kw.lowercase().trim()
-                    val node = findClickableNodeByText(rootNode, target)
-                    if (node != null) {
-                        clicked = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                        Log.d(TAG, "Quick setting tile '$kw' clicked: $clicked")
-                        break
-                    }
-                }
-            }
-
-            // 2. Закрываем шторку обратно
-            delay(150)
-            service.performGlobalAction(GLOBAL_ACTION_BACK)
-            return clicked
-        }
-
-        /**
          * Считывает весь текстовый контент со всех AccessibilityNodeInfo текущего экрана
          */
         fun getScreenContent(): String {
             val rootNode = instance?.rootInActiveWindow ?: return "Экран недоступен или заблокирован."
             val sb = StringBuilder()
-            traverseNode(rootNode, sb)
-            val fullText = sb.toString().trim()
+            val queue = ArrayDeque<AccessibilityNodeInfo>()
+            queue.add(rootNode)
+            var visited = 0
+
+            while (queue.isNotEmpty() && visited < MAX_SCREEN_NODES && sb.length < MAX_SCREEN_TEXT_CHARS) {
+                val node = queue.removeFirst()
+                visited++
+                val value = node.text?.toString()?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: node.contentDescription?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+                if (value != null) {
+                    val remaining = MAX_SCREEN_TEXT_CHARS - sb.length
+                    sb.append(value.take(remaining)).append(". ")
+                }
+                for (i in 0 until node.childCount) {
+                    node.getChild(i)?.let(queue::addLast)
+                }
+            }
+
+            val fullText = sb.toString().take(MAX_SCREEN_TEXT_CHARS).trim()
             return if (fullText.isNotBlank()) fullText else "На экране нет текстового содержимого."
         }
 
@@ -121,7 +105,9 @@ class JarvisAccessibilityService : AccessibilityService() {
                 putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
             }
             val success = editable.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, setTextArgs)
-            Log.d(TAG, "typeText '$text' into editable field result: $success")
+            // Не пишем введённый текст в logcat: поле может содержать пароль,
+            // токен или персональные данные.
+            Log.d(TAG, "typeText into editable field result: $success, chars=${text.length}")
             return success
         }
 
@@ -158,20 +144,6 @@ class JarvisAccessibilityService : AccessibilityService() {
             val rootNode = instance?.rootInActiveWindow ?: return false
             val scrollableNode = findScrollableNode(rootNode)
             return scrollableNode?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) ?: false
-        }
-
-        private fun traverseNode(node: AccessibilityNodeInfo?, sb: StringBuilder) {
-            if (node == null) return
-            val text = node.text?.toString()?.trim()
-            val desc = node.contentDescription?.toString()?.trim()
-            if (!text.isNullOrEmpty()) {
-                sb.append(text).append(". ")
-            } else if (!desc.isNullOrEmpty()) {
-                sb.append(desc).append(". ")
-            }
-            for (i in 0 until node.childCount) {
-                traverseNode(node.getChild(i), sb)
-            }
         }
 
         private fun findClickableNodeByText(node: AccessibilityNodeInfo?, target: String): AccessibilityNodeInfo? {

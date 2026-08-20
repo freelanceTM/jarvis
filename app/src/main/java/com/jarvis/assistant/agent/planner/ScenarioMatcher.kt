@@ -26,7 +26,9 @@ enum class ScenarioId(val priority: Int) {
  *  - побеждает сценарий с наименьшим приоритетом (сохраняет порядок исходных if);
  *  - комбинированные условия (оба слова обязательны) — в [compositeConditions].
  *
- * Поведение идентично прежнему: contains() без границ слова, как было.
+ * Для специфичных корней используется contains(); неоднозначные одиночные слова
+ * («отчёт», «состояние», «статус») заменены явными фразами, чтобы аналитические
+ * запросы не запускали диагностику телефона.
  */
 object ScenarioMatcher {
 
@@ -49,6 +51,8 @@ object ScenarioMatcher {
 
         // 3. «Подготовь ко сну» / «Режим сна» / «Спокойной ночи»
         put("сон", ScenarioId.SLEEP)
+        put("ко сну", ScenarioId.SLEEP)
+        put("режим сна", ScenarioId.SLEEP)
         put("спать", ScenarioId.SLEEP)
         put("спокойной ночи", ScenarioId.SLEEP)
         put("ночной режим", ScenarioId.SLEEP)
@@ -70,7 +74,7 @@ object ScenarioMatcher {
 
         // 6. «Подготовь к поездке» / «Еду на машине» / «Навигация»
         put("поездк", ScenarioId.DRIVING)
-        put("еду", ScenarioId.DRIVING)
+        put("еду ", ScenarioId.DRIVING)
         put("за рулём", ScenarioId.DRIVING)
         put("за рулем", ScenarioId.DRIVING)
         put("в машин", ScenarioId.DRIVING)
@@ -83,13 +87,17 @@ object ScenarioMatcher {
         put("экономь", ScenarioId.POWER_SAVING)
         put("сохрани заряд", ScenarioId.POWER_SAVING)
 
-        // 8. «Статус системы» / «Что с телефоном» / «Диагностика»
-        put("статус", ScenarioId.DIAGNOSTICS)
+        // 8. «Статус системы» / «Что с телефоном» / «Диагностика».
+        // Общие слова «отчёт», «состояние», «статус» намеренно не используем:
+        // они давали ложный сценарий устройства для финансовых/технических текстов.
+        put("статус системы", ScenarioId.DIAGNOSTICS)
+        put("статус телефона", ScenarioId.DIAGNOSTICS)
+        put("состояние системы", ScenarioId.DIAGNOSTICS)
+        put("состояние телефона", ScenarioId.DIAGNOSTICS)
+        put("системный отчёт", ScenarioId.DIAGNOSTICS)
         put("диагностик", ScenarioId.DIAGNOSTICS)
         put("что с телефоном", ScenarioId.DIAGNOSTICS)
-        put("состояние", ScenarioId.DIAGNOSTICS)
         put("проверь всё", ScenarioId.DIAGNOSTICS)
-        put("отчёт", ScenarioId.DIAGNOSTICS)
 
         // 9. «Подготовь презентацию» / «Демо режим»
         put("презентац", ScenarioId.PRESENTATION)

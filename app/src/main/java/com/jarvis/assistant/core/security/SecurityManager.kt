@@ -67,6 +67,13 @@ class SecurityManagerImpl @Inject constructor(
 
     override fun saveAccessToken(token: String) {
         val trimmed = token.trim()
+        if (trimmed.isEmpty()) {
+            clearAccessToken()
+            return
+        }
+        require(AccessTokenPolicy.isValid(trimmed)) {
+            "JARVIS access token must be ${AccessTokenPolicy.MIN_LENGTH}..${AccessTokenPolicy.MAX_LENGTH} characters without whitespace"
+        }
         securePrefs.edit().putString(AppConstants.KEY_ACCESS_TOKEN, trimmed).apply()
         _accessTokenFlow.value = trimmed
     }
@@ -76,8 +83,6 @@ class SecurityManagerImpl @Inject constructor(
         _accessTokenFlow.value = ""
     }
 
-    override fun hasValidAccessToken(): Boolean {
-        val token = getAccessToken()
-        return token.isNotEmpty() && token.length >= 10
-    }
+    override fun hasValidAccessToken(): Boolean =
+        AccessTokenPolicy.isValid(getAccessToken())
 }

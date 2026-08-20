@@ -4,8 +4,8 @@ import android.util.Log
 import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.model.ToolCall
 import com.jarvis.assistant.agent.model.ToolExecutionResult
-import com.jarvis.assistant.agent.model.ToolExecutionStatus
 import com.jarvis.assistant.agent.registry.ToolRegistry
+import com.jarvis.assistant.agent.safety.PreflightVerdict
 import com.jarvis.assistant.agent.safety.ToolPermissionManager
 import kotlinx.coroutines.*
 import java.util.UUID
@@ -53,17 +53,28 @@ class ToolExecutor @Inject constructor(
      */
     private val pendingConfirmations = ConcurrentLinkedQueue<PendingConfirmationRequest>()
 
-    /** @return первый ожидающий подтверждения вызов (голова очереди) или null. */
-    fun peekPendingConfirmation(): PendingConfirmationRequest? = pendingConfirmations.peek()
+    /**
+     * Составные операции «проверить дубликат/лимит + добавить» и
+     * «проверить токен + удалить» должны быть атомарными. Одна лишь
+     * ConcurrentLinkedQueue этого не гарантирует.
+     */
+    private val confirmationLock = Any()
 
-    fun hasPendingConfirmations(): Boolean = !pendingConfirmations.isEmpty()
+    /** @return первый ожидающий подтверждения вызов (голова очереди) или null. */
+    fun peekPendingConfirmation(): PendingConfirmationRequest? =
+        synchronized(confirmationLock) { pendingConfirmations.peek() }
+
+    fun hasPendingConfirmations(): Boolean =
+        synchronized(confirmationLock) { !pendingConfirmations.isEmpty() }
 
     /** @return запись по callId (для UI: получить токен не-головного элемента) или null. */
     fun findPendingConfirmation(callId: String): PendingConfirmationRequest? =
-        pendingConfirmations.firstOrNull { it.toolCall.callId == callId }
+        synchronized(confirmationLock) {
+            pendingConfirmations.firstOrNull { it.toolCall.callId == callId }
+        }
 
     /** Количество ожидающих подтверждения вызовов (для диагностики). */
-    fun pendingConfirmationCount(): Int = pendingConfirmations.size
+    fun pendingConfirmationCount(): Int = synchronized(confirmationLock) { pendingConfirmations.size }
 
     /**
      * Добавляет вызов в очередь подтверждений.
@@ -71,19 +82,20 @@ class ToolExecutor @Inject constructor(
      * @return true, если вызов добавлен; false — дубликат или очередь переполнена
      *         (в этом случае вызывающий слой обязан НЕ выдавать запрос на подтверждение).
      */
-    private fun enqueuePendingConfirmation(call: ToolCall, prompt: String): Boolean {
-        if (pendingConfirmations.any { it.toolCall.callId == call.callId }) {
-            Log.w(TAG, "Call ${call.callId} уже ожидает подтверждения — дубликат отклонён")
-            return false
+    private fun enqueuePendingConfirmation(call: ToolCall, prompt: String): Boolean =
+        synchronized(confirmationLock) {
+            if (pendingConfirmations.any { it.toolCall.callId == call.callId }) {
+                Log.w(TAG, "Call ${call.callId} уже ожидает подтверждения — дубликат отклонён")
+                return@synchronized false
+            }
+            if (pendingConfirmations.size >= MAX_PENDING_CONFIRMATIONS) {
+                Log.w(TAG, "Очередь подтверждений переполнена ($MAX_PENDING_CONFIRMATIONS) — вызов ${call.callId} отклонён")
+                return@synchronized false
+            }
+            pendingConfirmations.add(PendingConfirmationRequest(toolCall = call, promptMessage = prompt))
+            Log.d(TAG, "Confirmation enqueued: ${call.toolId} (${call.callId}), queue=${pendingConfirmations.size}")
+            true
         }
-        if (pendingConfirmations.size >= MAX_PENDING_CONFIRMATIONS) {
-            Log.w(TAG, "Очередь подтверждений переполнена ($MAX_PENDING_CONFIRMATIONS) — вызов ${call.callId} отклонён")
-            return false
-        }
-        pendingConfirmations.add(PendingConfirmationRequest(toolCall = call, promptMessage = prompt))
-        Log.d(TAG, "Confirmation enqueued: ${call.toolId} (${call.callId}), queue=${pendingConfirmations.size}")
-        return true
-    }
 
     /**
      * Извлекает вызов из очереди подтверждений (подтверждение или отмена).
@@ -98,20 +110,32 @@ class ToolExecutor @Inject constructor(
      */
     private fun consumePendingConfirmation(call: ToolCall, confirmationToken: String?): Boolean {
         if (confirmationToken == null) return false
-        val iterator = pendingConfirmations.iterator()
-        while (iterator.hasNext()) {
-            val request = iterator.next()
-            if (request.toolCall.callId == call.callId) {
-                return if (request.confirmationToken == confirmationToken) {
-                    iterator.remove()
-                    true
-                } else {
-                    Log.w(TAG, "Токен подтверждения НЕ совпал для ${call.toolId} (${call.callId})")
-                    false
+        return synchronized(confirmationLock) {
+            val iterator = pendingConfirmations.iterator()
+            while (iterator.hasNext()) {
+                val request = iterator.next()
+                if (request.toolCall.callId == call.callId) {
+                    val tokenMatches = request.confirmationToken == confirmationToken
+                    // Подтверждение привязано не только к callId, но и к
+                    // неизменным toolId/arguments. Иначе после показа SMS
+                    // «маме: привет» можно было тем же токеном выполнить вызов
+                    // с иным получателем или даже другим опасным инструментом.
+                    val callMatches = request.toolCall == call
+                    return@synchronized if (tokenMatches && callMatches) {
+                        iterator.remove()
+                        true
+                    } else {
+                        Log.w(
+                            TAG,
+                            "Подтверждение НЕ совпало для ${call.toolId} (${call.callId}): " +
+                                "token=$tokenMatches call=$callMatches"
+                        )
+                        false
+                    }
                 }
             }
+            false
         }
-        return false
     }
 
     /**
@@ -127,24 +151,25 @@ class ToolExecutor @Inject constructor(
         )
     }
 
-    fun removePendingConfirmation(call: ToolCall): Boolean {
-        // Итератор ConcurrentLinkedQueue weakly-consistent и поддерживает remove().
+    fun removePendingConfirmation(call: ToolCall): Boolean = synchronized(confirmationLock) {
         val iterator = pendingConfirmations.iterator()
         while (iterator.hasNext()) {
-            if (iterator.next().toolCall.callId == call.callId) {
+            if (iterator.next().toolCall == call) {
                 iterator.remove()
-                return true
+                return@synchronized true
             }
         }
         Log.w(TAG, "removePendingConfirmation: call ${call.callId} (${call.toolId}) не найден в очереди")
-        return false
+        false
     }
 
     /** Очищает ВСЮ очередь (полный сброс — смена режима, выход из приложения). */
     fun clearPendingConfirmation() {
-        val size = pendingConfirmations.size
-        pendingConfirmations.clear()
-        if (size > 0) Log.d(TAG, "Pending confirmations cleared ($size)")
+        synchronized(confirmationLock) {
+            val size = pendingConfirmations.size
+            pendingConfirmations.clear()
+            if (size > 0) Log.d(TAG, "Pending confirmations cleared ($size)")
+        }
     }
 
     /**
@@ -157,20 +182,35 @@ class ToolExecutor @Inject constructor(
                 error = "TOOL_NOT_FOUND"
             )
 
-        if (!permissionManager.isExecutionAllowed(tool, call)) {
-            val confirmationPrompt = permissionManager.buildConfirmationPrompt(tool, call)
-            // Пункт аудита #4: встаём в очередь, а не перезаписываем предыдущий.
-            // Если очередь переполнена или вызов уже в ней — честный отказ.
-            if (!enqueuePendingConfirmation(call, confirmationPrompt)) {
-                return@withContext ToolExecutionResult.failure(
-                    summary = "Слишком много действий ожидают подтверждения. Сначала подтвердите или отмените предыдущие, сэр.",
-                    error = "CONFIRMATION_QUEUE_FULL"
+        when (val preflight = permissionManager.preflight(tool, call)) {
+            PreflightVerdict.Allowed -> Unit
+
+            is PreflightVerdict.PermissionsMissing ->
+                return@withContext ToolExecutionResult.permissionRequired(
+                    summary = preflight.explanation,
+                    permissions = preflight.permissions
+                )
+
+            is PreflightVerdict.Unsupported ->
+                return@withContext ToolExecutionResult.unsupported(
+                    summary = preflight.reason,
+                    reason = "CAPABILITY_UNSUPPORTED"
+                )
+
+            is PreflightVerdict.ConfirmationRequired -> {
+                // Пункт аудита #4: встаём в очередь, а не перезаписываем предыдущий.
+                // Если очередь переполнена или вызов уже в ней — честный отказ.
+                if (!enqueuePendingConfirmation(call, preflight.prompt)) {
+                    return@withContext ToolExecutionResult.failure(
+                        summary = "Слишком много действий ожидают подтверждения. Сначала подтвердите или отмените предыдущие, сэр.",
+                        error = "CONFIRMATION_QUEUE_FULL"
+                    )
+                }
+                return@withContext ToolExecutionResult.requiresConfirmation(
+                    message = preflight.prompt,
+                    pendingCall = call
                 )
             }
-            return@withContext ToolExecutionResult.requiresConfirmation(
-                message = confirmationPrompt,
-                pendingCall = call
-            )
         }
 
         val startTime = System.currentTimeMillis()
@@ -182,6 +222,8 @@ class ToolExecutor @Inject constructor(
             }
         } catch (e: TimeoutCancellationException) {
             ToolExecutionResult.timeout(tool.name, tool.executionTimeoutMs)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             val duration = System.currentTimeMillis() - startTime
             ToolExecutionResult.failure(
@@ -228,6 +270,24 @@ class ToolExecutor @Inject constructor(
                 error = "TOOL_NOT_FOUND"
             )
 
+        // Между показом prompt и ответом пользователя состояние устройства
+        // могло измениться. Повторяем capability-часть preflight; валидный
+        // одноразовый токен заменяет только confirmation, но не разрешения.
+        when (val preflight = permissionManager.preflight(tool, call)) {
+            is PreflightVerdict.PermissionsMissing ->
+                return@withContext ToolExecutionResult.permissionRequired(
+                    preflight.explanation,
+                    preflight.permissions
+                )
+            is PreflightVerdict.Unsupported ->
+                return@withContext ToolExecutionResult.unsupported(
+                    preflight.reason,
+                    "CAPABILITY_UNSUPPORTED"
+                )
+            PreflightVerdict.Allowed,
+            is PreflightVerdict.ConfirmationRequired -> Unit
+        }
+
         val startTime = System.currentTimeMillis()
         try {
             withTimeout(tool.executionTimeoutMs) {
@@ -237,6 +297,8 @@ class ToolExecutor @Inject constructor(
             }
         } catch (e: TimeoutCancellationException) {
             ToolExecutionResult.timeout(tool.name, tool.executionTimeoutMs)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             val duration = System.currentTimeMillis() - startTime
             ToolExecutionResult.failure(
@@ -254,25 +316,28 @@ class ToolExecutor @Inject constructor(
         val results = mutableListOf<ToolExecutionResult>()
         val executedHistory = mutableListOf<Pair<JarvisTool, ToolExecutionResult>>()
 
-        for (call in calls) {
-            val tool = registry.getTool(call.toolId)
-            val result = execute(call)
-            results.add(result)
+        try {
+            for (call in calls) {
+                val tool = registry.getTool(call.toolId)
+                val result = execute(call)
+                results.add(result)
 
-            if (result.isSuccess && tool != null) {
-                executedHistory.add(tool to result)
-            } else if (!result.isSuccess) {
-                // Если шаг упал с ошибкой -> запускаем транзакционный откат (Rollback)
-                performRollback(executedHistory)
-                break
-            }
+                if (result.isSuccess && tool != null) {
+                    executedHistory.add(tool to result)
+                } else if (!result.isSuccess) {
+                    // Если шаг упал с ошибкой -> запускаем транзакционный откат (Rollback)
+                    performRollback(executedHistory)
+                    break
+                }
 
-            if (result.status == ToolExecutionStatus.REQUIRES_USER_CONFIRMATION) {
-                break
             }
+            results
+        } catch (e: CancellationException) {
+            // Structured cancellation не превращаем в обычный failure, но уже
+            // выполненные шаги обязаны откатиться даже в cancelled context.
+            withContext(NonCancellable) { performRollback(executedHistory) }
+            throw e
         }
-
-        results
     }
 
     /**

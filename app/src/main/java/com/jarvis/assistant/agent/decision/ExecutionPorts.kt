@@ -16,11 +16,10 @@ import com.jarvis.assistant.core.result.Resource
 /**
  * Локальный (офлайн) слой обработки.
  *
- * ЧЕСТНАЯ ФОРМУЛИРОВКА: нейросетевой локальной LLM в проекте нет
- * (см. README и docs/ANDROID_CAPABILITIES.md — локальных моделей и embeddings
- * не подключено). Реальный локальный слой — процедурная память
- * ([com.jarvis.assistant.agent.memory.procedural.WorkflowExecutor]):
- * сохранённые пользовательские сценарии, выполняемые полностью офлайн.
+ * Реализация композитная: on-device Gemma через MediaPipe (если пользователь
+ * установил файл модели) и процедурная память
+ * ([com.jarvis.assistant.agent.memory.procedural.WorkflowExecutor]). Оба пути
+ * выполняются офлайн; сама модель в APK не входит.
  *
  * Поэтому [hasWebCapability] == false: при `requiresWeb == true` decision
  * engine обязан пропустить локальный путь, а не позволить ему изобразить успех.
@@ -47,9 +46,9 @@ sealed class LocalAiOutcome {
 }
 
 /**
- * Облачный AI. Адаптер над существующим
- * [com.jarvis.assistant.domain.repository.AIRepository] → `UniversalAIClient`.
- * Новый HTTP/LLM-клиент на этом этапе НЕ создаётся.
+ * Облачный AI. Адаптер над
+ * [com.jarvis.assistant.domain.repository.AIRepository] → `JarvisApiAiClient` →
+ * серверный AI Router. Android не выбирает провайдера и не хранит его ключи.
  */
 interface CloudAiExecutor {
 

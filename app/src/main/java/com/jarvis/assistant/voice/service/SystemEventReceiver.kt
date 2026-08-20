@@ -1,10 +1,14 @@
 package com.jarvis.assistant.voice.service
 
+import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.util.Log
 import com.jarvis.assistant.agent.automation.engine.PersonalAutomationEngine
 import com.jarvis.assistant.agent.automation.model.AutomationTriggerType
@@ -24,64 +28,101 @@ interface SystemEventReceiverEntryPoint {
 
 class SystemEventReceiver : BroadcastReceiver() {
 
-    private val receiverScope = CoroutineScope(Dispatchers.IO)
+    companion object {
+        private const val TAG = "SystemEventReceiver"
+    }
 
     override fun onReceive(context: Context?, intent: Intent?) {
         if (context == null || intent == null) return
-
         val action = intent.action ?: return
-        Log.d("SystemEventReceiver", "onReceive action: $action")
+        Log.d(TAG, "onReceive action: $action")
 
-        // Безопасное получение automationEngine через Hilt EntryPoint
-        val entryPoint = EntryPointAccessors.fromApplication(
-            context.applicationContext,
-            SystemEventReceiverEntryPoint::class.java
-        )
-        val automationEngine = entryPoint.automationEngine()
+        val automationEngine = try {
+            EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                SystemEventReceiverEntryPoint::class.java
+            ).automationEngine()
+        } catch (e: Exception) {
+            Log.e(TAG, "Cannot obtain automation engine", e)
+            return
+        }
 
         when (action) {
-            // 🎧 1. Проводные наушники
             Intent.ACTION_HEADSET_PLUG -> {
-                val state = intent.getIntExtra("state", 0)
-                val trigger = if (state == 1) {
-                    AutomationTriggerType.HEADPHONES_CONNECTED
-                } else {
-                    AutomationTriggerType.HEADPHONES_DISCONNECTED
-                }
-                receiverScope.launch {
-                    automationEngine.onSystemEvent(trigger)
+                when (intent.getIntExtra("state", -1)) {
+                    1 -> dispatch(automationEngine, AutomationTriggerType.HEADPHONES_CONNECTED)
+                    0 -> dispatch(automationEngine, AutomationTriggerType.HEADPHONES_DISCONNECTED)
+                    else -> Log.w(TAG, "HEADSET_PLUG without a valid state")
                 }
             }
 
-            // 🎧 2. Bluetooth наушники / TWS-гарнитура
             BluetoothDevice.ACTION_ACL_CONNECTED -> {
-                receiverScope.launch {
-                    automationEngine.onSystemEvent(AutomationTriggerType.HEADPHONES_CONNECTED)
+                if (isAudioBluetoothDevice(intent)) {
+                    dispatch(automationEngine, AutomationTriggerType.HEADPHONES_CONNECTED)
                 }
             }
 
             BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
-                receiverScope.launch {
-                    automationEngine.onSystemEvent(AutomationTriggerType.HEADPHONES_DISCONNECTED)
+                if (isAudioBluetoothDevice(intent)) {
+                    dispatch(automationEngine, AutomationTriggerType.HEADPHONES_DISCONNECTED)
                 }
             }
 
-            // 🔋 3. Низкий заряд батареи (< 15-20%)
-            Intent.ACTION_BATTERY_LOW -> {
-                receiverScope.launch {
-                    automationEngine.onSystemEvent(AutomationTriggerType.BATTERY_LOW)
-                }
-            }
+            Intent.ACTION_BATTERY_LOW ->
+                dispatch(automationEngine, AutomationTriggerType.BATTERY_LOW)
 
-            // 📶 4. Подключение к сети Wi-Fi
-            WifiManager.WIFI_STATE_CHANGED_ACTION -> {
-                val state = intent.getIntExtra(WifiManager.EXTRA_WIFI_STATE, -1)
-                if (state == WifiManager.WIFI_STATE_ENABLED) {
-                    receiverScope.launch {
-                        automationEngine.onSystemEvent(AutomationTriggerType.WIFI_CONNECTED)
-                    }
+            WifiManager.NETWORK_STATE_CHANGED_ACTION -> {
+                // WIFI_STATE_CHANGED означает лишь включение адаптера. Событие
+                // WIFI_CONNECTED отправляем только при реальном active Wi-Fi.
+                if (isWifiConnected(context)) {
+                    dispatch(automationEngine, AutomationTriggerType.WIFI_CONNECTED)
                 }
             }
+        }
+    }
+
+    /**
+     * BroadcastReceiver может быть уничтожен сразу после onReceive. goAsync()
+     * удерживает pending result до завершения Room/tool workflow.
+     */
+    private fun dispatch(
+        automationEngine: PersonalAutomationEngine,
+        trigger: AutomationTriggerType
+    ) {
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                automationEngine.onSystemEvent(trigger)
+            } catch (e: Exception) {
+                Log.e(TAG, "Automation failed for $trigger", e)
+            } finally {
+                pendingResult.finish()
+            }
+        }
+    }
+
+    private fun isWifiConnected(context: Context): Boolean {
+        val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return false
+        val network = connectivity.activeNetwork ?: return false
+        val capabilities = connectivity.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+    }
+
+    private fun isAudioBluetoothDevice(intent: Intent): Boolean {
+        val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+        } ?: return false
+
+        return try {
+            device.bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.AUDIO_VIDEO
+        } catch (_: SecurityException) {
+            // Без BLUETOOTH_CONNECT безопаснее не запускать headphone automation,
+            // чем принять клавиатуру/автомобильный датчик за наушники.
+            false
         }
     }
 }

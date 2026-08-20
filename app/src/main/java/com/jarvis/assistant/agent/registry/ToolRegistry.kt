@@ -4,8 +4,6 @@ import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.core.ToolCategory
 import com.jarvis.assistant.agent.discovery.ToolDiscoveryEngine
 import com.jarvis.assistant.agent.model.ToolDefinition
-import com.jarvis.assistant.agent.model.ToolExecutionResult
-import kotlinx.serialization.json.JsonObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -14,8 +12,21 @@ class ToolRegistry @Inject constructor(
     tools: Set<@JvmSuppressWildcards JarvisTool>,
     private val discoveryEngine: ToolDiscoveryEngine
 ) {
-    private val toolsById: Map<String, JarvisTool> = tools.associateBy { it.toolId }
-    private val toolsByName: Map<String, JarvisTool> = tools.associateBy { it.name.substringAfterLast(".") }
+    private val toolsById: Map<String, JarvisTool>
+    private val toolsByName: Map<String, JarvisTool>
+
+    init {
+        require(tools.none { it.toolId.isBlank() }) { "Tool id must not be blank" }
+        val duplicateIds = tools.groupBy { it.toolId }.filterValues { it.size > 1 }.keys
+        require(duplicateIds.isEmpty()) { "Duplicate tool ids: ${duplicateIds.joinToString()}" }
+
+        val aliases = tools.groupBy { it.name.substringAfterLast(".") }
+        val duplicateAliases = aliases.filterValues { it.size > 1 }.keys
+        require(duplicateAliases.isEmpty()) { "Duplicate tool aliases: ${duplicateAliases.joinToString()}" }
+
+        toolsById = tools.associateBy { it.toolId }
+        toolsByName = tools.associateBy { it.name.substringAfterLast(".") }
+    }
 
     fun getTool(identifier: String): JarvisTool? {
         return toolsById[identifier] ?: toolsByName[identifier]
@@ -44,25 +55,4 @@ class ToolRegistry @Inject constructor(
         return discoveryEngine.buildTargetedToolsPrompt(discovered)
     }
 
-    suspend fun execute(toolIdentifier: String, arguments: JsonObject): ToolExecutionResult {
-        val tool = getTool(toolIdentifier)
-            ?: return ToolExecutionResult.failure(
-                summary = "Инструмент '$toolIdentifier' не найден в Tool Registry 2.0",
-                error = "TOOL_NOT_FOUND"
-            )
-
-        val startTime = System.currentTimeMillis()
-        return try {
-            val result = tool.execute(arguments)
-            val duration = System.currentTimeMillis() - startTime
-            result.copy(executionTimeMs = duration)
-        } catch (e: Exception) {
-            val duration = System.currentTimeMillis() - startTime
-            ToolExecutionResult.failure(
-                summary = e.localizedMessage ?: "Ошибка выполнения инструмента $toolIdentifier",
-                error = e.javaClass.simpleName,
-                executionTimeMs = duration
-            )
-        }
-    }
 }

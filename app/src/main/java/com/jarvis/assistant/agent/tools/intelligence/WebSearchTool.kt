@@ -1,6 +1,8 @@
 package com.jarvis.assistant.agent.tools.intelligence
 
 import com.jarvis.assistant.agent.core.JarvisTool
+import com.jarvis.assistant.core.network.ResponseBodyTooLargeException
+import com.jarvis.assistant.core.network.readUtf8Bounded
 import com.jarvis.assistant.agent.core.ToolCategory
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
@@ -9,6 +11,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
 import java.net.URLEncoder
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,6 +27,15 @@ import javax.inject.Singleton
 class WebSearchTool @Inject constructor(
     private val okHttpClient: OkHttpClient
 ) : JarvisTool {
+
+    companion object {
+        private const val MAX_RESPONSE_BYTES = 512L * 1024
+        private const val PER_REQUEST_TIMEOUT_MILLIS = 3_500L
+    }
+
+    private val searchHttpClient = okHttpClient.newBuilder()
+        .callTimeout(PER_REQUEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+        .build()
 
     override val toolId: String = "intelligence.web_search"
     override val description: String = "Поиск актуальной информации, фактов и новостей в интернете"
@@ -79,6 +91,11 @@ class WebSearchTool @Inject constructor(
                     put("found", false)
                 }
             )
+        } catch (e: ResponseBodyTooLargeException) {
+            ToolExecutionResult.failure(
+                summary = "Поисковый сервис вернул слишком большой ответ",
+                error = "RESPONSE_TOO_LARGE"
+            )
         } catch (e: IOException) {
             ToolExecutionResult.failure(
                 summary = "Нет подключения к интернету для поиска",
@@ -102,12 +119,12 @@ class WebSearchTool @Inject constructor(
             .get()
             .build()
 
-        val response = okHttpClient.newCall(request).execute()
-        val body = response.body?.string().orEmpty()
-
-        if (!response.isSuccessful || body.isEmpty()) {
-            return null
+        val body = searchHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return null
+            response.body?.readUtf8Bounded(MAX_RESPONSE_BYTES).orEmpty()
         }
+
+        if (body.isEmpty()) return null
 
         val json = Json.parseToJsonElement(body).jsonObject
 
@@ -174,13 +191,12 @@ class WebSearchTool @Inject constructor(
             .build()
 
         return try {
-            val response = okHttpClient.newCall(request).execute()
-            val body = response.body?.string().orEmpty()
-
-            if (!response.isSuccessful || body.isEmpty()) {
-                // Попробуем английскую Wikipedia
-                return searchWikipediaEn(query)
+            val body = searchHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return searchWikipediaEn(query)
+                response.body?.readUtf8Bounded(MAX_RESPONSE_BYTES).orEmpty()
             }
+
+            if (body.isEmpty()) return searchWikipediaEn(query)
 
             val json = Json.parseToJsonElement(body).jsonObject
             
@@ -211,6 +227,8 @@ class WebSearchTool @Inject constructor(
                     put("found", true)
                 }
             )
+        } catch (e: ResponseBodyTooLargeException) {
+            throw e
         } catch (_: Exception) {
             searchWikipediaEn(query)
         }
@@ -227,12 +245,12 @@ class WebSearchTool @Inject constructor(
             .build()
 
         return try {
-            val response = okHttpClient.newCall(request).execute()
-            val body = response.body?.string().orEmpty()
-
-            if (!response.isSuccessful || body.isEmpty()) {
-                return null
+            val body = searchHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                response.body?.readUtf8Bounded(MAX_RESPONSE_BYTES).orEmpty()
             }
+
+            if (body.isEmpty()) return null
 
             val json = Json.parseToJsonElement(body).jsonObject
             
@@ -262,6 +280,8 @@ class WebSearchTool @Inject constructor(
                     put("found", true)
                 }
             )
+        } catch (e: ResponseBodyTooLargeException) {
+            throw e
         } catch (_: Exception) {
             null
         }

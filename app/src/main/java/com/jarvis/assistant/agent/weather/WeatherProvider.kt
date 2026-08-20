@@ -1,5 +1,6 @@
 package com.jarvis.assistant.agent.weather
 
+import com.jarvis.assistant.core.network.readUtf8Bounded
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -12,6 +13,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
 import java.net.URLEncoder
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -65,6 +67,15 @@ class OpenMeteoWeatherProvider @Inject constructor(
     private val json: Json
 ) : WeatherProvider {
 
+    companion object {
+        private const val MAX_RESPONSE_BYTES = 512L * 1024
+        private const val PER_REQUEST_TIMEOUT_SECONDS = 4L
+    }
+
+    private val weatherHttpClient = okHttpClient.newBuilder()
+        .callTimeout(PER_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .build()
+
     override suspend fun geocode(query: String): GeoPoint? = withContext(Dispatchers.IO) {
         val encoded = URLEncoder.encode(query, "UTF-8")
         val url = "https://geocoding-api.open-meteo.com/v1/search?name=$encoded&count=1&language=ru&format=json"
@@ -115,9 +126,11 @@ class OpenMeteoWeatherProvider @Inject constructor(
     /** @throws IOException при сетевой ошибке — вызывающий обязан обработать. */
     private fun executeGet(url: String): String? {
         val request = Request.Builder().url(url).get().build()
-        okHttpClient.newCall(request).execute().use { response ->
+        weatherHttpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) return null
-            return response.body?.string()?.takeIf { it.isNotBlank() }
+            return response.body
+                ?.readUtf8Bounded(MAX_RESPONSE_BYTES)
+                ?.takeIf { it.isNotBlank() }
         }
     }
 

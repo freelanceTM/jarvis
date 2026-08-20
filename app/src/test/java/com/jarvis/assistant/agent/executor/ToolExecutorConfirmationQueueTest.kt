@@ -11,9 +11,13 @@ import com.jarvis.assistant.agent.model.ToolExecutionStatus
 import com.jarvis.assistant.agent.model.ToolRisk
 import com.jarvis.assistant.agent.registry.ToolRegistry
 import com.jarvis.assistant.agent.safety.ToolPermissionManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -239,5 +243,54 @@ class ToolExecutorConfirmationQueueTest {
         assertTrue(firstToken.isNotBlank())
         assertTrue(secondToken.isNotBlank())
         assertTrue(firstToken != secondToken)
+    }
+
+    @Test
+    fun `valid token cannot authorize mutated tool or arguments with same call id`() = runBlocking {
+        val executor = buildExecutor()
+        val original = ToolCall(
+            toolId = "communication.sms",
+            arguments = buildJsonObject {
+                put("recipient", "alice")
+                put("message", "hello")
+            }
+        )
+        executor.execute(original)
+        val token = executor.peekPendingConfirmation()!!.confirmationToken
+
+        val changedArguments = original.copy(
+            arguments = buildJsonObject {
+                put("recipient", "attacker")
+                put("message", "send money")
+            }
+        )
+        val changedTool = original.copy(toolId = "communication.call")
+
+        val argsResult = executor.executeWithBypass(changedArguments, token, "test")
+        val toolResult = executor.executeWithBypass(changedTool, token, "test")
+
+        assertEquals("CONFIRMATION_TOKEN_INVALID", argsResult.error)
+        assertEquals("CONFIRMATION_TOKEN_INVALID", toolResult.error)
+        // Неудачные попытки не потребляют исходное подтверждение.
+        assertEquals(1, executor.pendingConfirmationCount())
+        assertTrue(executor.executeWithBypass(original, token, "test").isSuccess)
+    }
+
+    @Test
+    fun `one-time token executes at most once under concurrent replay`() = runBlocking {
+        val executor = buildExecutor()
+        val c = call("communication.sms")
+        executor.execute(c)
+        val token = executor.peekPendingConfirmation()!!.confirmationToken
+
+        val results = List(64) {
+            async(Dispatchers.Default) {
+                executor.executeWithBypass(c, token, "concurrency_test")
+            }
+        }.awaitAll()
+
+        assertEquals(1, results.count { it.isSuccess })
+        assertEquals(63, results.count { it.error == "CONFIRMATION_TOKEN_INVALID" })
+        assertEquals(0, executor.pendingConfirmationCount())
     }
 }

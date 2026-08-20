@@ -23,6 +23,7 @@ import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import java.net.InetSocketAddress
+import java.nio.charset.StandardCharsets
 import java.util.concurrent.Executors
 
 /**
@@ -171,13 +172,13 @@ fun main() {
                         method = exchange.requestMethod,
                         path = exchange.requestURI.path,
                         authorizationHeader = exchange.requestHeaders.getFirst("Authorization"),
-                        body = String(rawBody),
+                        body = String(rawBody, StandardCharsets.UTF_8),
                         contentLength = maxOf(declaredLength, rawBody.size.toLong())
                     )
                 )
             }
 
-            val bytes = response.body.toByteArray()
+            val bytes = response.body.toByteArray(StandardCharsets.UTF_8)
             exchange.responseHeaders.add("Content-Type", "application/json; charset=utf-8")
             response.headers.forEach { (k, v) -> exchange.responseHeaders.add(k, v) }
             exchange.sendResponseHeaders(response.status, bytes.size.toLong())
@@ -187,7 +188,7 @@ fun main() {
             logger.error("unhandled request failure", "error" to e.javaClass.simpleName)
             val body = """{"success":false,"error":{"code":"INTERNAL_ERROR",""" +
                 """"message":"Internal server error","requestId":"-"}}"""
-            val bytes = body.toByteArray()
+            val bytes = body.toByteArray(StandardCharsets.UTF_8)
             runCatching {
                 exchange.responseHeaders.add("Content-Type", "application/json; charset=utf-8")
                 exchange.sendResponseHeaders(500, bytes.size.toLong())

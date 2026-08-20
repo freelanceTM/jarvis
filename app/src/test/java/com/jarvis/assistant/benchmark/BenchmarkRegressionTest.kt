@@ -9,30 +9,26 @@ import org.junit.Test
 /**
  * Regression-suite на основе benchmark (п. 41 ТЗ).
  *
- * Пороги зафиксированы по BASELINE v1 (замер от 2026-08-20) и служат
- * «защёлкой»: изменения в FastCommandRouter, ExecutionDecisionEngine,
- * Local AI, AI Router или Agent не должны незаметно ухудшить маршрутизацию.
- *
- * ВАЖНО: пороги — это НЕ цели качества. Они равны текущему (местами плохому)
- * baseline. Задача — не допустить регресса; улучшение порогов происходит
- * ПОСЛЕ реальных исправлений, вместе с обновлением этих констант.
+ * Пороги усилены по результатам QA-аудита 2026-08-20: исправлены ложные
+ * media/Wi-Fi/device routes, сложные запросы к 1B-модели и ambiguity flow.
+ * Изменения в роутинге не должны вернуть прежний baseline 73%.
  */
 class BenchmarkRegressionTest {
 
     private companion object {
-        /** Baseline v1: 73/100. Ниже — регресс. */
-        const val MIN_ROUTING_ACCURACY = 73.0
+        /** Усиленный baseline после QA-аудита: 99/100. */
+        const val MIN_ROUTING_ACCURACY = 99.0
 
-        /** Baseline: DEVICE 100%, LOCAL_AI 100% — эти категории терять нельзя. */
+        /** Категории с детерминированным ожидаемым поведением. */
         const val MIN_DEVICE_ACCURACY = 100.0
         const val MIN_LOCAL_ACCURACY = 100.0
-        const val MIN_WEB_ACCURACY = 90.0
+        const val MIN_WEB_ACCURACY = 100.0
+        const val MIN_CLOUD_ACCURACY = 100.0
+        const val MIN_AMBIGUOUS_ACCURACY = 100.0
 
-        /** Baseline: 4 device false positive. Больше — регресс безопасности. */
-        const val MAX_DEVICE_FALSE_POSITIVES = 4
-
-        /** Baseline: 13 false local. */
-        const val MAX_FALSE_LOCAL = 13
+        /** Неожиданные device-действия и false-local больше не допускаются. */
+        const val MAX_DEVICE_FALSE_POSITIVES = 0
+        const val MAX_FALSE_LOCAL = 0
     }
 
     private fun runBenchmark(): Pair<BenchmarkMetrics.Report, BenchmarkHarness.Rig> = runBlocking {
@@ -74,10 +70,20 @@ class BenchmarkRegressionTest {
     fun `web requests do not silently go local`() {
         val (report, _) = runBenchmark()
         val web = report.categoryAccuracy.first { it.category == BenchmarkCategory.CLOUD_WEB }
+        val cloud = report.categoryAccuracy.first { it.category == BenchmarkCategory.CLOUD_AI }
+        val ambiguous = report.categoryAccuracy.first { it.category == BenchmarkCategory.AMBIGUOUS }
         assertTrue(
             "CLOUD_WEB accuracy ${web.accuracyPercent}% ниже $MIN_WEB_ACCURACY% — " +
                 "риск галлюцинаций на актуальных данных",
             web.accuracyPercent >= MIN_WEB_ACCURACY
+        )
+        assertTrue(
+            "CLOUD_AI accuracy ${cloud.accuracyPercent}% ниже $MIN_CLOUD_ACCURACY%",
+            cloud.accuracyPercent >= MIN_CLOUD_ACCURACY
+        )
+        assertTrue(
+            "AMBIGUOUS accuracy ${ambiguous.accuracyPercent}% ниже $MIN_AMBIGUOUS_ACCURACY%",
+            ambiguous.accuracyPercent >= MIN_AMBIGUOUS_ACCURACY
         )
     }
 

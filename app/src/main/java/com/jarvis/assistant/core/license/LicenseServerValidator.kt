@@ -1,5 +1,6 @@
 package com.jarvis.assistant.core.license
 
+import com.jarvis.assistant.core.network.readUtf8Bounded
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
@@ -56,8 +57,7 @@ private data class ValidateResponse(
  *
  * TODO(server): endpoint /v1/license/validate ещё не существует — URL ниже
  * является заглушкой. Пока сервер не развёрнут, validate() возвращает
- * ServiceUnavailable, и код уходит во ВРЕМЕННЫЙ локальный fallback
- * ([LocalChecksumVerifier]), помеченный для удаления.
+ * ServiceUnavailable, а активация безопасно отклоняется (fail closed).
  *
  * Когда endpoint появится, сервер также должен проверять:
  *  - одноразовость кода (cross-device);
@@ -66,6 +66,10 @@ private data class ValidateResponse(
  */
 @Singleton
 class HttpLicenseServerValidator @Inject constructor() : LicenseServerValidator {
+
+    companion object {
+        private const val MAX_RESPONSE_BYTES = 64L * 1024
+    }
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -92,7 +96,7 @@ class HttpLicenseServerValidator @Inject constructor() : LicenseServerValidator 
 
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) return@withContext ServerValidationResult.ServiceUnavailable
-                    val respBody = response.body?.string()
+                    val respBody = response.body?.readUtf8Bounded(MAX_RESPONSE_BYTES)
                         ?: return@withContext ServerValidationResult.ServiceUnavailable
                     val parsed = json.decodeFromString(ValidateResponse.serializer(), respBody)
                     if (parsed.valid) {

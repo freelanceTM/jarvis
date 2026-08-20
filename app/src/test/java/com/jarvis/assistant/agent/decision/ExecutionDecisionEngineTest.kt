@@ -153,6 +153,39 @@ class ExecutionDecisionEngineTest {
 
     // ------------------------------------------------------------------ tests
 
+    @Test
+    fun `underspecified commands request clarification before any executor`() = runBlocking {
+        val local = FakeLocalAi(LocalAiOutcome.Handled("must not run"))
+        val cloud = FakeCloudAi()
+        val agent = FakeAgent(plan = simplePlan())
+        val engine = buildEngine(localAi = local, cloudAi = cloud, agent = agent)
+
+        for (query in listOf("Открой", "Найди это", "Что лучше?", "Проверь", "Переведи", "Сделай это")) {
+            val result = engine.execute(request(query))
+            assertTrue("query=$query result=$result", result is ExecutionResult.ClarificationRequired)
+            assertTrue((result as ExecutionResult.ClarificationRequired).promptMessage.endsWith("?"))
+        }
+        assertEquals(0, local.calls)
+        assertEquals(0, cloud.calls)
+        assertEquals(0, agent.planCalls)
+    }
+
+    @Test
+    fun `blank request is rejected before any executor is called`() = runBlocking {
+        val local = FakeLocalAi(LocalAiOutcome.Handled("must not run"))
+        val cloud = FakeCloudAi()
+        val agent = FakeAgent(plan = simplePlan())
+        val engine = buildEngine(localAi = local, cloudAi = cloud, agent = agent)
+
+        val result = engine.execute(request("   "))
+
+        assertTrue(result is ExecutionResult.Error)
+        assertEquals(DecisionReason.INVALID_REQUEST, (result as ExecutionResult.Error).reason)
+        assertEquals(0, local.calls)
+        assertEquals(0, cloud.calls)
+        assertEquals(0, agent.planCalls)
+    }
+
     /** Test 1: device-команда + уверенный роутер → DEVICE_TOOL через ToolExecutor. */
     @Test
     fun `confident router routes to device tool`() = runBlocking {
@@ -234,6 +267,19 @@ class ExecutionDecisionEngineTest {
         assertTrue("Ожидался Error, получено: $result", result is ExecutionResult.Error)
         assertEquals(DecisionReason.CLOUD_BLOCKED_BY_PRIVACY, (result as ExecutionResult.Error).reason)
         assertEquals("Cloud AI не должен вызываться для PRIVATE", 0, cloud.calls)
+    }
+
+    @Test
+    fun `automatically detected credential is never sent to cloud by default`() = runBlocking {
+        val local = FakeLocalAi(LocalAiOutcome.Uncertain)
+        val cloud = FakeCloudAi()
+        val engine = buildEngine(localAi = local, cloudAi = cloud)
+
+        val result = engine.execute(request("мой пароль от банка: 4821-secret"))
+
+        assertTrue(result is ExecutionResult.Error)
+        assertEquals(DecisionReason.CLOUD_BLOCKED_BY_PRIVACY, (result as ExecutionResult.Error).reason)
+        assertEquals(0, cloud.calls)
     }
 
     /** Test 6: SENSITIVE — без явного разрешения нет облака, с разрешением — есть. */

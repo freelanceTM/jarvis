@@ -29,7 +29,7 @@ class AccessibilityHonestyInstrumentedTest {
     private val emptyArgs: JsonObject = buildJsonObject { }
 
     @Test
-    fun `screen reader without enabled service returns USER_ACTION_REQUIRED`() = runBlocking {
+    fun screenReaderWithoutEnabledServiceReturnsUserActionRequired() = runBlocking {
         val tool = ScreenReaderTool(context)
 
         val result = tool.execute(emptyArgs)
@@ -42,7 +42,7 @@ class AccessibilityHonestyInstrumentedTest {
     }
 
     @Test
-    fun `ui click without enabled service returns USER_ACTION_REQUIRED`() = runBlocking {
+    fun uiClickWithoutEnabledServiceReturnsUserActionRequired() = runBlocking {
         val tool = UiClickTool(context)
 
         val result = tool.execute(buildJsonObject { put("target_text", "Отправить") })
@@ -53,7 +53,7 @@ class AccessibilityHonestyInstrumentedTest {
     }
 
     @Test
-    fun `type text without enabled service returns USER_ACTION_REQUIRED`() = runBlocking {
+    fun typeTextWithoutEnabledServiceReturnsUserActionRequired() = runBlocking {
         val tool = UiTypeTextTool(context)
 
         val result = tool.execute(buildJsonObject { put("text", "UFC") })
@@ -64,7 +64,7 @@ class AccessibilityHonestyInstrumentedTest {
     }
 
     @Test
-    fun `ui click with empty target returns FAILURE`() = runBlocking {
+    fun uiClickWithEmptyTargetReturnsFailure() = runBlocking {
         val tool = UiClickTool(context)
 
         val result = tool.execute(emptyArgs)
@@ -74,7 +74,7 @@ class AccessibilityHonestyInstrumentedTest {
     }
 
     @Test
-    fun `type text with empty text returns FAILURE`() = runBlocking {
+    fun typeTextWithEmptyTextReturnsFailure() = runBlocking {
         val tool = UiTypeTextTool(context)
 
         val result = tool.execute(emptyArgs)

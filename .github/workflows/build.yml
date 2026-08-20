@@ -1,7 +1,11 @@
 name: Build JARVIS APK
 
+permissions:
+  contents: read
+
 on:
   push:
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -34,21 +38,22 @@ jobs:
           echo "Building in: $PROJECT_DIR"
           cd "$PROJECT_DIR"
           # Пункт аудита #12: lint в CI — warningsAsErrors + baseline блокируют НОВЫЕ warnings.
-          gradle testDebugUnitTest lint assembleDebug --stacktrace
+          ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug \
+            :app:assembleDebugAndroidTest --stacktrace
 
       - name: JARVIS Benchmark regression (Этап 4)
         run: |
           PROJECT_DIR=$(find . -type f \( -name "settings.gradle.kts" -o -name "settings.gradle" \) -exec dirname {} \; | head -n 1)
           cd "$PROJECT_DIR"
           # Защёлка маршрутизации: падение accuracy ниже baseline ломает сборку.
-          gradle :app:testDebugUnitTest --tests '*BenchmarkRegressionTest*' --stacktrace
+          ./gradlew :app:testDebugUnitTest --tests '*BenchmarkRegressionTest*' --stacktrace
 
       - name: Test JARVIS API server (Этап 3)
         run: |
           PROJECT_DIR=$(find . -type f \( -name "settings.gradle.kts" -o -name "settings.gradle" \) -exec dirname {} \; | head -n 1)
           cd "$PROJECT_DIR"
           # :server — отдельный JVM-модуль; Android-сборка от него не зависит.
-          gradle :server:test :server:build --stacktrace
+          ./gradlew :server:test :server:build --stacktrace
 
       - name: Upload JARVIS APK Artifact
         uses: actions/upload-artifact@v4

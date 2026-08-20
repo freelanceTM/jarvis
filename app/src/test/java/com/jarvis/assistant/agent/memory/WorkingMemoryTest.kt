@@ -7,6 +7,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
 
 /**
  * Пункт аудита #10 (MEDIUM): contextStore не растёт бесконечно —
@@ -131,6 +133,35 @@ class WorkingMemoryTest {
         assertEquals(0, memory.contextStoreSize())
         assertNull(memory.getLastApp())
         assertNull(memory.get("battery_percent"))
+    }
+
+    @Test
+    fun `concurrent observation and dialog access remains bounded and exception free`() {
+        val start = CountDownLatch(1)
+        val errors = ConcurrentLinkedQueue<Throwable>()
+        val workers = List(12) { worker ->
+            Thread {
+                try {
+                    start.await()
+                    repeat(2_000) { i ->
+                        val key = "worker_${worker}_$i"
+                        memory.put(key, i)
+                        memory.get(key)
+                        memory.setLastApp("app_$worker")
+                        if (i % 20 == 0) memory.evictExpired()
+                    }
+                } catch (t: Throwable) {
+                    errors.add(t)
+                }
+            }
+        }
+
+        workers.forEach(Thread::start)
+        start.countDown()
+        workers.forEach(Thread::join)
+
+        assertTrue("Concurrent access failed: ${errors.firstOrNull()}", errors.isEmpty())
+        assertTrue(memory.contextStoreSize() <= WorkingMemory.MAX_CONTEXT_ENTRIES)
     }
 
     @Test

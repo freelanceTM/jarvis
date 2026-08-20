@@ -2,6 +2,7 @@ package com.jarvis.server.usage
 
 import java.time.Instant
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Запись об использовании AI (пункт 18 ТЗ).
@@ -53,19 +54,38 @@ class InMemoryUsageRepository(
     private val maxRecords: Int = 10_000
 ) : UsageRepository {
 
+    init {
+        require(maxRecords >= 0) { "maxRecords must be non-negative" }
+    }
+
     private val records = ConcurrentLinkedQueue<AiUsageRecord>()
+    private val recordCount = AtomicInteger(0)
 
     override suspend fun record(usage: AiUsageRecord) {
-        records.add(usage)
-        while (records.size > maxRecords) {
-            records.poll()
+        synchronized(records) {
+            records.add(usage)
+            recordCount.incrementAndGet()
+            // ConcurrentLinkedQueue.size — O(n). Отдельный атомарный счётчик
+            // сохраняет bounded-memory операцию O(1) и не деградирует после
+            // достижения лимита на каждом последующем запросе.
+            while (recordCount.get() > maxRecords) {
+                if (records.poll() != null) {
+                    recordCount.decrementAndGet()
+                } else {
+                    // Защита от рассинхронизации при будущих изменениях.
+                    recordCount.set(0)
+                    break
+                }
+            }
         }
     }
 
     override suspend fun recentFor(clientId: String, limit: Int): List<AiUsageRecord> =
-        records.filter { it.clientId == clientId }.takeLast(limit)
+        synchronized(records) {
+            records.filter { it.clientId == clientId }.takeLast(limit.coerceAtLeast(0))
+        }
 
-    override suspend fun all(): List<AiUsageRecord> = records.toList()
+    override suspend fun all(): List<AiUsageRecord> = synchronized(records) { records.toList() }
 
-    fun size(): Int = records.size
+    fun size(): Int = recordCount.get()
 }

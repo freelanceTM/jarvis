@@ -32,14 +32,15 @@ class UiTypeTextTool @Inject constructor(
     override val toolId: String = "accessibility.type_text"
     override val description: String = "Вводит текст в поле поиска или ввода на текущем экране (требует включения Accessibility Service)"
     override val category: ToolCategory = ToolCategory.DEVICE
-    override val riskLevel: ToolRisk = ToolRisk.LOW
+    override val riskLevel: ToolRisk = ToolRisk.CONFIRMATION_REQUIRED
     override val isOffline: Boolean = true
     override val requiresForeground: Boolean = true
     override val executionTimeoutMs: Long = 5000L
 
     override val capabilityContract = ToolCapabilityContract(
         capabilities = setOf(DeviceCapability.USE_ACCESSIBILITY_SERVICE),
-        dangerLevel = DangerLevel.LOW
+        dangerLevel = DangerLevel.MEDIUM,
+        confirmationRequired = true
     )
     override val capability: JarvisCapability = JarvisCapability.Accessibility
 
@@ -60,6 +61,12 @@ class UiTypeTextTool @Inject constructor(
             return ToolExecutionResult.failure(
                 summary = "Не указан текст для ввода",
                 error = "MISSING_TEXT"
+            )
+        }
+        if (text.length > 10_000) {
+            return ToolExecutionResult.failure(
+                summary = "Текст для ввода слишком длинный",
+                error = "TEXT_TOO_LONG"
             )
         }
 
@@ -91,15 +98,17 @@ class UiTypeTextTool @Inject constructor(
             val typed = JarvisAccessibilityService.typeText(text)
             if (typed) {
                 ToolExecutionResult.success(
-                    summary = "Ввёл \"$text\" в поле ввода",
+                    // Не дублируем потенциальный пароль/токен в observation,
+                    // TTS и последующих cloud-промптах.
+                    summary = "Ввёл текст в поле ввода",
                     data = buildJsonObject {
-                        put("text", text)
+                        put("text_length", text.length)
                         put("typed", true)
                     }
                 )
             } else {
                 ToolExecutionResult.failure(
-                    summary = "Не нашёл редактируемого поля на экране — текст \"$text\" не введён",
+                    summary = "Не нашёл редактируемого поля на экране — текст не введён",
                     error = "NO_EDITABLE_FIELD"
                 )
             }

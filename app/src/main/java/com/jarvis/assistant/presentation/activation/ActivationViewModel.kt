@@ -78,10 +78,18 @@ class ActivationViewModel @Inject constructor(
                     }
                 }
                 is ActivationResult.InvalidCode -> {
-                    _uiState.update { 
+                    _uiState.update {
                         it.copy(
                             isLoading = false,
                             errorMessage = result.reason
+                        )
+                    }
+                }
+                is ActivationResult.ServiceUnavailable -> {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = result.message
                         )
                     }
                 }

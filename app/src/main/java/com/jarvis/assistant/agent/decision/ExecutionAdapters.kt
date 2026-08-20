@@ -65,7 +65,7 @@ class RepositoryCloudAiExecutor @Inject constructor(
             }
         }
 
-        Log.d(TAG, "cloud request → JARVIS API | source=${request.source} | privacy=${request.privacyLevel}")
+        Log.d(TAG, "cloud request → JARVIS API | source=${request.source} | privacy=${request.effectivePrivacyLevel}")
 
         // Передаём контекст решения: сервер применит privacy-политику как
         // вторую линию защиты, даже если клиент ошибётся.
@@ -73,7 +73,7 @@ class RepositoryCloudAiExecutor @Inject constructor(
             prompt = request.text,
             systemPrompt = fullSystemPrompt,
             source = request.source.name,
-            privacyLevel = request.privacyLevel.name,
+            privacyLevel = request.effectivePrivacyLevel.name,
             requiresWeb = request.requiresWeb
         )
     }

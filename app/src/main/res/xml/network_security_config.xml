@@ -3,8 +3,9 @@
     <!-- Запрет небезопасного HTTP трафика по умолчанию в production -->
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
+            <!-- Не доверяем пользовательским CA в production: иначе
+                 установленный на устройстве CA может перехватить Bearer-токен. -->
             <certificates src="system" />
-            <certificates src="user" />
         </trust-anchors>
     </base-config>
 

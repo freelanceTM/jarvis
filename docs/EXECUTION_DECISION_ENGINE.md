@@ -16,7 +16,7 @@ SendPromptUseCase → AgentPipeline
 ExecutionDecisionEngine
      ├── Device Tool → ToolExecutor → JarvisTool
      ├── Local AI    → WorkflowExecutor (процедурная память, офлайн)
-     ├── Cloud AI    → AIRepository → UniversalAIClient
+     ├── Cloud AI    → AIRepository → JarvisApiAiClient → JARVIS API
      └── Agent       → CognitivePlanner → AgentCognitiveLoop
      ↓
 ExecutionResult → PromptExecutionResult → TTS / Chat UI
@@ -62,24 +62,30 @@ ExecutionResult → PromptExecutionResult → TTS / Chat UI
 Текст приватного запроса не логируется: `ExecutionRequest.loggableText`
 возвращает `<redacted:N chars>`.
 
-> **TODO:** автоматической классификации приватности пока нет — уровень задаёт
-> вызывающий слой (по умолчанию `NORMAL`, поведение не изменилось).
+До логирования и cloud gate запрос дополнительно проходит локальный
+`PrivacyClassifier`. Сильные признаки credentials, платёжных, медицинских и
+личных данных автоматически повышают уровень до `PRIVATE`/`SENSITIVE`; явную
+метку вызывающего слоя или автоматически найденный уровень понизить нельзя.
+Общие вопросы вроде «как сменить пароль» остаются `NORMAL`. Сервер независимо
+повторяет классификацию и не доверяет присланной клиентом метке `NORMAL`.
 
 ## requiresWeb
 
-Локальный слой — это процедурная память, а не нейросетевая модель:
+Локальный слой не имеет web-доступа:
 `LocalAiExecutor.hasWebCapability == false`. При `requiresWeb = true` движок
-**пропускает** локальный путь, чтобы тот не имитировал успех, и уходит в
-Cloud/Agent. Новых web-интеграций на этом этапе не добавлено.
+**пропускает** локальный путь, чтобы тот не имитировал актуальный сетевой ответ,
+и уходит в Cloud/Agent.
 
 ## Честная формулировка «Local AI»
 
-Нейросетевой локальной LLM в проекте нет (см. `README.md` и
-`docs/ANDROID_CAPABILITIES.md` — офлайн-модели и embeddings не подключены).
-`ExecutionType.LOCAL_AI` означает **локальный офлайн-слой**:
-`WorkflowExecutor` — сохранённые пользовательские сценарии, выполняемые
-без сети. Когда появится настоящая on-device модель, достаточно будет добавить
-её реализацию `LocalAiExecutor` — контракт менять не придётся.
+`ExecutionType.LOCAL_AI` — композитный офлайн-слой:
+
+- on-device Gemma через MediaPipe, если пользователь отдельно установил модель
+  (модель не входит в APK; см. `docs/LOCAL_AI.md`);
+- `WorkflowExecutor` — сохранённые пользовательские сценарии.
+
+Neural embeddings по-прежнему не подключены: лексико-семантический поиск памяти
+не следует путать с локальной генеративной моделью.
 
 ## Error handling
 

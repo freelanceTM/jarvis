@@ -47,21 +47,31 @@ object MediaIntentParser {
         val q = rawPhrase.lowercase().trim()
         if (q.isEmpty()) return null
 
-        // 1. Переключение вперёд (самое специфичное)
-        if (NEXT_PATTERNS.any { q.contains(it) }) return MediaIntent.NEXT_TRACK
+        // 1. Переключение вперёд (самое специфичное). Одиночные слова
+        // «следующий/дальше» допустимы только как вся команда: иначе вопрос
+        // «когда следующий матч?» неожиданно переключал музыку.
+        if (NEXT_PATTERNS.any { q.contains(it) } || q in NEXT_STANDALONE) {
+            return MediaIntent.NEXT_TRACK
+        }
 
-        // 2. Переключение назад
-        if (PREV_PATTERNS.any { q.contains(it) }) return MediaIntent.PREVIOUS_TRACK
+        // 2. Переключение назад — то же правило для «предыдущий».
+        if (PREV_PATTERNS.any { q.contains(it) } || q in PREV_STANDALONE) {
+            return MediaIntent.PREVIOUS_TRACK
+        }
 
         // 3. Остановка (стоп «жёстче» паузы)
         if (STOP_PATTERNS.any { q.contains(it) }) return MediaIntent.STOP_MEDIA
 
         // 4. Продолжить после паузы (RESUME — отдельный интент от PLAY;
         //    проверяется раньше PAUSE, чтобы «продолжи после паузы» не уехало в паузу)
-        if (RESUME_PATTERNS.any { q.contains(it) }) return MediaIntent.RESUME_MEDIA
+        if (RESUME_PATTERNS.any { q.contains(it) } || q in RESUME_STANDALONE) {
+            return MediaIntent.RESUME_MEDIA
+        }
 
         // 5. Пауза
-        if (PAUSE_PATTERNS.any { q.contains(it) }) return MediaIntent.PAUSE_MEDIA
+        if (PAUSE_PATTERNS.any { q.contains(it) } || q in PAUSE_STANDALONE) {
+            return MediaIntent.PAUSE_MEDIA
+        }
 
         // 6. Громкость медиа (только при медиа-контексте: музык/трек/песн/плеер)
         if (hasMediaContext(q)) {
@@ -70,7 +80,9 @@ object MediaIntentParser {
         }
 
         // 7. Воспроизведение. «включи музыку» — это именно PLAY_MEDIA.
-        if (PLAY_PATTERNS.any { q.contains(it) }) return MediaIntent.PLAY_MEDIA
+        if (PLAY_PATTERNS.any { q.contains(it) } || q in PLAY_STANDALONE) {
+            return MediaIntent.PLAY_MEDIA
+        }
 
         // 8. Общее переключение состояния
         if (TOGGLE_PATTERNS.any { q.contains(it) }) return MediaIntent.TOGGLE_PLAY_PAUSE
@@ -103,15 +115,17 @@ object MediaIntentParser {
     )
 
     private val NEXT_PATTERNS = listOf(
-        "следующий трек", "следующая песня", "следующую песню", "следующий",
+        "следующий трек", "следующая песня", "следующую песню",
         "переключи вперед", "переключи вперёд", "перемотай вперед", "перемотай вперёд",
-        "дальше", "след трек", "next track", "next song", "skip"
+        "след трек", "next track", "next song", "skip track"
     )
+    private val NEXT_STANDALONE = setOf("следующий", "дальше", "next", "skip")
 
     private val PREV_PATTERNS = listOf(
-        "предыдущий трек", "предыдущая песня", "предыдущую песню", "предыдущий",
+        "предыдущий трек", "предыдущая песня", "предыдущую песню",
         "назад трек", "верни трек", "прошлый трек", "previous track", "previous song"
     )
+    private val PREV_STANDALONE = setOf("предыдущий", "назад", "previous")
 
     private val STOP_PATTERNS = listOf(
         "останови музыку", "выключи музыку", "выключить музыку", "стоп музыка",
@@ -119,15 +133,16 @@ object MediaIntentParser {
     )
 
     private val PAUSE_PATTERNS = listOf(
-        "поставь на паузу", "на паузу", "пауза", "паузу", "приостанови",
-        "притормози музыку", "pause"
+        "поставь на паузу", "на паузу", "приостанови музыку", "приостанови воспроизведение",
+        "притормози музыку", "pause music"
     )
+    private val PAUSE_STANDALONE = setOf("пауза", "паузу", "приостанови", "pause")
 
     private val RESUME_PATTERNS = listOf(
-        "продолжи музыку", "продолжи воспроизведение", "продолжай музыку",
-        "возобнови музыку", "возобнови воспроизведение", "продолжи", "продолжай",
-        "continue music", "continue", "resume"
+        "продолжи музыку", "продолжи воспроизведение", "продолжи после паузы", "продолжай музыку",
+        "возобнови музыку", "возобнови воспроизведение", "continue music", "resume music"
     )
+    private val RESUME_STANDALONE = setOf("продолжи", "продолжай", "continue", "resume")
 
     private val VOLUME_UP_PATTERNS = listOf(
         "громче", "прибавь звук", "прибавь громкость", "сделай громче",
@@ -141,9 +156,10 @@ object MediaIntentParser {
 
     private val PLAY_PATTERNS = listOf(
         "включи музыку", "включить музыку", "включи песню", "включи трек",
-        "поставь музыку", "запусти музыку", "играй музыку", "играй",
-        "вруби музыку", "play music", "play"
+        "поставь музыку", "запусти музыку", "играй музыку",
+        "вруби музыку", "play music"
     )
+    private val PLAY_STANDALONE = setOf("играй", "play")
 
     private val TOGGLE_PATTERNS = listOf("плей", "воспроизведение", "play_pause")
 }

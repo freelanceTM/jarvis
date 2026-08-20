@@ -4,7 +4,9 @@ import com.jarvis.server.config.ExecutionPolicyConfig
 import com.jarvis.server.config.ProviderConfig
 import com.jarvis.server.observability.Metrics
 import com.jarvis.server.observability.StructuredLogger
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeout
 
 /**
  * Требования запроса к провайдеру (пункт 16 ТЗ).
@@ -118,8 +120,14 @@ class ProviderManager(
         val attempted = mutableListOf<ProviderId>()
         var lastKind: ProviderFailureKind? = null
 
-        // Fallback: перебираем провайдеров, но не больше maxProviderAttempts.
-        for (provider in candidates.take(policy.maxProviderAttempts)) {
+        // Fallback: считаем только реально зарезервированные/вызванные
+        // провайдеры. tryAcquire() особенно важен для HALF_OPEN: ровно один
+        // конкурентный запрос получает право на пробу после cooldown.
+        val maxProviderAttempts = policy.maxProviderAttempts.coerceAtLeast(0)
+        for (provider in candidates) {
+            if (attempted.size >= maxProviderAttempts) break
+            if (!health.tryAcquire(provider.id)) continue
+
             attempted += provider.id
 
             when (val outcome = executeWithRetry(provider, request)) {
@@ -136,7 +144,11 @@ class ProviderManager(
             }
         }
 
-        return ManagerOutcome.Failure(lastKind = lastKind, attempted = attempted)
+        return ManagerOutcome.Failure(
+            lastKind = lastKind,
+            attempted = attempted,
+            noCandidates = attempted.isEmpty()
+        )
     }
 
     /**
@@ -157,7 +169,21 @@ class ProviderManager(
             val startedAt = clock()
 
             val result = try {
-                provider.execute(request)
+                // Менеджер обеспечивает timeout независимо от качества
+                // реализации провайдера. HTTP-транспорт имеет собственный
+                // callTimeout, но fake/будущий SDK-провайдер тоже не должен
+                // иметь возможность зависнуть навсегда.
+                val timeoutMs = configs[provider.id]?.requestTimeoutMs
+                    ?.coerceAtLeast(1L)
+                    ?: 30_000L
+                withTimeout(timeoutMs) {
+                    provider.execute(request)
+                }
+            } catch (_: TimeoutCancellationException) {
+                ProviderResult.Failure(
+                    kind = ProviderFailureKind.TIMEOUT,
+                    detail = "manager timeout"
+                )
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Throwable) {

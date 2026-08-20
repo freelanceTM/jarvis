@@ -90,10 +90,11 @@
     <string name="licenziya_jarvis_earclip">Лицензия JARVIS Earclip</string>
     <string name="trebuetsya_aktivaciya">ТРЕБУЕТСЯ АКТИВАЦИЯ</string>
     <string name="prilozhenie_zablokirovano_bez_koda_iz_korobki_naushnikov">Приложение заблокировано без кода из коробки наушников.</string>
-    <string name="prodlit_podpisku_na_30_dney_50_tmt">Продлить подписку на 30 дней (50 TMT)</string>
+    <string name="prodlit_podpisku_na_30_dney_50_tmt">Продление временно недоступно — требуется серверная оплата</string>
     <string name="ai_api_klyuch">Токен доступа JARVIS</string>
     <string name="podderzhivayutsya_klyuchi_openrouter_sk_or_google_gemini_aq_">Токен выдаётся при активации. Ключи AI-провайдеров на устройстве не хранятся — облачные запросы идут через сервер JARVIS.</string>
     <string name="sk_or_ili_aq_ili_gsk">Токен доступа</string>
+    <string name="jarvis_token_format_error">Токен должен содержать от 32 до 256 символов без пробелов.</string>
     <string name="pokazat_skryt">Показать/скрыть</string>
     <string name="akusticheskiy_wake_word_slovo_dzharvis">Акустический Wake Word (Слово «Джарвис»)</string>
     <string name="dvuhetapnyy_kaskad_zcr_filtr_formant_rechi_stage_1_verifikac">Двухэтапный каскад: ZCR-фильтр формант речи (Stage 1) ➔ верификация ключевого слова (Stage 2).</string>
@@ -182,7 +183,7 @@
 
     <!-- ===== License & UseCase (audit #17) ===== -->
     <string name="nevernyy_kod_aktivacii">Неверный код активации. Проверьте код на карточке в коробке наушников.</string>
-    <string name="kod_uzhe_ispolzovan">Этот код уже был использован на другом устройстве, сэр.</string>
+    <string name="server_licenziy_nedostupen">Сервер активации временно недоступен. Код не был активирован — повторите позже.</string>
     <string name="jarvis_uspeshno_aktivirovan">JARVIS Earclip успешно активирован! Первые 30 дней использования включены бесплатно, сэр.</string>
     <string name="pustoy_zapros">Пустой запрос</string>
     <string name="zapros_ne_mozhet_byt_pustym">Запрос не может быть пустым</string>

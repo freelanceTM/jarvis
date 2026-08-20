@@ -42,7 +42,7 @@ class CallSmsHonestyInstrumentedTest {
     }
 
     @Test
-    fun `call by phone number without CALL_PHONE returns USER_ACTION_REQUIRED not success`() = runBlocking {
+    fun callByPhoneNumberWithoutPermissionReturnsUserActionRequired() = runBlocking {
         val tool = CallTool(context, capabilities, contactResolver)
 
         val result = tool.execute(buildJsonObject { put("recipient", "+79991234567") })
@@ -61,7 +61,7 @@ class CallSmsHonestyInstrumentedTest {
     }
 
     @Test
-    fun `call by contact name without READ_CONTACTS returns PERMISSION_REQUIRED`() = runBlocking {
+    fun callByContactNameWithoutContactsPermissionReturnsPermissionRequired() = runBlocking {
         val tool = CallTool(context, capabilities, contactResolver)
 
         val result = tool.execute(buildJsonObject { put("recipient", "Иван Иванович") })
@@ -79,7 +79,7 @@ class CallSmsHonestyInstrumentedTest {
     }
 
     @Test
-    fun `sms without SEND_SMS returns PERMISSION_REQUIRED not success`() = runBlocking {
+    fun smsWithoutPermissionReturnsPermissionRequired() = runBlocking {
         val tool = SmsTool(context, capabilities, contactResolver)
 
         val result = tool.execute(
@@ -97,7 +97,7 @@ class CallSmsHonestyInstrumentedTest {
     }
 
     @Test
-    fun `sms with empty message returns FAILURE`() = runBlocking {
+    fun smsWithEmptyMessageReturnsFailure() = runBlocking {
         val tool = SmsTool(context, capabilities, contactResolver)
 
         val result = tool.execute(buildJsonObject { put("recipient", "+79991234567") })
@@ -107,7 +107,7 @@ class CallSmsHonestyInstrumentedTest {
     }
 
     @Test
-    fun `sms with empty recipient returns FAILURE`() = runBlocking {
+    fun smsWithEmptyRecipientReturnsFailure() = runBlocking {
         val tool = SmsTool(context, capabilities, contactResolver)
 
         val result = tool.execute(buildJsonObject { put("message", "текст") })

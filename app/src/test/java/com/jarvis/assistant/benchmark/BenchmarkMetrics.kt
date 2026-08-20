@@ -65,11 +65,18 @@ object BenchmarkMetrics {
             val columns = listOf("DEVICE_TOOL", "LOCAL_AI", "CLOUD_AI", "AGENT", "REFUSAL", "NONE")
             val sb = StringBuilder()
             sb.append(String.format("%-18s", "expected\\actual"))
-            columns.forEach { sb.append(String.format("%-13s", it)) }
+            columns.forEachIndexed { index, column ->
+                if (index == columns.lastIndex) sb.append(column)
+                else sb.append(String.format("%-13s", column))
+            }
             sb.append('\n')
             for ((expected, actuals) in rows.entries.sortedBy { it.key.name }) {
                 sb.append(String.format("%-18s", expected.name))
-                columns.forEach { col -> sb.append(String.format("%-13s", actuals[col] ?: 0)) }
+                columns.forEachIndexed { index, column ->
+                    val value = actuals[column] ?: 0
+                    if (index == columns.lastIndex) sb.append(value)
+                    else sb.append(String.format("%-13s", value))
+                }
                 sb.append('\n')
             }
             return sb.toString()

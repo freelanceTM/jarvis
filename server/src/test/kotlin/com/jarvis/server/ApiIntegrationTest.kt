@@ -228,6 +228,31 @@ class ApiIntegrationTest {
         assertEquals("провайдер не должен вызываться", 0, h.providers[0].calls.get())
     }
 
+    @Test
+    fun `normal-labelled credential is detected and blocked server side`() = runBlocking {
+        val h = harness()
+
+        val response = h.handler.handle(
+            post(requestBody(text = "мой пароль от банка: 4821-secret", privacy = "NORMAL"))
+        )
+
+        assertEquals(403, response.status)
+        assertEquals(ApiErrorCode.PRIVACY_POLICY_VIOLATION.name, errorOf(response.body).error.code)
+        assertEquals(0, h.providers[0].calls.get())
+    }
+
+    @Test
+    fun `educational password question is not a privacy false positive`() = runBlocking {
+        val h = harness()
+
+        val response = h.handler.handle(
+            post(requestBody(text = "как безопасно сменить пароль", privacy = "NORMAL"))
+        )
+
+        assertEquals(200, response.status)
+        assertEquals(1, h.providers[0].calls.get())
+    }
+
     /** PRIVATE тоже блокируется политикой по умолчанию. */
     @Test
     fun `private request is blocked by default policy`() = runBlocking {
@@ -452,5 +477,58 @@ class ApiIntegrationTest {
         )
 
         assertEquals(404, response.status)
+    }
+
+    @Test
+    fun `known endpoint with wrong method returns 405`() = runBlocking {
+        val h = harness()
+        for ((method, path) in listOf(
+            "POST" to JarvisApiHandler.PATH_HEALTH,
+            "GET" to JarvisApiHandler.PATH_EXECUTE,
+            "POST" to JarvisApiHandler.PATH_ADMIN_METRICS
+        )) {
+            val response = h.handler.handle(HttpRequestContext(method, path, null, "", 0))
+            assertEquals("$method $path", 405, response.status)
+        }
+    }
+
+    @Test
+    fun `UTF-8 byte size is enforced even when supplied content length is wrong`() = runBlocking {
+        val h = harness(validation = ValidationConfig(maxTextLength = 100, maxBodyBytes = 50))
+        val body = requestBody(text = "😀".repeat(20))
+
+        // Direct handler callers must not be able to bypass byte limit by
+        // reporting a fake Content-Length or relying on UTF-16 String.length.
+        val response = h.handler.handle(
+            HttpRequestContext("POST", JarvisApiHandler.PATH_EXECUTE, "Bearer $validToken", body, 1)
+        )
+
+        assertEquals(413, response.status)
+        assertEquals(0, h.providers[0].calls.get())
+    }
+
+    @Test
+    fun `blank and overlong request ids are replaced rather than reflected`() = runBlocking {
+        val h = harness()
+        for (badId in listOf("", "x".repeat(65))) {
+            val body = """{"text":"test","requestId":"$badId"}"""
+            val response = h.handler.handle(post(body))
+            val parsed = json.decodeFromString(AiExecutionResponse.serializer(), response.body)
+            assertTrue(parsed.requestId.isNotBlank())
+            assertTrue(parsed.requestId.length <= 64)
+            assertTrue(parsed.requestId != badId)
+        }
+    }
+
+    @Test
+    fun `malformed requests consume rate budget but never reach provider`() = runBlocking {
+        val h = harness(rateLimit = RateLimitConfig(perMinute = 1, perDay = 10))
+
+        val malformed = h.handler.handle(post("{bad"))
+        val next = h.handler.handle(post(requestBody()))
+
+        assertEquals(400, malformed.status)
+        assertEquals(429, next.status)
+        assertEquals(0, h.providers[0].calls.get())
     }
 }

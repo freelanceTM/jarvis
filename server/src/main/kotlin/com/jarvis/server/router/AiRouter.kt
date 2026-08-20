@@ -15,6 +15,7 @@ import com.jarvis.server.provider.ProviderFailureKind
 import com.jarvis.server.provider.ProviderManager
 import com.jarvis.server.provider.ProviderRequest
 import com.jarvis.server.provider.ProviderRequirements
+import com.jarvis.server.privacy.PromptPrivacyClassifier
 import com.jarvis.server.usage.AiUsageRecord
 import com.jarvis.server.usage.UsageRepository
 import java.time.Instant
@@ -74,14 +75,22 @@ class AiRouter(
         }
 
         // -------------------------------------------------- 2. Privacy policy
-        // Вторая линия защиты: даже если Android ошибётся и пришлёт
-        // PRIVATE/SENSITIVE, сервер откажет, а не отправит провайдеру.
-        if (!isPrivacyAllowed(request.privacyLevel)) {
+        // Вторая линия защиты: сервер не доверяет клиентской метке NORMAL.
+        // Явный уровень усиливается локальной классификацией текста и никогда
+        // не понижается автоматически.
+        val detectedPrivacy = PromptPrivacyClassifier.classify(request.text)
+        val effectivePrivacy = PromptPrivacyClassifier.strongest(
+            explicit = request.privacyLevel,
+            detected = detectedPrivacy
+        )
+        if (!isPrivacyAllowed(effectivePrivacy)) {
             logger.warn(
                 "privacy policy blocked cloud execution",
                 "requestId" to requestId,
                 "clientId" to client.clientId,
-                "privacyLevel" to request.privacyLevel.name
+                "privacyLevel" to effectivePrivacy.name,
+                "declaredPrivacyLevel" to request.privacyLevel.name,
+                "automaticallyDetected" to (detectedPrivacy != ApiPrivacyLevel.NORMAL).toString()
             )
             metrics.recordFailure()
             metrics.recordPrivacyBlocked()
@@ -100,7 +109,7 @@ class AiRouter(
             "requestId" to requestId,
             "clientId" to client.clientId,
             "source" to request.source.name,
-            "privacyLevel" to request.privacyLevel.name,
+            "privacyLevel" to effectivePrivacy.name,
             "requiresWeb" to request.requiresWeb.toString(),
             // Текст промпта НЕ логируется — только его размер.
             "promptSize" to LogSanitizer.describeText(request.text)

@@ -121,6 +121,20 @@ class MediaIntentParserTest {
     }
 
     @Test
+    fun `generic words inside non-media questions do not trigger playback actions`() {
+        listOf(
+            "Когда следующий матч сборной?",
+            "Проанализируй следующий договор",
+            "Какой был предыдущий результат?",
+            "Продолжи анализ отчёта",
+            "Что такое пауза в литературе?",
+            "Explain the display pipeline"
+        ).forEach { phrase ->
+            assertNull("Phrase: $phrase", MediaIntentParser.parse(phrase))
+        }
+    }
+
+    @Test
     fun `normalizeAction accepts canonical tool actions`() {
         assertEquals(MediaIntent.NEXT_TRACK, MediaIntentParser.normalizeAction("next"))
         assertEquals(MediaIntent.PREVIOUS_TRACK, MediaIntentParser.normalizeAction("prev"))

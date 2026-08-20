@@ -140,8 +140,17 @@ class RuleEvaluatorTest {
     }
 
     @Test
-    fun `malformed condition does not silently drop the rule`() {
-        assertTrue(evaluator.isTimeConditionSatisfied("{not json", 13, 45))
+    fun `malformed and out of range conditions fail closed`() {
+        assertFalse(evaluator.isTimeConditionSatisfied("{not json", 13, 45))
+        assertFalse(
+            evaluator.isTimeConditionSatisfied(
+                """{"startHour":99,"startMinute":0,"endHour":12,"endMinute":0}""",
+                10,
+                0
+            )
+        )
+        assertFalse(evaluator.isTimeConditionSatisfied("", 24, 0))
+        assertFalse(evaluator.isTimeConditionSatisfied("", 12, 60))
     }
 
     @Test

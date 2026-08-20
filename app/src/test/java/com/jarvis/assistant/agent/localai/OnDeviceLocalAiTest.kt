@@ -255,6 +255,24 @@ class OnDeviceLocalAiTest {
         assertEquals(0, runtime.calls.get())
     }
 
+    @Test
+    fun `complex normal request is escalated but equally complex private request stays local`() = runBlocking {
+        val complex = "Проанализируй подробно договор аренды, выдели юридические и финансовые риски, " +
+            "сравни варианты расторжения и предложи улучшенную редакцию каждого спорного пункта."
+
+        val normalRuntime = FakeRuntime()
+        val normal = buildLocalAi(FakeModelManager(normalRuntime)).execute(request(complex))
+        assertTrue(normal is LocalAiResult.Unsupported)
+        assertEquals(0, normalRuntime.calls.get())
+
+        val privateRuntime = FakeRuntime("Локальный приватный ответ")
+        val privateResult = buildLocalAi(FakeModelManager(privateRuntime)).execute(
+            request(complex, privacy = PrivacyLevel.PRIVATE)
+        )
+        assertTrue(privateResult is LocalAiResult.Success)
+        assertEquals(1, privateRuntime.calls.get())
+    }
+
     /** Отмена корутины прерывает инференс и не превращается в Error. */
     @Test
     fun `cancellation propagates and stops inference`() = runBlocking {

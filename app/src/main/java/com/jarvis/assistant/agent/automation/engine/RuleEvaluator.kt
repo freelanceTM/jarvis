@@ -91,19 +91,27 @@ class RuleEvaluator @Inject constructor(
     }
 
     /**
-     * Пустое условие означает «всегда». Некорректный JSON — тоже «всегда»,
-     * но это осознанный выбор: правило пользователя не должно молча исчезать
-     * из-за ошибки сериализации.
+     * Пустое условие означает «всегда». Повреждённое или выходящее за
+     * календарные границы условие блокирует выполнение (fail closed):
+     * автоматизация не должна неожиданно звонить/отправлять данные только
+     * потому, что conditionsJson не удалось десериализовать.
      */
     fun isTimeConditionSatisfied(conditionsJson: String, currentHour: Int, currentMinute: Int): Boolean {
+        if (currentHour !in 0..23 || currentMinute !in 0..59) return false
         if (conditionsJson.isBlank()) return true
 
         val condition = try {
             json.decodeFromString(TimeRangeCondition.serializer(), conditionsJson)
         } catch (_: IllegalArgumentException) {
-            return true
+            return false
         } catch (_: kotlinx.serialization.SerializationException) {
-            return true
+            return false
+        }
+
+        if (condition.startHour !in 0..23 || condition.endHour !in 0..23 ||
+            condition.startMinute !in 0..59 || condition.endMinute !in 0..59
+        ) {
+            return false
         }
 
         val current = currentHour * 60 + currentMinute

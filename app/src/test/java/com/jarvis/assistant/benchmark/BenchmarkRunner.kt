@@ -53,11 +53,11 @@ class BenchmarkRunner(private val rig: BenchmarkHarness.Rig) {
         }
 
         val wasRefusal = result is ExecutionResult.Error
-        // Уточнение = система явно просит подтверждение/дополнение.
-        val wasClarification = result is ExecutionResult.ConfirmationRequired
+        val wasClarification = result is ExecutionResult.ClarificationRequired
 
         val success = when (result) {
             is ExecutionResult.Success -> true
+            is ExecutionResult.ClarificationRequired -> true
             is ExecutionResult.ConfirmationRequired -> true
             is ExecutionResult.Error -> false
         }
@@ -66,6 +66,7 @@ class BenchmarkRunner(private val rig: BenchmarkHarness.Rig) {
 
         val responseChars = when (result) {
             is ExecutionResult.Success -> result.text.length
+            is ExecutionResult.ClarificationRequired -> result.promptMessage.length
             is ExecutionResult.ConfirmationRequired -> result.promptMessage.length
             is ExecutionResult.Error -> result.message.length
         }

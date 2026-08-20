@@ -165,6 +165,20 @@ class AutomationRuleMatcherTest {
     }
 
     @Test
+    fun `malformed schedule values fail closed`() {
+        val malformed = listOf("7:00", "07:", "07:60", "24:00", "07:00:extra", "garbage")
+        malformed.forEachIndexed { index, value ->
+            val candidate = rule(
+                id = (index + 1).toLong(),
+                name = value,
+                triggerType = AutomationTriggerType.TIME_SCHEDULE.name,
+                triggerParam = value
+            )
+            assertTrue("triggerParam=$value", matcher.matchForSchedule(listOf(candidate), 0L, 7, 0).isEmpty())
+        }
+    }
+
+    @Test
     fun `schedule without trigger param falls back to time range condition`() {
         val morningRange = AutomationEntity(
             id = 1,

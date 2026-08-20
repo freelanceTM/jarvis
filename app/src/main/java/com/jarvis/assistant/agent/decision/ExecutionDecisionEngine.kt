@@ -6,6 +6,7 @@ import com.jarvis.assistant.agent.fast.FastCommandRouter
 import com.jarvis.assistant.agent.memory.WorkingMemory
 import com.jarvis.assistant.agent.model.ToolExecutionStatus
 import com.jarvis.assistant.core.result.Resource
+import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,8 +23,8 @@ import javax.inject.Singleton
  *      ↓
  * ExecutionDecisionEngine
  *      ├── Device Tool  (ToolExecutor → JarvisTool)
- *      ├── Local AI     (WorkflowExecutor, офлайн)
- *      ├── Cloud AI     (AIRepository → UniversalAIClient)
+ *      ├── Local AI     (on-device Gemma / WorkflowExecutor, офлайн)
+ *      ├── Cloud AI     (AIRepository → JarvisApiAiClient → JARVIS API)
  *      └── Agent        (CognitivePlanner → AgentCognitiveLoop)
  *           ↓
  *      ExecutionResult
@@ -63,6 +64,7 @@ class ExecutionDecisionEngine @Inject constructor(
             "Запрос помечен как приватный, сэр. Локально выполнить его не удалось, а в облако я его без вашего явного разрешения не отправлю."
 
         private const val GENERIC_ERROR_MESSAGE = "Не удалось выполнить запрос, сэр."
+        private const val EMPTY_REQUEST_MESSAGE = "Запрос не может быть пустым."
     }
 
     /**
@@ -72,9 +74,20 @@ class ExecutionDecisionEngine @Inject constructor(
      */
     suspend fun execute(request: ExecutionRequest): ExecutionResult {
         logRequest(request)
+        if (request.text.isBlank()) {
+            return ExecutionResult.Error(
+                message = EMPTY_REQUEST_MESSAGE,
+                reason = DecisionReason.INVALID_REQUEST
+            )
+        }
+        clarificationPrompt(request.text)?.let { prompt ->
+            return ExecutionResult.ClarificationRequired(prompt)
+        }
 
         return try {
             decide(request)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Unexpected failure while executing request (source=${request.source})", e)
             ExecutionResult.Error(
@@ -82,6 +95,17 @@ class ExecutionDecisionEngine @Inject constructor(
                 reason = DecisionReason.UNEXPECTED_ERROR
             )
         }
+    }
+
+    /** Минимальные команды без объекта нельзя безопасно «додумывать». */
+    private fun clarificationPrompt(text: String): String? = when (text.lowercase().trim().trimEnd('?', '!', '.')) {
+        "открой", "запусти" -> "Что именно открыть, сэр?"
+        "найди", "найди это" -> "Что именно найти, сэр?"
+        "что лучше" -> "Какие варианты нужно сравнить, сэр?"
+        "проверь" -> "Что именно проверить, сэр?"
+        "переведи" -> "Какой текст и на какой язык перевести, сэр?"
+        "сделай", "сделай это" -> "Что именно нужно сделать, сэр?"
+        else -> null
     }
 
     private suspend fun decide(request: ExecutionRequest): ExecutionResult {
@@ -170,6 +194,8 @@ class ExecutionDecisionEngine @Inject constructor(
 
         val result = try {
             toolExecutor.execute(call)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             // ToolExecutor уже конвертирует исключения инструментов в failure,
             // но контракт защищаем и здесь: наружу исключение не уходит.
@@ -257,7 +283,7 @@ class ExecutionDecisionEngine @Inject constructor(
             Log.i(
                 TAG,
                 "route=BLOCKED reason=${DecisionReason.CLOUD_BLOCKED_BY_PRIVACY} " +
-                    "privacy=${request.privacyLevel}"
+                    "privacy=${request.effectivePrivacyLevel}"
             )
             return ExecutionResult.Error(
                 message = PRIVACY_BLOCKED_MESSAGE,
@@ -321,7 +347,7 @@ class ExecutionDecisionEngine @Inject constructor(
     private fun logRequest(request: ExecutionRequest) {
         Log.d(
             TAG,
-            "request received | source=${request.source} | privacy=${request.privacyLevel} | " +
+            "request received | source=${request.source} | privacy=${request.effectivePrivacyLevel} | " +
                 "requiresWeb=${request.requiresWeb} | requiresDeviceControl=${request.requiresDeviceControl} | " +
                 "text=${request.loggableText}"
         )

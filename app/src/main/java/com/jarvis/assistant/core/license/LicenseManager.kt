@@ -29,6 +29,7 @@ data class LicenseInfo(
 sealed interface ActivationResult {
     data class Success(val licenseInfo: LicenseInfo, val message: String) : ActivationResult
     data class InvalidCode(val reason: String) : ActivationResult
+    data class ServiceUnavailable(val message: String) : ActivationResult
     data class AlreadyExpired(val message: String) : ActivationResult
 }
 
@@ -37,14 +38,11 @@ interface LicenseManager {
     fun getLicenseInfo(): LicenseInfo
     fun isActivatedAndValid(): Boolean
     suspend fun activateWithCode(code: String): ActivationResult
-    fun extendSubscription(days: Int = 30): LicenseInfo
-    fun resetLicense()
 }
 
 @Singleton
 class LicenseManagerImpl @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val remoteConfig: LicenseRemoteConfig,
     private val serverValidator: LicenseServerValidator,
     private val validator: LicenseCodeValidator
 ) : LicenseManager {
@@ -56,11 +54,7 @@ class LicenseManagerImpl @Inject constructor(
         private const val KEY_ACTIVATION_DATE = "activation_date"
         private const val KEY_EXPIRY_DATE = "expiry_date"
         private const val KEY_HARDWARE_ID = "hardware_id"
-        private const val KEY_USED_MASTER_CODES = "used_master_codes"
-        private const val KEY_MASTER_CODE_HARDWARE = "master_code_hardware_id"
 
-        // Срок действия первичного кода из коробки: 30 дней
-        private const val DEFAULT_TRIAL_DAYS = 30
         private const val DAY_IN_MS = 24L * 60 * 60 * 1000L
     }
 
@@ -89,50 +83,39 @@ class LicenseManagerImpl @Inject constructor(
     /**
      * Активирует приложение одноразовым кодом из инструкции к наушникам JARVIS Earclip.
      *
-     * Мастер-коды НЕ зашиты в приложение: они проверяются через удалённый
-     * конфиг ([LicenseRemoteConfig]) и могут быть отозваны без обновления APK.
-     * Обычные скретч-коды коробки проверяются контрольной суммой на клиенте
-     * (TODO(server): перенести на сервер).
+     * Любые коды проверяются только сервером и привязываются к hardware ID.
+     * При недоступном endpoint активация fail closed и не изменяет лицензию.
      */
     override suspend fun activateWithCode(code: String): ActivationResult {
         val cleanCode = code.trim().uppercase()
             .replace(" ", "")
             .replace("-", "")
 
-        // 1. Валидация: удалённый конфиг (мастер-коды) + контрольная сумма (box-коды)
-        val remote = remoteConfig.fetch()
+        // 1. Серверная валидация и привязка к устройству.
         val hardwareId = getDeviceHardwareId()
         val verdict = validator.validate(
             cleanCode = cleanCode,
-            remoteConfig = remote,
             serverValidator = serverValidator,
-            currentHardwareId = hardwareId,
-            usedMasterCodes = getUsedMasterCodes(),
-            codeBoundToHardwareId = securePrefs.getString(KEY_MASTER_CODE_HARDWARE, null)
+            currentHardwareId = hardwareId
         )
 
-        when (verdict) {
-            is LicenseCodeValidator.CodeVerdict.Invalid ->
+        val licenseDays = when (verdict) {
+            LicenseCodeValidator.CodeVerdict.Invalid ->
                 return ActivationResult.InvalidCode(
                     context.getString(R.string.nevernyy_kod_aktivacii)
                 )
 
-            is LicenseCodeValidator.CodeVerdict.MasterCodeAlreadyUsed ->
-                return ActivationResult.InvalidCode(
-                    context.getString(R.string.kod_uzhe_ispolzovan)
+            LicenseCodeValidator.CodeVerdict.ServiceUnavailable ->
+                return ActivationResult.ServiceUnavailable(
+                    context.getString(R.string.server_licenziy_nedostupen)
                 )
 
-            is LicenseCodeValidator.CodeVerdict.MasterCodeValid -> {
-                // Одноразовость мастер-кода на этом устройстве (cross-device — TODO(server)).
-                markMasterCodeUsed(cleanCode, hardwareId)
-            }
-
-            is LicenseCodeValidator.CodeVerdict.BoxCodeValid -> Unit
+            is LicenseCodeValidator.CodeVerdict.BoxCodeValid -> verdict.licenseDays
         }
 
-        // 2. Генерация лицензии на 30 дней
+        // 2. Генерация лицензии на срок, подтверждённый сервером.
         val now = System.currentTimeMillis()
-        val expiry = now + (DEFAULT_TRIAL_DAYS * DAY_IN_MS)
+        val expiry = Math.addExact(now, Math.multiplyExact(licenseDays.toLong(), DAY_IN_MS))
 
         securePrefs.edit()
             .putBoolean(KEY_ACTIVATED, true)
@@ -151,30 +134,6 @@ class LicenseManagerImpl @Inject constructor(
         )
     }
 
-    /**
-     * Продлевает ежемесячную подписку (50 манат / месяц)
-     */
-    override fun extendSubscription(days: Int): LicenseInfo {
-        val current = loadLicenseFromStorage()
-        val now = System.currentTimeMillis()
-        val baseExpiry = if (current.expiryDate > now) current.expiryDate else now
-        val newExpiry = baseExpiry + (days * DAY_IN_MS)
-
-        securePrefs.edit()
-            .putBoolean(KEY_ACTIVATED, true)
-            .putLong(KEY_EXPIRY_DATE, newExpiry)
-            .apply()
-
-        val updated = loadLicenseFromStorage()
-        _licenseFlow.value = updated
-        return updated
-    }
-
-    override fun resetLicense() {
-        securePrefs.edit().clear().apply()
-        _licenseFlow.value = loadLicenseFromStorage()
-    }
-
     private fun loadLicenseFromStorage(): LicenseInfo {
         val isActivated = securePrefs.getBoolean(KEY_ACTIVATED, false)
         val code = securePrefs.getString(KEY_CODE, "").orEmpty()
@@ -185,7 +144,7 @@ class LicenseManagerImpl @Inject constructor(
         val now = System.currentTimeMillis()
         val remainingMs = max(0L, expDate - now)
         val remainingDays = (remainingMs / DAY_IN_MS).toInt()
-        val isExpired = isActivated && (now > expDate)
+        val isExpired = isActivated && (now >= expDate)
 
         return LicenseInfo(
             isActivated = isActivated,
@@ -196,20 +155,6 @@ class LicenseManagerImpl @Inject constructor(
             isExpired = isExpired,
             hardwareSerial = hwId
         )
-    }
-
-    // ------------------------------------------------------- мастер-коды (удалённый конфиг)
-
-    private fun getUsedMasterCodes(): Set<String> =
-        securePrefs.getStringSet(KEY_USED_MASTER_CODES, emptySet()) ?: emptySet()
-
-    /** Отмечает мастер-код использованным и привязывает к hardware ID этого устройства. */
-    private fun markMasterCodeUsed(code: String, hardwareId: String) {
-        val updated = (getUsedMasterCodes() + code).toMutableSet()
-        securePrefs.edit()
-            .putStringSet(KEY_USED_MASTER_CODES, updated)
-            .putString(KEY_MASTER_CODE_HARDWARE, hardwareId)
-            .apply()
     }
 
     private fun formatFormattedCode(raw: String): String {
@@ -224,13 +169,21 @@ class LicenseManagerImpl @Inject constructor(
     // требование аудита (#1: hardware ID binding). Не персональные данные.
     @Suppress("HardwareIds")
     private fun getDeviceHardwareId(): String {
+        val stored = securePrefs.getString(KEY_HARDWARE_ID, null)?.takeIf { it.isNotBlank() }
         return try {
-            val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "UNKNOWN"
-            val manufacturer = Build.MANUFACTURER.uppercase()
-            val model = Build.MODEL.uppercase()
-            "JRV-$manufacturer-$model-${androidId.takeLast(6).uppercase()}"
+            val androidId = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ANDROID_ID
+            )?.takeIf { it.isNotBlank() && it != "9774d56d682e549c" }
+                ?: return stored ?: newFallbackHardwareId()
+            val manufacturer = Build.MANUFACTURER.uppercase(Locale.ROOT)
+            val model = Build.MODEL.uppercase(Locale.ROOT)
+            "JRV-$manufacturer-$model-${androidId.takeLast(6).uppercase(Locale.ROOT)}"
         } catch (_: Exception) {
-            "JRV-DEVICE-${UUID.randomUUID().toString().take(8).uppercase()}"
+            stored ?: newFallbackHardwareId()
         }
     }
+
+    private fun newFallbackHardwareId(): String =
+        "JRV-DEVICE-${UUID.randomUUID().toString().take(8).uppercase(Locale.ROOT)}"
 }

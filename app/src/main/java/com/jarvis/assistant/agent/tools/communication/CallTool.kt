@@ -81,6 +81,12 @@ class CallTool @Inject constructor(
         // 1. Определяем реальный номер.
         val phoneNumber = when (val resolution = contactResolver.resolve(recipient)) {
             is ContactResolution.Resolved -> resolution.phoneNumber
+            is ContactResolution.Ambiguous -> return ToolExecutionResult.failure(
+                summary = "Найдено несколько контактов: " +
+                    resolution.candidates.joinToString(", ") { (name, number) -> "$name ($number)" } +
+                    ". Уточните получателя, сэр.",
+                error = "AMBIGUOUS_CONTACT"
+            )
             is ContactResolution.PermissionRequired -> return ToolExecutionResult.permissionRequired(
                 summary = "Чтобы найти номер контакта «$recipient», нужен доступ к контактам",
                 permissions = resolution.permissions

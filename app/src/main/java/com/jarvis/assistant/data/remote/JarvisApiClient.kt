@@ -1,7 +1,10 @@
 package com.jarvis.assistant.data.remote
 
 import android.util.Log
+import com.jarvis.assistant.core.network.ResponseBodyTooLargeException
+import com.jarvis.assistant.core.network.readUtf8Bounded
 import com.jarvis.assistant.core.result.Resource
+import com.jarvis.assistant.core.security.AccessTokenPolicy
 import com.jarvis.assistant.core.security.SecurityManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,6 +18,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -81,14 +85,18 @@ class JarvisApiClient @Inject constructor(
         private const val TAG = "JarvisApiClient"
 
         /**
-         * Базовый URL JARVIS API. Тот же хост, что уже используют
-         * LicenseRemoteConfig и LicenseServerValidator.
+         * Базовый URL JARVIS API. Тот же хост использует LicenseServerValidator.
          */
         const val BASE_URL = "https://api.jarvis.ai"
         const val EXECUTE_PATH = "/v1/ai/execute"
+        private const val MAX_RESPONSE_BYTES = 1L * 1024 * 1024
+        private const val CALL_TIMEOUT_SECONDS = 35L
     }
 
     private val mediaType = "application/json; charset=utf-8".toMediaType()
+    private val apiHttpClient = okHttpClient.newBuilder()
+        .callTimeout(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .build()
 
     /**
      * @param source        VOICE или CHAT.
@@ -102,10 +110,10 @@ class JarvisApiClient @Inject constructor(
         systemContext: String? = null
     ): Resource<String> = withContext(Dispatchers.IO) {
         val token = securityManager.getAccessToken()
-        if (token.isBlank()) {
+        if (!AccessTokenPolicy.isValid(token)) {
             return@withContext Resource.Error(
-                IllegalStateException("NO_ACCESS_TOKEN"),
-                "Приложение не активировано. Введите код активации в настройках."
+                IllegalStateException("INVALID_ACCESS_TOKEN"),
+                "Токен доступа JARVIS отсутствует или имеет неверный формат."
             )
         }
 
@@ -131,8 +139,8 @@ class JarvisApiClient @Inject constructor(
             .build()
 
         try {
-            okHttpClient.newCall(request).execute().use { response ->
-                val body = response.body?.string().orEmpty()
+            apiHttpClient.newCall(request).execute().use { response ->
+                val body = response.body?.readUtf8Bounded(MAX_RESPONSE_BYTES).orEmpty()
 
                 if (response.isSuccessful) {
                     val parsed = json.decodeFromString(JarvisAiResponseDto.serializer(), body)
@@ -160,6 +168,9 @@ class JarvisApiClient @Inject constructor(
                     userMessageFor(error.code)
                 )
             }
+        } catch (e: ResponseBodyTooLargeException) {
+            Log.w(TAG, "oversized response | requestId=$requestId")
+            Resource.Error(e, "Сервер JARVIS вернул слишком большой ответ.")
         } catch (e: SocketTimeoutException) {
             Log.w(TAG, "timeout | requestId=$requestId")
             Resource.Error(e, "Таймаут подключения к серверу JARVIS. Проверьте интернет.")

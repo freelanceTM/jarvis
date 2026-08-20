@@ -490,6 +490,28 @@ class FastCommandRouterTest {
         assertEquals("status", handled.toolCall?.arguments?.get("action")?.jsonPrimitive?.content)
     }
 
+    @Test
+    fun `internet as web-search context does not toggle wifi`() {
+        val queries = listOf(
+            "найди в интернете информацию о диагнозе",
+            "поищи в интернете расписание матчей",
+            "что пишут в интернете про Kotlin"
+        )
+        queries.forEach { query ->
+            assertTrue("query=$query", router.route(query) is FastRouteResult.ForwardToLlm)
+        }
+    }
+
+    @Test
+    fun `power saving request is left for multi-step planner`() {
+        assertTrue(
+            router.route("включи режим экономии заряда") is FastRouteResult.ForwardToLlm
+        )
+        assertTrue(
+            router.route("сохрани заряд батареи") is FastRouteResult.ForwardToLlm
+        )
+    }
+
     // ===========================================
     // Forward to LLM
     // ===========================================

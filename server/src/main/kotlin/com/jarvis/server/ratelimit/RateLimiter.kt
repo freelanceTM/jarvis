@@ -53,13 +53,13 @@ class SlidingWindowRateLimiter(
 
             if (window.minuteHits.size >= config.perMinute) {
                 val oldest = window.minuteHits.peekFirst() ?: now
-                val retryAfter = ((oldest + MINUTE_MS - now) / 1000).coerceAtLeast(1)
+                val retryAfter = retryAfterSeconds(oldest + MINUTE_MS - now)
                 return RateLimitDecision.Limited(retryAfter, "per_minute")
             }
 
             if (window.dayHits.size >= config.perDay) {
                 val oldest = window.dayHits.peekFirst() ?: now
-                val retryAfter = ((oldest + DAY_MS - now) / 1000).coerceAtLeast(1)
+                val retryAfter = retryAfterSeconds(oldest + DAY_MS - now)
                 return RateLimitDecision.Limited(retryAfter, "per_day")
             }
 
@@ -74,6 +74,10 @@ class SlidingWindowRateLimiter(
             hits.pollFirst()
         }
     }
+
+    /** HTTP Retry-After округляется вверх: 59.999 с нельзя объявлять как 59 с. */
+    private fun retryAfterSeconds(remainingMs: Long): Long =
+        ((remainingMs.coerceAtLeast(1L) + 999L) / 1000L).coerceAtLeast(1L)
 
     fun reset(clientId: String) {
         windows.remove(clientId)

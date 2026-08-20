@@ -28,14 +28,14 @@ class JarvisDatabaseMigrationTest {
     )
 
     @Test
-    fun `v5 schema creates all tables and validates`() {
+    fun v5SchemaCreatesAllTablesAndValidates() {
         // Создаём БД из экспортированной схемы 5.json и валидируем её.
         helper.createDatabase(TEST_DB, 5).close()
         helper.runMigrationsAndValidate(TEST_DB, 5, true, *JarvisMigrations.ALL)
     }
 
     @Test
-    fun `messages table roundtrips on v5 schema`() {
+    fun messagesTableRoundTripsOnV5Schema() {
         val db = helper.createDatabase(TEST_DB, 5)
         db.execSQL(
             "INSERT INTO messages (role, text, timestamp) VALUES ('user', 'тестовое сообщение', 1)"
@@ -48,7 +48,7 @@ class JarvisDatabaseMigrationTest {
     }
 
     @Test
-    fun `automations table has trigger_param column on v5`() {
+    fun automationsTableHasTriggerParamColumnOnV5() {
         val db = helper.createDatabase(TEST_DB, 5)
         db.query("SELECT trigger_param FROM automations LIMIT 0").use { cursor ->
             assertTrue("Колонка trigger_param должна существовать", cursor.columnCount >= 1)

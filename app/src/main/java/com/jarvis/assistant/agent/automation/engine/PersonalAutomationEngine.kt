@@ -8,6 +8,7 @@ import com.jarvis.assistant.agent.automation.model.TimeRangeCondition
 import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.model.ToolCall
 import com.jarvis.assistant.voice.tts.TextToSpeechManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -46,35 +47,45 @@ class PersonalAutomationEngine @Inject constructor(
     }
 
     private val initMutex = Mutex()
+    private val eventMutex = Mutex()
+
+    @Volatile
     private var defaultsInitialized = false
 
     /**
      * Обработка системного события (например: подключение наушников, смена Wi-Fi, падение батареи)
      */
     suspend fun onSystemEvent(
-        triggerType: AutomationTriggerType, 
+        triggerType: AutomationTriggerType,
         extraData: Map<String, Any> = emptyMap()
     ) = withContext(Dispatchers.IO) {
-        Log.d(TAG, ">>> Event received: ${triggerType.name}")
+        // Матчинг по lastTriggeredAt и запись recordTrigger должны быть одной
+        // критической секцией. Иначе два одинаковых broadcast одновременно
+        // проходят cooldown и выполняют необратимое действие дважды.
+        eventMutex.withLock {
+            Log.d(TAG, ">>> Event received: ${triggerType.name}")
 
-        // Инициализируем дефолтные правила если нужно
-        ensureDefaultsInitialized()
+            ensureDefaultsInitialized()
 
-        val candidateRules = automationDao.getAutomationsByTrigger(triggerType.name)
-        Log.d(TAG, "Found ${candidateRules.size} rules for ${triggerType.name}")
+            val candidateRules = automationDao.getAutomationsByTrigger(triggerType.name)
+            Log.d(TAG, "Found ${candidateRules.size} rules for ${triggerType.name}")
 
-        if (candidateRules.isEmpty()) return@withContext
+            if (candidateRules.isNotEmpty()) {
+                val now = Calendar.getInstance(Locale.getDefault())
+                val nowMillis = System.currentTimeMillis()
+                val currentHour = now.get(Calendar.HOUR_OF_DAY)
+                val currentMinute = now.get(Calendar.MINUTE)
 
-        val now = Calendar.getInstance(Locale.getDefault())
-        val nowMillis = System.currentTimeMillis()
-        val currentHour = now.get(Calendar.HOUR_OF_DAY)
-        val currentMinute = now.get(Calendar.MINUTE)
-
-        // RuleMatcher: событие → ВСЕ подходящие правила (отсортированы по приоритету).
-        val matchingRules = ruleMatcher.matchForTrigger(candidateRules, nowMillis, currentHour, currentMinute)
-        Log.d(TAG, "Matched ${matchingRules.size} rules for ${triggerType.name}")
-
-        executeRules(matchingRules, nowMillis)
+                val matchingRules = ruleMatcher.matchForTrigger(
+                    candidateRules,
+                    nowMillis,
+                    currentHour,
+                    currentMinute
+                )
+                Log.d(TAG, "Matched ${matchingRules.size} rules for ${triggerType.name}")
+                executeRules(matchingRules, nowMillis)
+            }
+        }
     }
 
     /**
@@ -84,18 +95,19 @@ class PersonalAutomationEngine @Inject constructor(
      * сообщить важные задачи — ВСЕ правила на 07:00 выполняются.
      */
     suspend fun onTimeSchedule(hour: Int, minute: Int) = withContext(Dispatchers.IO) {
-        Log.d(TAG, ">>> Schedule event: %02d:%02d".format(hour, minute))
+        eventMutex.withLock {
+            Log.d(TAG, ">>> Schedule event: %02d:%02d".format(hour, minute))
 
-        ensureDefaultsInitialized()
+            ensureDefaultsInitialized()
 
-        val candidateRules = automationDao.getAutomationsByTrigger(AutomationTriggerType.TIME_SCHEDULE.name)
-        if (candidateRules.isEmpty()) return@withContext
-
-        val nowMillis = System.currentTimeMillis()
-        val matchingRules = ruleMatcher.matchForSchedule(candidateRules, nowMillis, hour, minute)
-        Log.d(TAG, "Matched ${matchingRules.size} rules for schedule %02d:%02d".format(hour, minute))
-
-        executeRules(matchingRules, nowMillis)
+            val candidateRules = automationDao.getAutomationsByTrigger(AutomationTriggerType.TIME_SCHEDULE.name)
+            if (candidateRules.isNotEmpty()) {
+                val nowMillis = System.currentTimeMillis()
+                val matchingRules = ruleMatcher.matchForSchedule(candidateRules, nowMillis, hour, minute)
+                Log.d(TAG, "Matched ${matchingRules.size} rules for schedule %02d:%02d".format(hour, minute))
+                executeRules(matchingRules, nowMillis)
+            }
+        }
     }
 
     /**
@@ -117,18 +129,32 @@ class PersonalAutomationEngine @Inject constructor(
             Log.d(TAG, "Executing ${calls.size} actions for rule '${rule.name}'")
             try {
                 val results = toolExecutor.executeAll(calls)
-                automationDao.recordTrigger(rule.id, nowMillis)
+                val completedSuccessfully =
+                    results.size == calls.size && results.all { it.isSuccess }
 
-                val voiceFeedback = if (rule.voiceAnnouncement.isNotBlank()) {
-                    rule.voiceAnnouncement
+                if (completedSuccessfully) {
+                    automationDao.recordTrigger(rule.id, nowMillis)
+                    val voiceFeedback = if (rule.voiceAnnouncement.isNotBlank()) {
+                        rule.voiceAnnouncement
+                    } else {
+                        results.joinToString(". ") { it.summary }
+                            .takeIf { it.isNotBlank() }
+                            ?.let { "$it, сэр." }
+                            .orEmpty()
+                    }
+                    if (voiceFeedback.isNotBlank()) voiceMessages.add(voiceFeedback)
                 } else {
-                    results.filter { it.isSuccess }
-                        .joinToString(". ") { it.summary }
-                        .takeIf { it.isNotBlank() }
-                        ?.let { "$it, сэр." }
-                        .orEmpty()
+                    // Не записываем cooldown и не произносим ложное «выполнено»:
+                    // executeAll мог вернуть FAILURE/PERMISSION_REQUIRED/
+                    // REQUIRES_USER_CONFIRMATION после частичного rollback.
+                    val failed = results.lastOrNull()
+                    Log.w(
+                        TAG,
+                        "Rule '${rule.name}' not completed: ${failed?.status} ${failed?.error.orEmpty()}"
+                    )
                 }
-                if (voiceFeedback.isNotBlank()) voiceMessages.add(voiceFeedback)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // Сбой одного правила не должен останавливать остальные правила события.
                 Log.e(TAG, "Error executing rule '${rule.name}', continuing with other rules", e)

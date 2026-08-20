@@ -33,8 +33,10 @@ class ScenarioMatcherTest {
 
     @Test
     fun `sleep phrases match SLEEP`() {
-        // «режим сна» НЕ матчится (в оригинале тоже): в нём нет ключей «сон»/«спать»/«ночной режим».
-        listOf("спокойной ночи", "ложусь спать", "включи ночной режим", "засыпаю", "пора спать")
+        listOf(
+            "спокойной ночи", "ложусь спать", "включи ночной режим", "засыпаю",
+            "пора спать", "подготовь телефон ко сну", "включи режим сна"
+        )
             .forEach { phrase ->
                 assertEquals("'$phrase'", ScenarioId.SLEEP, ScenarioMatcher.match(phrase))
             }
@@ -62,6 +64,8 @@ class ScenarioMatcherTest {
             .forEach { phrase ->
                 assertEquals("'$phrase'", ScenarioId.DRIVING, ScenarioMatcher.match(phrase))
             }
+        assertNull(ScenarioMatcher.match("когда следующий матч сборной"))
+        assertNull(ScenarioMatcher.match("проанализируй следующий договор"))
     }
 
     @Test
@@ -74,10 +78,24 @@ class ScenarioMatcherTest {
 
     @Test
     fun `diagnostics phrases match DIAGNOSTICS`() {
-        listOf("статус системы", "диагностика", "что с телефоном", "состояние", "проверь всё", "отчёт")
-            .forEach { phrase ->
-                assertEquals("'$phrase'", ScenarioId.DIAGNOSTICS, ScenarioMatcher.match(phrase))
-            }
+        listOf(
+            "статус системы", "статус телефона", "диагностика", "что с телефоном",
+            "состояние системы", "системный отчёт", "проверь всё"
+        ).forEach { phrase ->
+            assertEquals("'$phrase'", ScenarioId.DIAGNOSTICS, ScenarioMatcher.match(phrase))
+        }
+    }
+
+    @Test
+    fun `generic report words do not trigger device diagnostics`() {
+        listOf(
+            "Сделай подробное резюме технического отчёта",
+            "Проанализируй финансовую отчётность компании",
+            "Оцени состояние европейского рынка",
+            "Какой статус у нового законопроекта?"
+        ).forEach { phrase ->
+            assertNull("'$phrase'", ScenarioMatcher.match(phrase.lowercase()))
+        }
     }
 
     @Test

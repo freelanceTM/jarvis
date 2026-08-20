@@ -38,10 +38,10 @@ class ConsoleStructuredLogger(
         val rendered = buildString {
             append("ts=").append(clock())
             append(" level=").append(level)
-            append(" msg=\"").append(message.replace("\"", "'")).append('"')
+            append(" msg=\"").append(LogSanitizer.forLog(message)).append('"')
             for ((k, v) in fields) {
                 append(' ').append(k).append('=')
-                val safe = v.replace("\"", "'")
+                val safe = LogSanitizer.forLog(v)
                 if (safe.contains(' ')) append('"').append(safe).append('"') else append(safe)
             }
         }
@@ -53,7 +53,7 @@ class ConsoleStructuredLogger(
 object LogSanitizer {
 
     private val secretPatterns = listOf(
-        Regex("""(?i)bearer\s+[A-Za-z0-9._\-]+"""),
+        Regex("""(?i)bearer\s+[^\s,;]+"""),
         Regex("""sk-or-[A-Za-z0-9._\-]+"""),
         Regex("""gsk_[A-Za-z0-9._\-]+"""),
         Regex("""sk-[A-Za-z0-9._\-]{10,}"""),
@@ -62,6 +62,18 @@ object LogSanitizer {
 
     fun redact(value: String): String =
         secretPatterns.fold(value) { acc, rx -> rx.replace(acc, "[REDACTED]") }
+
+    /**
+     * Делает значение безопасным для однострочного structured log:
+     * маскирует секреты и исключает CR/LF/control-character injection.
+     */
+    fun forLog(value: String): String = redact(value)
+        .replace("\r", "\\r")
+        .replace("\n", "\\n")
+        .replace("\t", "\\t")
+        .map { ch -> if (ch.code < 0x20 || ch.code == 0x7f) '?' else ch }
+        .joinToString("")
+        .replace('"', '\'')
 
     /** Безопасное представление текста промпта: только длина. */
     fun describeText(text: String): String = "<${text.length} chars>"

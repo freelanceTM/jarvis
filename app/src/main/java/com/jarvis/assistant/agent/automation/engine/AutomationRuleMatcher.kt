@@ -68,9 +68,11 @@ class AutomationRuleMatcher @Inject constructor(
     private fun matchesScheduleTime(rule: AutomationEntity, hour: Int, minute: Int): Boolean {
         val param = rule.triggerParam.trim()
         if (param.isNotEmpty()) {
-            val parts = param.split(":")
-            val paramHour = parts.getOrNull(0)?.toIntOrNull() ?: return false
-            val paramMinute = parts.getOrNull(1)?.toIntOrNull() ?: 0
+            // Только канонический 24-часовой HH:MM. Раньше "07:",
+            // "07:00:garbage" и другие повреждённые значения могли сработать.
+            val match = Regex("^(?:[01]\\d|2[0-3]):[0-5]\\d$").matchEntire(param)
+                ?: return false
+            val (paramHour, paramMinute) = match.value.split(":").map(String::toInt)
             return paramHour == hour && paramMinute == minute
         }
         // Без triggerParam — диапазон из conditionsJson (RuleEvaluator проверит

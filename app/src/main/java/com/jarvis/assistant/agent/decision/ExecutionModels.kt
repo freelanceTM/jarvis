@@ -18,9 +18,8 @@ enum class RequestSource {
  * не уходят в облачную модель без явного разрешения пользователя
  * ([ExecutionRequest.cloudExplicitlyAllowed]).
  *
- * TODO (следующий этап): автоматическая классификация приватности запроса.
- *  Сейчас уровень выставляет вызывающий слой; по умолчанию — [NORMAL],
- *  что сохраняет текущее поведение приложения.
+ * Явная метка вызывающего слоя усиливается локальным [PrivacyClassifier]:
+ * автоматически обнаруженный PRIVATE/SENSITIVE нельзя понизить до NORMAL.
  */
 enum class PrivacyLevel {
     NORMAL,
@@ -59,16 +58,27 @@ data class ExecutionRequest(
     val cloudExplicitlyAllowed: Boolean = false,
     val history: List<Message> = emptyList()
 ) {
+    /** Автоматически обнаруженный уровень, вычисленный до логирования/роутинга. */
+    val detectedPrivacyLevel: PrivacyLevel = PrivacyClassifier.classify(text)
+
+    /** Явный уровень нельзя ослабить, а автоматически найденный — понизить. */
+    val effectivePrivacyLevel: PrivacyLevel =
+        PrivacyClassifier.strongest(privacyLevel, detectedPrivacyLevel)
+
     /** Можно ли отправлять этот запрос в облако. */
     val isCloudAllowed: Boolean
-        get() = !privacyLevel.isCloudRestricted || cloudExplicitlyAllowed
+        get() = !effectivePrivacyLevel.isCloudRestricted || cloudExplicitlyAllowed
 
     /**
      * Текст, безопасный для логов: приватные запросы не логируются дословно
      * (пункт 12 ТЗ этапа 1).
      */
     val loggableText: String
-        get() = if (privacyLevel == PrivacyLevel.NORMAL) text else "<redacted:${text.length} chars>"
+        get() = if (effectivePrivacyLevel == PrivacyLevel.NORMAL) {
+            text
+        } else {
+            "<redacted:${text.length} chars>"
+        }
 }
 
 /**
@@ -79,13 +89,12 @@ enum class ExecutionType {
     DEVICE_TOOL,
 
     /**
-     * Локальный офлайн-слой (без сети): процедурная память / сохранённые
-     * пользовательские сценарии. Нейросетевой локальной модели в проекте нет —
-     * см. docs/EXECUTION_DECISION_ENGINE.md.
+     * Локальный офлайн-слой: on-device Gemma (если модель установлена) и
+     * процедурная память / сохранённые пользовательские сценарии.
      */
     LOCAL_AI,
 
-    /** Облачная LLM через существующий AIRepository / UniversalAIClient. */
+    /** Облачная LLM через AIRepository / JarvisApiAiClient / JARVIS API. */
     CLOUD_AI,
 
     /** Многошаговый план: CognitivePlanner → AgentCognitiveLoop. */
@@ -106,6 +115,8 @@ enum class DecisionReason {
     CLOUD_FAILED,
     CLOUD_PLAN_DETECTED,
     DEVICE_TOOL_FAILED,
+    INVALID_REQUEST,
+    CLARIFICATION_REQUIRED,
     UNEXPECTED_ERROR
 }
 
@@ -129,6 +140,11 @@ sealed class ExecutionResult {
     data class Error(
         val message: String,
         val reason: DecisionReason = DecisionReason.UNEXPECTED_ERROR
+    ) : ExecutionResult()
+
+    /** Не хватает объекта/критерия — нужно уточнение, а не выдуманный ответ. */
+    data class ClarificationRequired(
+        val promptMessage: String
     ) : ExecutionResult()
 
     /** Действие требует явного подтверждения пользователя (SMS, звонок и т. п.). */

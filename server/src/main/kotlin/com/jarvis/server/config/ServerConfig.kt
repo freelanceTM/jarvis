@@ -21,6 +21,13 @@ data class ProviderConfig(
     val connectTimeoutMs: Long,
     val requestTimeoutMs: Long
 ) {
+    init {
+        require(model.isNotBlank()) { "provider model must not be blank" }
+        require(baseUrl.isNotBlank()) { "provider baseUrl must not be blank" }
+        require(connectTimeoutMs > 0) { "connectTimeoutMs must be positive" }
+        require(requestTimeoutMs > 0) { "requestTimeoutMs must be positive" }
+    }
+
     val hasKey: Boolean get() = !apiKey.isNullOrBlank()
 }
 
@@ -32,13 +39,24 @@ data class CircuitBreakerConfig(
     val openCooldownMs: Long = 60_000,
     /** Сколько успехов в HALF_OPEN возвращают в HEALTHY. */
     val halfOpenSuccessesToClose: Int = 1
-)
+) {
+    init {
+        require(failureThreshold > 0) { "failureThreshold must be positive" }
+        require(openCooldownMs >= 0) { "openCooldownMs must be non-negative" }
+        require(halfOpenSuccessesToClose > 0) { "halfOpenSuccessesToClose must be positive" }
+    }
+}
 
 /** Лимиты запросов (пункт 8 ТЗ). */
 data class RateLimitConfig(
     val perMinute: Int = 20,
     val perDay: Int = 500
-)
+) {
+    init {
+        require(perMinute >= 0) { "perMinute must be non-negative" }
+        require(perDay >= 0) { "perDay must be non-negative" }
+    }
+}
 
 /** Политика fallback и retry (пункты 14 и 23 ТЗ). */
 data class ExecutionPolicyConfig(
@@ -47,13 +65,26 @@ data class ExecutionPolicyConfig(
     /** Максимум повторов у ОДНОГО провайдера при transient-сбое. */
     val maxRetriesPerProvider: Int = 1,
     val retryBackoffMs: Long = 250
-)
+) {
+    init {
+        require(maxProviderAttempts >= 0) { "maxProviderAttempts must be non-negative" }
+        require(maxRetriesPerProvider >= 0) { "maxRetriesPerProvider must be non-negative" }
+        require(retryBackoffMs >= 0) { "retryBackoffMs must be non-negative" }
+    }
+}
 
 /** Валидация входа (пункт 30 ТЗ). */
 data class ValidationConfig(
     val maxTextLength: Int = 8_000,
     val maxBodyBytes: Long = 32 * 1024
-)
+) {
+    init {
+        require(maxTextLength > 0) { "maxTextLength must be positive" }
+        require(maxBodyBytes in 1..(10L * 1024 * 1024)) {
+            "maxBodyBytes must be in 1..10 MiB"
+        }
+    }
+}
 
 /**
  * Политика приватности (пункт 19 ТЗ).
@@ -73,6 +104,14 @@ data class AiGenerationConfig(
     val temperature: Double = 0.6,
     val systemPrompt: String = DEFAULT_SYSTEM_PROMPT
 ) {
+    init {
+        require(maxTokens > 0) { "maxTokens must be positive" }
+        require(temperature.isFinite() && temperature in 0.0..2.0) {
+            "temperature must be finite and in 0.0..2.0"
+        }
+        require(systemPrompt.isNotBlank()) { "systemPrompt must not be blank" }
+    }
+
     companion object {
         const val DEFAULT_SYSTEM_PROMPT =
             "Ты JARVIS — персональный голосовой AI-ассистент. Отвечай кратко и по существу: " +
@@ -95,6 +134,21 @@ data class ServerConfig(
      */
     val staticClientTokens: Map<String, String>
 ) {
+    init {
+        require(port in 1..65_535) { "port must be in 1..65535" }
+        require(staticClientTokens.keys.none { it.isBlank() }) { "client token must not be blank" }
+        require(
+            staticClientTokens.keys.all { token ->
+                token.length in 32..256 && token.none { it.isWhitespace() || it.isISOControl() }
+            }
+        ) {
+            "client tokens must contain 32..256 characters without whitespace"
+        }
+        require(staticClientTokens.values.all { it.isNotBlank() && it.length <= 128 }) {
+            "clientId must contain 1..128 characters"
+        }
+    }
+
     companion object {
 
         fun fromEnv(env: (String) -> String? = System::getenv): ServerConfig {
@@ -140,7 +194,7 @@ data class ServerConfig(
             )
 
             // Формат: "token1:clientA,token2:clientB"
-            val tokens = str("JARVIS_CLIENT_TOKENS")
+            val tokenPairs = str("JARVIS_CLIENT_TOKENS")
                 ?.split(",")
                 ?.mapNotNull { entry ->
                     val parts = entry.split(":", limit = 2)
@@ -150,8 +204,11 @@ data class ServerConfig(
                         null
                     }
                 }
-                ?.toMap()
-                ?: emptyMap()
+                ?: emptyList()
+            require(tokenPairs.map { it.first }.distinct().size == tokenPairs.size) {
+                "duplicate client token in JARVIS_CLIENT_TOKENS"
+            }
+            val tokens = tokenPairs.toMap()
 
             return ServerConfig(
                 port = int("PORT", 8080),

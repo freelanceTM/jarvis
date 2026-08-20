@@ -114,6 +114,10 @@ class ToolPermissionManager @Inject constructor(
                     "Отправить $recipient сообщение «$preview»? Подтвердите, сэр."
                 }
             }
+            "accessibility.type_text" -> {
+                val preview = call.arguments["text"]?.jsonPrimitive?.contentOrNull?.take(60).orEmpty()
+                "Ввести в активное поле текст «$preview»? Подтвердите, сэр."
+            }
             else -> "Действие «${tool.description}» требует подтверждения. Подтвердить выполнение, сэр?"
         }
     }

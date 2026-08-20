@@ -38,27 +38,33 @@ class UiClickTool @Inject constructor(
     override val parametersSchema: JsonObject = buildJsonObject {
         put("type", "object")
         putJsonObject("properties") {
+            putJsonObject("action") {
+                put("type", "string")
+                put("description", "click, scroll_down или scroll_up")
+            }
             putJsonObject("target_text") {
                 put("type", "string")
                 put("description", "Текст кнопки или элемента для нажатия (например: 'Отправить', 'OK', 'Далее')")
             }
         }
-        put("required", buildJsonArray { add("target_text") })
+        put("required", buildJsonArray { add("action") })
     }
 
     override suspend fun execute(arguments: JsonObject): ToolExecutionResult {
+        val action = arguments["action"]?.jsonPrimitive?.contentOrNull?.lowercase()?.trim() ?: "click"
         val targetText = arguments["target_text"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
-        
-        if (targetText.isEmpty()) {
+
+        if (action == "click" && targetText.isEmpty()) {
             return ToolExecutionResult.failure(
                 "Не указан текст элемента для нажатия",
                 "MISSING_TARGET_TEXT"
             )
         }
+        if (action !in setOf("click", "scroll_down", "scroll_up")) {
+            return ToolExecutionResult.failure("Неизвестное UI-действие: $action", "INVALID_ACTION")
+        }
 
-        // КРИТИЧНО: Проверяем, включён ли Accessibility Service
         if (!JarvisAccessibilityService.isServiceRunning()) {
-            // Открываем настройки Accessibility для пользователя
             val opened = try {
                 val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -68,8 +74,6 @@ class UiClickTool @Inject constructor(
             } catch (_: Exception) {
                 false
             }
-
-            // Честный статус: действие НЕ выполнено, нужен пользователь в системном UI.
             return ToolExecutionResult.userActionRequired(
                 summary = if (opened) {
                     "Для управления интерфейсом необходимо включить JARVIS Accessibility Service. Открыл настройки специальных возможностей."
@@ -82,26 +86,39 @@ class UiClickTool @Inject constructor(
         }
 
         return try {
-            val clicked = JarvisAccessibilityService.clickByText(targetText)
-            
-            if (clicked) {
+            val performed = when (action) {
+                "click" -> JarvisAccessibilityService.clickByText(targetText)
+                "scroll_down" -> JarvisAccessibilityService.scrollDown()
+                "scroll_up" -> JarvisAccessibilityService.scrollUp()
+                else -> false
+            }
+            if (performed) {
                 ToolExecutionResult.success(
-                    summary = "Нажал на '$targetText'",
+                    summary = when (action) {
+                        "click" -> "Нажал на '$targetText'"
+                        "scroll_down" -> "Прокрутил экран вниз"
+                        else -> "Прокрутил экран вверх"
+                    },
                     data = buildJsonObject {
-                        put("target", targetText)
-                        put("clicked", true)
+                        put("action", action)
+                        if (targetText.isNotEmpty()) put("target", targetText)
+                        put("performed", true)
                     }
                 )
             } else {
                 ToolExecutionResult.failure(
-                    summary = "Элемент '$targetText' не найден на экране. Возможно, он скрыт или ещё не загружен.",
-                    error = "ELEMENT_NOT_FOUND"
+                    summary = if (action == "click") {
+                        "Элемент '$targetText' не найден на экране."
+                    } else {
+                        "На экране нет доступной области для прокрутки."
+                    },
+                    error = if (action == "click") "ELEMENT_NOT_FOUND" else "SCROLL_TARGET_NOT_FOUND"
                 )
             }
         } catch (e: Exception) {
             ToolExecutionResult.failure(
-                summary = "Ошибка при попытке нажать на '$targetText': ${e.localizedMessage}",
-                error = "CLICK_ERROR"
+                summary = "Ошибка UI-действия: ${e.localizedMessage}",
+                error = "UI_ACTION_ERROR"
             )
         }
     }

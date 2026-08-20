@@ -17,7 +17,8 @@
   скриншоты, автоматизации, зачитывание экрана и UI-клики (accessibility).
 - Ear Mode: непрерывный перевод речи (RU/EN/TK/TR/DE/ZH/AR) с выводом
   в наушники через Bluetooth SCO.
-- Активация по одноразовому скретч-коду (30 дней бесплатно, далее подписка).
+- Активация по одноразовому скретч-коду (fail-closed через сервер лицензий;
+  до реализации `/v1/license/validate` активация честно недоступна).
 
 Честное описание того, что реально работает на Android (и что невозможно
 программно) — в [docs/ANDROID_CAPABILITIES.md](docs/ANDROID_CAPABILITIES.md).
@@ -40,10 +41,10 @@ embedding-модели в проект не включены (`LocalEmbeddingPro
 ## Сборка
 
 ```bash
-./gradlew assembleDebug          # собрать debug APK
-./gradlew test                   # unit-тесты (JVM)
-./gradlew lint                   # Android Lint
-./gradlew build                  # полная сборка
+./gradlew :app:testDebugUnitTest # Android JVM unit-тесты
+./gradlew :server:test           # unit/integration-тесты API
+./gradlew :app:lintDebug         # Android Lint
+./gradlew :app:assembleDebug     # debug APK
 ```
 
 APK: `app/build/outputs/apk/debug/app-debug.apk`
@@ -52,21 +53,26 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`
 
 - `app/src/main/java/com/jarvis/assistant/`
   - `agent/` — агентное ядро: планировщик, роутер, память, инструменты
-  - `ai/` — AI-клиенты (OpenAI / OpenRouter / Groq / Gemini через OkHttp)
+  - `ai/` — клиент JARVIS API (без ключей AI-провайдеров на устройстве)
   - `data/` — Room, DataStore, сетевые DTO
   - `domain/` — модели и use cases
   - `presentation/` — Compose UI (chat, настройки, активация, перевод)
   - `voice/` — STT/TTS, wake-word, Bluetooth-аудио, фоновый сервис
   - `core/` — лицензирование, безопасное хранение ключа, сеть, константы
-- `app/src/test/` — unit-тесты
+- `app/src/test/` — JVM unit-тесты; `app/src/androidTest/` — тесты на устройстве.
+- `server/` — JVM API: auth/authz, rate limit, AI router, provider fallback,
+  circuit breaker, usage/metrics; подробности в `docs/SERVER_AI_LAYER.md`.
 
 ## Конфигурация
 
-- Ключ API вводится пользователем в настройках приложения и хранится в
-  `EncryptedSharedPreferences` (Android Keystore). В репозитории секретов нет.
+- Android хранит только Bearer-токен доступа JARVIS в
+  `EncryptedSharedPreferences` (Android Keystore). Ключи Groq/Gemini/OpenRouter
+  на устройство не передаются.
+- Серверные токены и ключи провайдеров задаются environment variables; пример —
+  `server/.env.example`. `.env` и другие секреты Git игнорирует.
 - `local.properties` (путь к Android SDK) в Git не хранится — создаётся локально.
-- Поддерживаемые провайдеры: OpenAI-compatible API (`sk-...`), Groq (`gsk_...`),
-  OpenRouter (`sk-or-...`) и Google Gemini (`AIza...`).
+- Локальная LLM-модель не входит в APK; порядок установки описан в
+  `docs/LOCAL_AI.md`.
 
 ## CI
 

@@ -312,7 +312,13 @@ class FastCommandRouter @Inject constructor() {
             )
         }
 
-        // 6. Батарея
+        // 6. Батарея. Команда энергосбережения — многошаговый сценарий,
+        // а не запрос текущего процента; её должен увидеть планировщик.
+        if ((q.contains("эконом") || q.contains("сохрани заряд")) &&
+            (q.contains("батаре") || q.contains("заряд"))
+        ) {
+            return FastRouteResult.ForwardToLlm
+        }
         if (q.contains("батаре") || q.contains("заряд") || q.contains("аккумулятор") || q.contains("сколько процентов")) {
             return FastRouteResult.HandledLocally(
                 toolCall = ToolCall(toolId = "system.battery", arguments = JsonObject(emptyMap())),
@@ -353,7 +359,7 @@ class FastCommandRouter @Inject constructor() {
                         toolId = "accessibility.ui_click",
                         arguments = buildJsonObject {
                             put("action", "click")
-                            put("target", target)
+                            put("target_text", target)
                         }
                     ),
                     immediateVoiceResponse = "Нажимаю на \"$target\", сэр."
@@ -478,7 +484,9 @@ class FastCommandRouter @Inject constructor() {
                 immediateVoiceResponse = "Проверяю Bluetooth, сэр."
             )
         }
-        if (q.contains("вайфай") || q.contains("wifi") || q.contains("wi-fi") || q.contains("интернет")) {
+        val explicitWifiQuery = q.contains("вайфай") || q.contains("wifi") || q.contains("wi-fi") ||
+            (q.contains("интернет") && isInternetConnectivityCommand(q))
+        if (explicitWifiQuery) {
             return FastRouteResult.HandledLocally(
                 toolCall = ToolCall(
                     toolId = "device.wifi",
@@ -497,6 +505,19 @@ class FastCommandRouter @Inject constructor() {
         }
 
         return FastRouteResult.ForwardToLlm
+    }
+
+    /**
+     * Слово «интернет» само по себе означает предмет web-поиска, а не Wi-Fi.
+     * Локальный device route допустим только при явной команде управления или
+     * вопросе о состоянии подключения.
+     */
+    private fun isInternetConnectivityCommand(query: String): Boolean {
+        val controlVerb = listOf(
+            "включ", "выключ", "отключ", "подключ", "переключ", "настрой",
+            "работает", "не работает", "есть ли", "статус", "состояние"
+        ).any(query::contains)
+        return controlVerb || query in setOf("интернет", "проверь интернет")
     }
 
     /**

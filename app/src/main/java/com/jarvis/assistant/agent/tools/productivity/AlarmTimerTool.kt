@@ -46,10 +46,22 @@ class AlarmTimerTool @Inject constructor(
     override suspend fun execute(arguments: JsonObject): ToolExecutionResult {
         val type = arguments["type"]?.jsonPrimitive?.contentOrNull?.lowercase()?.trim() ?: "timer"
         val value = arguments["value"]?.jsonPrimitive?.intOrNull ?: 5
-        val label = arguments["label"]?.jsonPrimitive?.contentOrNull ?: "JARVIS"
+        val label = arguments["label"]?.jsonPrimitive?.contentOrNull?.take(100) ?: "JARVIS"
+        val isAlarm = type == "alarm" || type == "будильник"
+        val isTimer = type == "timer" || type == "таймер"
+
+        if (!isAlarm && !isTimer) {
+            return ToolExecutionResult.failure("Неизвестный тип: $type", "INVALID_TYPE")
+        }
+        if (isAlarm && value !in 0..23) {
+            return ToolExecutionResult.failure("Час будильника должен быть от 0 до 23", "INVALID_ALARM_HOUR")
+        }
+        if (isTimer && value !in 1..1_440) {
+            return ToolExecutionResult.failure("Таймер должен быть от 1 до 1440 минут", "INVALID_TIMER_DURATION")
+        }
 
         return try {
-            if (type.contains("alarm") || type.contains("будильник")) {
+            if (isAlarm) {
                 val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
                     putExtra(AlarmClock.EXTRA_HOUR, value)
                     putExtra(AlarmClock.EXTRA_MINUTES, 0)

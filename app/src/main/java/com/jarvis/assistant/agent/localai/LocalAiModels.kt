@@ -1,6 +1,7 @@
 package com.jarvis.assistant.agent.localai
 
 import com.jarvis.assistant.agent.decision.ExecutionRequest
+import java.util.Locale
 
 /**
  * Результат работы локальной модели (Этап 2).
@@ -40,7 +41,11 @@ data class GenerationConfig(
 ) {
     init {
         require(maxTokens in 1..2048) { "maxTokens вне разумного диапазона: $maxTokens" }
-        require(temperature >= 0f) { "temperature не может быть отрицательной" }
+        require(temperature.isFinite() && temperature in 0f..2f) {
+            "temperature должна быть конечной и в диапазоне 0..2"
+        }
+        require(topP.isFinite() && topP in 0f..1f) { "topP должен быть в диапазоне 0..1" }
+        require(topK in 1..1_000) { "topK должен быть в диапазоне 1..1000" }
     }
 
     companion object {
@@ -78,7 +83,7 @@ data class InferenceMetrics(
         if (timeToFirstTokenMs >= 0) append(" | ttftMs=").append(timeToFirstTokenMs)
         append(" | promptChars=").append(promptChars)
         append(" | responseChars=").append(responseChars)
-        append(" | ~tok/s=").append(String.format("%.1f", approxTokensPerSecond))
+        append(" | ~tok/s=").append(String.format(Locale.ROOT, "%.1f", approxTokensPerSecond))
     }
 }
 

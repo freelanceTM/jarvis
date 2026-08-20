@@ -8,6 +8,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.net.SocketTimeoutException
+import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 
 /**
@@ -22,6 +23,11 @@ import java.util.concurrent.TimeUnit
 class OkHttpTransport(
     private val baseClient: OkHttpClient = OkHttpClient()
 ) : HttpTransport {
+
+    companion object {
+        /** Защита от memory DoS со стороны ошибочного/скомпрометированного upstream. */
+        const val MAX_RESPONSE_BYTES = 1024 * 1024
+    }
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
@@ -49,9 +55,30 @@ class OkHttpTransport(
 
         try {
             client.newCall(requestBuilder.build()).execute().use { response ->
+                val responseBody = response.body
+                val declaredLength = responseBody?.contentLength() ?: 0L
+                if (declaredLength > MAX_RESPONSE_BYTES) {
+                    throw TransportException(
+                        ProviderFailureKind.UNKNOWN,
+                        "provider response too large"
+                    )
+                }
+
+                val bytes = responseBody?.byteStream()
+                    ?.readNBytes(MAX_RESPONSE_BYTES + 1)
+                    ?: ByteArray(0)
+                if (bytes.size > MAX_RESPONSE_BYTES) {
+                    throw TransportException(
+                        ProviderFailureKind.UNKNOWN,
+                        "provider response too large"
+                    )
+                }
+                val charset = responseBody?.contentType()?.charset(StandardCharsets.UTF_8)
+                    ?: StandardCharsets.UTF_8
+
                 HttpTransportResponse(
                     status = response.code,
-                    body = response.body?.string().orEmpty()
+                    body = String(bytes, charset)
                 )
             }
         } catch (e: SocketTimeoutException) {

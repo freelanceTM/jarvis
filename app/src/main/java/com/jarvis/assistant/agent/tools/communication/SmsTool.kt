@@ -37,6 +37,11 @@ class SmsTool @Inject constructor(
     private val contactResolver: ContactResolver
 ) : CapabilityAwareTool {
 
+    private companion object {
+        /** Не допускаем скрытую отправку десятков/сотен платных SMS-сегментов. */
+        const val MAX_MESSAGE_CHARS = 1_600
+    }
+
     override val toolId: String = "communication.sms"
     override val description: String = "Отправляет SMS-сообщение контакту по имени или номеру телефона"
     override val category: ToolCategory = ToolCategory.COMMUNICATION
@@ -80,6 +85,12 @@ class SmsTool @Inject constructor(
 
         if (recipient.isEmpty()) return ToolExecutionResult.failure("Не указан получатель сообщения", "MISSING_RECIPIENT")
         if (message.isEmpty()) return ToolExecutionResult.failure("Не указан текст сообщения", "MISSING_MESSAGE")
+        if (message.length > MAX_MESSAGE_CHARS) {
+            return ToolExecutionResult.failure(
+                "SMS слишком длинное: максимум $MAX_MESSAGE_CHARS символов",
+                "MESSAGE_TOO_LONG"
+            )
+        }
 
         // 1. Возможность отправки SMS вообще.
         when (val smsStatus = capabilities.statusOf(DeviceCapability.SEND_SMS_DIRECTLY)) {
@@ -102,6 +113,12 @@ class SmsTool @Inject constructor(
         val resolution = contactResolver.resolve(recipient)
         val phoneNumber = when (resolution) {
             is ContactResolution.Resolved -> resolution.phoneNumber
+            is ContactResolution.Ambiguous -> return ToolExecutionResult.failure(
+                summary = "Найдено несколько контактов: " +
+                    resolution.candidates.joinToString(", ") { (name, number) -> "$name ($number)" } +
+                    ". Уточните получателя, сэр.",
+                error = "AMBIGUOUS_CONTACT"
+            )
             is ContactResolution.PermissionRequired -> return ToolExecutionResult.permissionRequired(
                 summary = "Чтобы найти номер контакта «$recipient», нужен доступ к контактам",
                 permissions = resolution.permissions

@@ -103,7 +103,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 1.1 Hardware License & Subscription Card (50 TMT / month)
+            // 1.1 Hardware License; продление включается только после server-side billing.
             val license = uiState.licenseInfo
             Card(
                 colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
@@ -155,7 +155,10 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Button(
-                        onClick = { viewModel.extendSubscription(30) },
+                        // Продление нельзя выдавать локальным изменением prefs:
+                        // кнопка будет включена после появления server-side billing.
+                        onClick = { },
+                        enabled = false,
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = JarvisSurface, contentColor = JarvisCyanPrimary),
                         border = BorderStroke(1.dp, JarvisCyanPrimary.copy(alpha = 0.5f)),
@@ -204,6 +207,12 @@ fun SettingsScreen(
                         onValueChange = { viewModel.onAccessTokenChanged(it) },
                         label = { Text(stringResource(R.string.sk_or_ili_aq_ili_gsk)) },
                         modifier = Modifier.fillMaxWidth(),
+                        isError = uiState.isAccessTokenInvalid,
+                        supportingText = if (uiState.isAccessTokenInvalid) {
+                            { Text(stringResource(R.string.jarvis_token_format_error)) }
+                        } else {
+                            null
+                        },
                         visualTransformation = if (uiState.isAccessTokenHidden) PasswordVisualTransformation() else VisualTransformation.None,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         trailingIcon = {

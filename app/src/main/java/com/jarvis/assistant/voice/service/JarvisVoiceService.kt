@@ -156,7 +156,7 @@ private const val WAKELOCK_TIMEOUT_MS = 8 * 60 * 60 * 1000L
                 addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
                 addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
                 addAction(Intent.ACTION_BATTERY_LOW)
-                addAction(WifiManager.WIFI_STATE_CHANGED_ACTION)
+                addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION)
             }
             registerReceiver(systemEventReceiver, filter)
         } catch (e: Exception) {

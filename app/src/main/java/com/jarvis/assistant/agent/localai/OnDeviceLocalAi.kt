@@ -38,6 +38,14 @@ class OnDeviceLocalAi @Inject constructor(
          * токенов, а качество на длинных входах резко падает. Отдаём в облако.
          */
         const val MAX_LOCAL_INPUT_CHARS = 1200
+        const val MIN_COMPLEX_INPUT_CHARS = 100
+
+        /** Явные задачи, для которых качество 1B-модели заведомо недостаточно. */
+        val COMPLEXITY_MARKERS = listOf(
+            "проанализ", "подробн", "бизнес-план", "напиши код", "документац",
+            "сравни преимущества", "инвестиционн", "финансов", "учебный план", "стратегию выхода",
+            "логические ошибки"
+        )
     }
 
     override suspend fun execute(request: ExecutionRequest): LocalAiResult {
@@ -65,6 +73,18 @@ class OnDeviceLocalAi @Inject constructor(
         if (request.text.length > MAX_LOCAL_INPUT_CHARS) {
             Log.d(TAG, "unsupported: слишком длинный вход (${request.text.length} символов)")
             return LocalAiResult.Unsupported("Request too long for local model")
+        }
+
+        // 1B-модель подходит для коротких общих вопросов, но не для длинного
+        // юридического/финансового анализа, кода и подробной документации.
+        // PRIVATE/SENSITIVE оставляем локально: качество не важнее приватности.
+        val normalized = request.text.lowercase()
+        if (request.effectivePrivacyLevel == com.jarvis.assistant.agent.decision.PrivacyLevel.NORMAL &&
+            request.text.length >= MIN_COMPLEX_INPUT_CHARS &&
+            COMPLEXITY_MARKERS.any(normalized::contains)
+        ) {
+            Log.d(TAG, "unsupported: сложная задача требует cloud-quality model")
+            return LocalAiResult.Unsupported("Request complexity exceeds local model quality target")
         }
 
         // ------------------------------------------------------ model lifecycle
@@ -106,7 +126,7 @@ class OnDeviceLocalAi @Inject constructor(
         Log.d(
             TAG,
             "inference started | runtime=${runtime.runtimeId} | source=${request.source} | " +
-                "privacy=${request.privacyLevel} | maxTokens=${config.maxTokens}"
+                "privacy=${request.effectivePrivacyLevel} | maxTokens=${config.maxTokens}"
         )
 
         return try {
