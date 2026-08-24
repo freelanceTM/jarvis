@@ -32,6 +32,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jarvis.assistant.domain.models.VoiceAssistantState
 import com.jarvis.assistant.R
+import com.jarvis.assistant.agent.decision.PrivacyLevel
 import com.jarvis.assistant.presentation.components.JarvisOrbVisualizer
 import com.jarvis.assistant.presentation.components.StatusBadgeRow
 import com.jarvis.assistant.presentation.theme.*
@@ -65,6 +66,7 @@ fun MainScreen(
                     val list = mutableListOf(
                         Manifest.permission.RECORD_AUDIO,
                         Manifest.permission.CALL_PHONE,
+                        Manifest.permission.READ_PHONE_STATE,
                         Manifest.permission.READ_CONTACTS,
                         Manifest.permission.SEND_SMS,
                         Manifest.permission.ACCESS_FINE_LOCATION,
@@ -167,7 +169,19 @@ fun MainScreen(
                 isBluetoothConnected = uiState.isBluetoothConnected
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = when (uiState.privacyLevel) {
+                    PrivacyLevel.UNKNOWN -> stringResource(R.string.privacy_unknown_local_only)
+                    PrivacyLevel.NORMAL -> stringResource(R.string.privacy_normal_cloud_possible)
+                    PrivacyLevel.PRIVATE -> stringResource(R.string.privacy_private_local_only)
+                    PrivacyLevel.SENSITIVE -> stringResource(R.string.privacy_sensitive_local_only)
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = if (uiState.privacyLevel == PrivacyLevel.NORMAL) JarvisGreen else JarvisRed
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
 
             // 2. Animated Arc Reactor Core
             Box(
@@ -183,7 +197,7 @@ fun MainScreen(
             Spacer(modifier = Modifier.height(14.dp))
 
             // 3. Status Text Banner
-            WakeWordStatusBanner(uiState.orchestratorMode, uiState.assistantState, uiState.isBluetoothConnected)
+            WakeWordStatusBanner(uiState.orchestratorMode, uiState.isBluetoothConnected)
 
             Spacer(modifier = Modifier.height(18.dp))
 
@@ -197,6 +211,7 @@ fun MainScreen(
                         val required = mutableListOf(
                             Manifest.permission.RECORD_AUDIO,
                             Manifest.permission.CALL_PHONE,
+                            Manifest.permission.READ_PHONE_STATE,
                             Manifest.permission.READ_CONTACTS,
                             Manifest.permission.SEND_SMS,
                             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -341,7 +356,7 @@ fun MainScreen(
 }
 
 @Composable
-fun WakeWordStatusBanner(mode: OrchestratorMode, state: VoiceAssistantState, isHeadsetConnected: Boolean) {
+fun WakeWordStatusBanner(mode: OrchestratorMode, isHeadsetConnected: Boolean) {
     val (label, color) = when (mode) {
         OrchestratorMode.STANDBY_WAKE_WORD -> {
             if (isHeadsetConnected) stringResource(R.string.jarvis_slushaet_v_naushnike_skazhite_dzharvis) to JarvisCyanPrimary
