@@ -1,0 +1,1555 @@
+### app/src/main/java/com/jarvis/assistant/agent/automation/engine/PersonalAutomationEngine.kt:66
+            Log.d(TAG, ">>> Event received: ${triggerType.name}")
+
+            ensureDefaultsInitialized()
+
+            val candidateRules = automationDao.getAutomationsByTrigger(triggerType.name)
+            Log.d(TAG, "Found ${candidateRules.size} rules for ${triggerType.name}")
+
+            if (candidateRules.isNotEmpty()) {
+
+### app/src/main/java/com/jarvis/assistant/agent/automation/engine/PersonalAutomationEngine.kt:71
+            Log.d(TAG, "Found ${candidateRules.size} rules for ${triggerType.name}")
+
+            if (candidateRules.isNotEmpty()) {
+                val now = Calendar.getInstance(Locale.getDefault())
+                val nowMillis = System.currentTimeMillis()
+                val currentHour = now.get(Calendar.HOUR_OF_DAY)
+                val currentMinute = now.get(Calendar.MINUTE)
+
+
+### app/src/main/java/com/jarvis/assistant/agent/automation/engine/PersonalAutomationEngine.kt:85
+                Log.d(TAG, "Matched ${matchingRules.size} rules for ${triggerType.name}")
+                executeRules(matchingRules, nowMillis)
+            }
+        }
+    }
+
+    /**
+     * Обработка расписания: точное время (TIME_SCHEDULE, triggerParam "HH:MM").
+
+### app/src/main/java/com/jarvis/assistant/agent/automation/engine/PersonalAutomationEngine.kt:99
+            Log.d(TAG, ">>> Schedule event: %02d:%02d".format(hour, minute))
+
+            ensureDefaultsInitialized()
+
+            val candidateRules = automationDao.getAutomationsByTrigger(AutomationTriggerType.TIME_SCHEDULE.name)
+            if (candidateRules.isNotEmpty()) {
+                val nowMillis = System.currentTimeMillis()
+                val matchingRules = ruleMatcher.matchForSchedule(candidateRules, nowMillis, hour, minute)
+
+### app/src/main/java/com/jarvis/assistant/agent/automation/engine/PersonalAutomationEngine.kt:107
+                Log.d(TAG, "Matched ${matchingRules.size} rules for schedule %02d:%02d".format(hour, minute))
+                executeRules(matchingRules, nowMillis)
+            }
+        }
+    }
+
+    /**
+     * Выполняет ВСЕ переданные правила по порядку (приоритет уже учтён
+
+### app/src/main/java/com/jarvis/assistant/agent/automation/engine/PersonalAutomationEngine.kt:125
+                Log.w(TAG, "Rule id=${rule.id} has no parsable actions")
+                continue
+            }
+
+            Log.d(TAG, "Executing ${calls.size} actions for rule id=${rule.id}")
+            try {
+                val results = toolExecutor.executeAll(calls)
+                val completedSuccessfully =
+
+### app/src/main/java/com/jarvis/assistant/agent/automation/engine/PersonalAutomationEngine.kt:129
+            Log.d(TAG, "Executing ${calls.size} actions for rule id=${rule.id}")
+            try {
+                val results = toolExecutor.executeAll(calls)
+                val completedSuccessfully =
+                    results.size == calls.size && results.all { it.isSuccess }
+
+                if (completedSuccessfully) {
+                    automationDao.recordTrigger(rule.id, nowMillis)
+
+### app/src/main/java/com/jarvis/assistant/agent/automation/engine/PersonalAutomationEngine.kt:151
+                    Log.w(
+                        TAG,
+                        "Rule id=${rule.id} not completed: status=${failed?.status}"
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+
+### app/src/main/java/com/jarvis/assistant/agent/automation/engine/PersonalAutomationEngine.kt:160
+                Log.e(
+                    TAG,
+                    "Error executing rule id=${rule.id}, type=${e.javaClass.simpleName}; continuing"
+                )
+            }
+        }
+
+        if (voiceMessages.isNotEmpty()) {
+
+### app/src/main/java/com/jarvis/assistant/agent/automation/engine/PersonalAutomationEngine.kt:187
+                Log.e(TAG, "Error initializing default automations", e)
+            }
+        }
+    }
+
+    private fun parseActionCalls(actionsJson: String): List<ToolCall> {
+        return try {
+            val element = json.parseToJsonElement(actionsJson).jsonArray
+
+### app/src/main/java/com/jarvis/assistant/agent/automation/engine/PersonalAutomationEngine.kt:225
+                    Log.d(TAG, "Inserted default rule: ${rule.name}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error inserting rule ${rule.ruleId}", e)
+            }
+        }
+    }
+
+
+### app/src/main/java/com/jarvis/assistant/agent/automation/engine/PersonalAutomationEngine.kt:228
+                Log.e(TAG, "Error inserting rule ${rule.ruleId}", e)
+            }
+        }
+    }
+
+    /**
+     * Дефолтное правило 07:00 — пример «одно событие → много действий»:
+     *   открыть календарь, сказать погоду, прочитать расписание, сообщить задачи.
+
+### app/src/main/java/com/jarvis/assistant/agent/briefing/ProactiveEarBriefingEngine.kt:93
+            Log.e(TAG, "buildBriefing: не удалось получить напоминания", e)
+        }
+
+        sb.append("Я готов к работе.")
+        return@withContext sb.toString().trim()
+    }
+
+    private fun getBatteryPercent(): Int {
+
+### app/src/main/java/com/jarvis/assistant/agent/decision/ExecutionAdapters.kt:68
+        Log.d(TAG, "cloud request → JARVIS API | source=${request.source} | privacy=${request.effectivePrivacyLevel}")
+
+        // Передаём контекст решения: сервер применит privacy-политику как
+        // вторую линию защиты, даже если клиент ошибётся.
+        return aiRepository.generateResponse(
+            prompt = request.text,
+            systemPrompt = fullSystemPrompt,
+            source = request.source.name,
+
+### app/src/main/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt:92
+            Log.e(
+                TAG,
+                "Unexpected failure while executing request | source=${request.source} | type=${e.javaClass.simpleName}"
+            )
+            ExecutionResult.Error(
+                message = GENERIC_ERROR_MESSAGE,
+                reason = DecisionReason.UNEXPECTED_ERROR
+            )
+
+### app/src/main/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt:148
+                Log.w(TAG, "route=LOCAL_AI outcome=FAILED — не эскалируем в облако")
+                return ExecutionResult.Error(
+                    message = localOutcome.message,
+                    reason = DecisionReason.LOCAL_AI_UNCERTAIN
+                )
+            }
+
+            LocalAiOutcome.Uncertain -> Unit // идём дальше
+
+### app/src/main/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt:217
+            Log.e(TAG, "ToolExecutor threw | tool=${call.toolId} | type=${e.javaClass.simpleName}")
+            return ExecutionResult.Error(
+                message = "Не удалось выполнить команду устройства, сэр.",
+                reason = DecisionReason.DEVICE_TOOL_FAILED
+            )
+        }
+
+        if (result.status == ToolExecutionStatus.REQUIRES_USER_CONFIRMATION) {
+
+### app/src/main/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt:258
+                Log.w(TAG, "route=DEVICE_TOOL tool=${call.toolId} status=${result.status}")
+                ExecutionResult.Error(
+                    message = result.summary,
+                    reason = DecisionReason.DEVICE_TOOL_FAILED
+                )
+            }
+        }
+    }
+
+### app/src/main/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt:277
+            Log.d(
+                TAG,
+                "route=SKIP_LOCAL_AI reason=${DecisionReason.LOCAL_AI_NO_WEB_CAPABILITY} requiresWeb=true"
+            )
+            return LocalAiOutcome.Uncertain
+        }
+
+        logRoute(ExecutionType.LOCAL_AI, DecisionReason.FAST_ROUTER_UNCERTAIN, routing.confidence)
+
+### app/src/main/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt:298
+            Log.i(
+                TAG,
+                "route=BLOCKED reason=${DecisionReason.CLOUD_BLOCKED_BY_PRIVACY} " +
+                    "privacy=${request.effectivePrivacyLevel}"
+            )
+            return privacyBlocked(DecisionReason.CLOUD_BLOCKED_BY_PRIVACY)
+        }
+
+
+### app/src/main/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt:307
+            Log.i(TAG, "route=BLOCKED reason=OFFLINE")
+            return ExecutionResult.Error(
+                message = OFFLINE_MESSAGE,
+                reason = DecisionReason.CLOUD_FAILED
+            )
+        }
+
+        val reason = if (request.requiresWeb) {
+
+### app/src/main/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt:341
+                Log.w(TAG, "route=CLOUD_AI outcome=FAILED reason=${DecisionReason.CLOUD_FAILED}")
+                ExecutionResult.Error(
+                    message = cloudResult.message
+                        ?: "Не удалось связаться с сервером AI. Проверьте ключ в настройках.",
+                    reason = DecisionReason.CLOUD_FAILED
+                )
+            }
+
+
+### app/src/main/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt:363
+        Log.d(
+            TAG,
+            "request received | source=${request.source} | privacy=${request.effectivePrivacyLevel} | " +
+                "requiresWeb=${request.requiresWeb} | requiresDeviceControl=${request.requiresDeviceControl} | " +
+                "text=${request.loggableText}"
+        )
+    }
+
+
+### app/src/main/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt:372
+        Log.d(TAG, "route=$type | reason=$reason | confidence=$confidence")
+    }
+}
+
+### app/src/main/java/com/jarvis/assistant/agent/decision/LocalAiExecutorAdapter.kt:59
+            Log.d(TAG, "local layer = PROCEDURAL_MEMORY")
+            return if (workflowResult.isSuccess) {
+                LocalAiOutcome.Handled("${workflowResult.summary}, сэр.")
+            } else {
+                LocalAiOutcome.Failed(workflowResult.summary)
+            }
+        }
+
+
+### app/src/main/java/com/jarvis/assistant/agent/decision/LocalAiExecutorAdapter.kt:70
+                Log.d(TAG, "local layer = ON_DEVICE_LLM | ${result.metrics.toLogString()}")
+                LocalAiOutcome.Handled(result.text)
+            }
+
+            is LocalAiResult.Unsupported -> {
+                Log.d(TAG, "local layer declined: ${result.reason}")
+                LocalAiOutcome.Uncertain
+            }
+
+### app/src/main/java/com/jarvis/assistant/agent/decision/LocalAiExecutorAdapter.kt:75
+                Log.d(TAG, "local layer declined: ${result.reason}")
+                LocalAiOutcome.Uncertain
+            }
+
+            is LocalAiResult.Error -> {
+                Log.w(TAG, "local layer error | chars=${result.message.length}")
+                LocalAiOutcome.Failed(result.message)
+            }
+
+### app/src/main/java/com/jarvis/assistant/agent/decision/LocalAiExecutorAdapter.kt:80
+                Log.w(TAG, "local layer error | chars=${result.message.length}")
+                LocalAiOutcome.Failed(result.message)
+            }
+        }
+    }
+}
+
+### app/src/main/java/com/jarvis/assistant/agent/engine/AgentCognitiveLoop.kt:59
+                Log.w(TAG, "Step budget exhausted ($MAX_TOTAL_STEPS). Halting loop.")
+                isAllSuccessful = false
+                break
+            }
+
+            val step = currentPlan.steps[currentStepIdx]
+
+            // ---------------------------------------------------------- OBSERVE (pre)
+
+### app/src/main/java/com/jarvis/assistant/agent/engine/AgentCognitiveLoop.kt:129
+                Log.w(
+                    TAG,
+                    "VERIFY failed | stepId=${step.stepId} | tool=${step.toolCall.toolId} | " +
+                        "expectedChars=${expected.orEmpty().length}"
+                )
+
+                val replanned = tryReplan(currentPlan, step, verifyObservation, replanAttempts)
+                if (replanned != null) {
+
+### app/src/main/java/com/jarvis/assistant/agent/engine/AgentCognitiveLoop.kt:138
+                    Log.d(TAG, "Re-plan $replanAttempts/$MAX_REPLANS after verify failure")
+                    currentPlan = replanned
+                    currentStepIdx = 0
+                    continue
+                }
+
+                summaries.add(verifyObservation.summary)
+                if (step.isCritical) {
+
+### app/src/main/java/com/jarvis/assistant/agent/engine/AgentCognitiveLoop.kt:146
+                    Log.e(TAG, "Critical step failed verification without viable re-plan. Halting plan execution.")
+                    break
+                }
+                currentStepIdx++
+                continue
+            }
+
+            isAllSuccessful = false
+
+### app/src/main/java/com/jarvis/assistant/agent/engine/AgentCognitiveLoop.kt:154
+            Log.w(
+                TAG,
+                "Step not completed | stepId=${step.stepId} | tool=${step.toolCall.toolId} | " +
+                    "hint=${observation.nextActionHint}"
+            )
+
+            when (observation.nextActionHint) {
+                // Android требует пользователя / возможность недоступна:
+
+### app/src/main/java/com/jarvis/assistant/agent/engine/AgentCognitiveLoop.kt:168
+                        Log.i(TAG, "Critical step blocked by Android restrictions. Halting plan.")
+                        currentStepIdx = currentPlan.steps.size
+                    } else {
+                        currentStepIdx++
+                    }
+                }
+
+                // Обычный сбой — есть смысл попробовать альтернативу.
+
+### app/src/main/java/com/jarvis/assistant/agent/engine/AgentCognitiveLoop.kt:180
+                        Log.d(TAG, "Re-plan $replanAttempts/$MAX_REPLANS")
+                        currentPlan = replanned
+                        currentStepIdx = 0
+                        continue
+                    }
+
+                    summaries.add("Не удалось: ${observation.summary}")
+                    if (step.isCritical) {
+
+### app/src/main/java/com/jarvis/assistant/agent/engine/AgentCognitiveLoop.kt:188
+                        Log.e(TAG, "Critical step failed without viable re-plan. Halting plan execution.")
+                        break
+                    }
+                    currentStepIdx++
+                }
+            }
+        }
+
+
+### app/src/main/java/com/jarvis/assistant/agent/engine/AgentCognitiveLoop.kt:216
+            Log.d(TAG, "Re-plan limit reached ($MAX_REPLANS), no further replanning")
+            return null
+        }
+        if (!observation.isReplanWorthwhile) return null
+
+        val newPlan = cognitivePlanner.replan(
+            currentPlan = currentPlan,
+            failedStep = failedStep,
+
+### app/src/main/java/com/jarvis/assistant/agent/engine/AgentCognitiveLoop.kt:246
+            Log.d(TAG, "VERIFY OK | expectedChars=${expectedText.length}")
+            true
+        } else {
+            Log.w(
+                TAG,
+                "VERIFY failed | expectedChars=${expectedText.length} | screenChars=${screenContent.length}"
+            )
+            stepObservations.add(StepObservation.StepFailed(step, "VERIFY_FAILED"))
+
+### app/src/main/java/com/jarvis/assistant/agent/engine/AgentCognitiveLoop.kt:249
+            Log.w(
+                TAG,
+                "VERIFY failed | expectedChars=${expectedText.length} | screenChars=${screenContent.length}"
+            )
+            stepObservations.add(StepObservation.StepFailed(step, "VERIFY_FAILED"))
+            false
+        }
+    }
+
+### app/src/main/java/com/jarvis/assistant/agent/executor/ToolExecutor.kt:84
+            Log.i(
+                TAG,
+                "external tool blocked by privacy | tool=${tool.toolId} | " +
+                    "privacy=${classification.level} | reasons=" +
+                    classification.reasons.joinToString("|") { it.name }
+            )
+            ToolExecutionResult.failure(
+                summary = "Внешний инструмент заблокирован политикой приватности",
+
+### app/src/main/java/com/jarvis/assistant/agent/executor/ToolExecutor.kt:122
+                Log.w(TAG, "Call ${call.callId} уже ожидает подтверждения — дубликат отклонён")
+                return@synchronized false
+            }
+            if (pendingConfirmations.size >= MAX_PENDING_CONFIRMATIONS) {
+                Log.w(TAG, "Очередь подтверждений переполнена ($MAX_PENDING_CONFIRMATIONS) — вызов ${call.callId} отклонён")
+                return@synchronized false
+            }
+            pendingConfirmations.add(PendingConfirmationRequest(toolCall = call, promptMessage = prompt))
+
+### app/src/main/java/com/jarvis/assistant/agent/executor/ToolExecutor.kt:126
+                Log.w(TAG, "Очередь подтверждений переполнена ($MAX_PENDING_CONFIRMATIONS) — вызов ${call.callId} отклонён")
+                return@synchronized false
+            }
+            pendingConfirmations.add(PendingConfirmationRequest(toolCall = call, promptMessage = prompt))
+            Log.d(TAG, "Confirmation enqueued: ${call.toolId} (${call.callId}), queue=${pendingConfirmations.size}")
+            true
+        }
+
+
+### app/src/main/java/com/jarvis/assistant/agent/executor/ToolExecutor.kt:130
+            Log.d(TAG, "Confirmation enqueued: ${call.toolId} (${call.callId}), queue=${pendingConfirmations.size}")
+            true
+        }
+
+    /**
+     * Извлекает вызов из очереди подтверждений (подтверждение или отмена).
+     *
+     * @return true, если вызов был в очереди и извлечён.
+
+### app/src/main/java/com/jarvis/assistant/agent/executor/ToolExecutor.kt:162
+                        Log.w(
+                            TAG,
+                            "Подтверждение НЕ совпало для ${call.toolId} (${call.callId}): " +
+                                "token=$tokenMatches call=$callMatches"
+                        )
+                        false
+                    }
+                }
+
+### app/src/main/java/com/jarvis/assistant/agent/executor/ToolExecutor.kt:181
+        Log.i(
+            TAG,
+            "[AUDIT] ${System.currentTimeMillis()} | source=$source | tool=${call.toolId} | " +
+                "callId=${call.callId} | tokenValid=$tokenValid | outcome=$outcome"
+        )
+    }
+
+    fun removePendingConfirmation(call: ToolCall): Boolean = synchronized(confirmationLock) {
+
+### app/src/main/java/com/jarvis/assistant/agent/executor/ToolExecutor.kt:196
+        Log.w(TAG, "removePendingConfirmation: call ${call.callId} (${call.toolId}) не найден в очереди")
+        false
+    }
+
+    /** Очищает ВСЮ очередь (полный сброс — смена режима, выход из приложения). */
+    fun clearPendingConfirmation() {
+        synchronized(confirmationLock) {
+            val size = pendingConfirmations.size
+
+### app/src/main/java/com/jarvis/assistant/agent/executor/ToolExecutor.kt:205
+            if (size > 0) Log.d(TAG, "Pending confirmations cleared ($size)")
+        }
+    }
+
+    /**
+     * Выполняет одиночный вызов инструмента с проверкой безопасности и таймаутом
+     */
+    suspend fun execute(call: ToolCall): ToolExecutionResult = withContext(Dispatchers.IO) {
+
+### app/src/main/java/com/jarvis/assistant/agent/executor/ToolExecutor.kt:389
+                    Log.w(
+                        TAG,
+                        "performRollback failed | tool=${tool.toolId} | type=${e.javaClass.simpleName}"
+                    )
+                }
+            }
+        }
+    }
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/OnDeviceLocalAi.kt:55
+            Log.d(TAG, "unsupported: requiresWeb=true — актуальные данные локально недоступны")
+            return LocalAiResult.Unsupported("Local model has no web access")
+        }
+
+        // ------------------------------------------------------- guard: device
+        // Страховка второго уровня: device-команды сюда доходить не должны —
+        // их забирает FastCommandRouter → DEVICE_TOOL. Если запрос всё же
+        // помечен как управление устройством, локальная модель за него
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/OnDeviceLocalAi.kt:65
+            Log.d(TAG, "unsupported: requiresDeviceControl=true — это работа ToolExecutor")
+            return LocalAiResult.Unsupported("Local model does not execute device commands")
+        }
+
+        if (request.text.isBlank()) {
+            return LocalAiResult.Unsupported("Empty request")
+        }
+
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/OnDeviceLocalAi.kt:74
+            Log.d(TAG, "unsupported: слишком длинный вход (${request.text.length} символов)")
+            return LocalAiResult.Unsupported("Request too long for local model")
+        }
+
+        // 1B-модель подходит для коротких общих вопросов, но не для длинного
+        // юридического/финансового анализа, кода и подробной документации.
+        // PRIVATE/SENSITIVE оставляем локально: качество не важнее приватности.
+        val normalized = request.text.lowercase()
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/OnDeviceLocalAi.kt:86
+            Log.d(TAG, "unsupported: сложная задача требует cloud-quality model")
+            return LocalAiResult.Unsupported("Request complexity exceeds local model quality target")
+        }
+
+        // ------------------------------------------------------ model lifecycle
+        val runtime = try {
+            modelManager.runtimeOrNull()
+        } catch (e: CancellationException) {
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/OnDeviceLocalAi.kt:96
+            Log.e(TAG, "model initialization failed", e)
+            return LocalAiResult.Error("Model failed to initialize")
+        }
+
+        if (runtime == null) {
+            // Модель не установлена — это ОЖИДАЕМОЕ состояние (файл ~529 МБ
+            // не входит в APK), поэтому Unsupported, а не Error: движок
+            // спокойно уйдёт в Cloud AI.
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/OnDeviceLocalAi.kt:106
+                    Log.i(TAG, "unsupported: модель не установлена (${state.expectedPath})")
+                    LocalAiResult.Unsupported("Local model is not installed on this device")
+                }
+
+                is LocalModelState.Failed -> {
+                    Log.w(TAG, "error: инициализация модели провалена (${state.reason})")
+                    LocalAiResult.Error("Model failed to initialize: ${state.reason}")
+                }
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/OnDeviceLocalAi.kt:111
+                    Log.w(TAG, "error: инициализация модели провалена (${state.reason})")
+                    LocalAiResult.Error("Model failed to initialize: ${state.reason}")
+                }
+
+                else -> {
+                    Log.w(TAG, "error: runtime недоступен, состояние=$state")
+                    LocalAiResult.Error("Local model is unavailable")
+                }
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/OnDeviceLocalAi.kt:116
+                    Log.w(TAG, "error: runtime недоступен, состояние=$state")
+                    LocalAiResult.Error("Local model is unavailable")
+                }
+            }
+        }
+
+        // ------------------------------------------------------------ inference
+        val config = GenerationConfig.forRequest(request)
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/OnDeviceLocalAi.kt:126
+        Log.d(
+            TAG,
+            "inference started | runtime=${runtime.runtimeId} | source=${request.source} | " +
+                "privacy=${request.effectivePrivacyLevel} | maxTokens=${config.maxTokens}"
+        )
+
+        return try {
+            // Инференс — на Default (CPU-bound), не на Main.
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/OnDeviceLocalAi.kt:140
+                Log.w(TAG, "inference completed, но ответ пуст")
+                return LocalAiResult.Error("Local model returned an empty response")
+            }
+
+            Log.d(TAG, "inference completed | ${generation.metrics.toLogString()}")
+            LocalAiResult.Success(text = text, metrics = generation.metrics)
+        } catch (e: CancellationException) {
+            // Отмена — не ошибка: пробрасываем, чтобы корутина свернулась штатно.
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/OnDeviceLocalAi.kt:144
+            Log.d(TAG, "inference completed | ${generation.metrics.toLogString()}")
+            LocalAiResult.Success(text = text, metrics = generation.metrics)
+        } catch (e: CancellationException) {
+            // Отмена — не ошибка: пробрасываем, чтобы корутина свернулась штатно.
+            Log.d(TAG, "inference cancelled")
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "inference failed | type=${e.javaClass.simpleName}")
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/OnDeviceLocalAi.kt:148
+            Log.d(TAG, "inference cancelled")
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "inference failed | type=${e.javaClass.simpleName}")
+            LocalAiResult.Error("Local inference failed")
+        }
+    }
+}
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/OnDeviceLocalAi.kt:151
+            Log.e(TAG, "inference failed | type=${e.javaClass.simpleName}")
+            LocalAiResult.Error("Local inference failed")
+        }
+    }
+}
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/mediapipe/MediaPipeLlmRuntime.kt:127
+                            Log.d(TAG, "inference cancelled by caller")
+                        } catch (e: Exception) {
+                            Log.w(TAG, "cancelGenerateResponseAsync failed | type=${e.javaClass.simpleName}")
+                        }
+                    }
+                }
+
+                try {
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/mediapipe/MediaPipeLlmRuntime.kt:129
+                            Log.w(TAG, "cancelGenerateResponseAsync failed | type=${e.javaClass.simpleName}")
+                        }
+                    }
+                }
+
+                try {
+                    session.generateResponseAsync { partial, done ->
+                        if (partial != null) {
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/mediapipe/MediaPipeLlmRuntime.kt:175
+                Log.w(TAG, "session close failed", e)
+            }
+        }
+    }
+
+    override fun close() {
+        try {
+            engine.close()
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/mediapipe/MediaPipeLlmRuntime.kt:184
+            Log.w(TAG, "engine close failed", e)
+        }
+    }
+}
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/mediapipe/MediaPipeModelManager.kt:74
+                    Log.i(TAG, "onTrimMemory(level=$level) — выгружаю локальную модель")
+                    unloadBlocking()
+                }
+            }
+
+            override fun onLowMemory() {
+                Log.i(TAG, "onLowMemory — выгружаю локальную модель")
+                unloadBlocking()
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/mediapipe/MediaPipeModelManager.kt:80
+                Log.i(TAG, "onLowMemory — выгружаю локальную модель")
+                unloadBlocking()
+            }
+
+            override fun onConfigurationChanged(newConfig: Configuration) = Unit
+        })
+    }
+
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/mediapipe/MediaPipeModelManager.kt:103
+            Log.i(TAG, "model not installed | expected=${file.absolutePath}")
+            return@withLock currentState
+        }
+
+        if (!hasEnoughMemory()) {
+            currentState = LocalModelState.Failed("Недостаточно свободной RAM для локальной модели")
+            Log.w(TAG, "model load skipped: недостаточно памяти (нужно ~${spec.minRuntimeMemoryMb} МБ)")
+            return@withLock currentState
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/mediapipe/MediaPipeModelManager.kt:109
+            Log.w(TAG, "model load skipped: недостаточно памяти (нужно ~${spec.minRuntimeMemoryMb} МБ)")
+            return@withLock currentState
+        }
+
+        currentState = LocalModelState.Loading
+        Log.i(TAG, "model loading | id=${spec.modelId} | sizeMb=${spec.approxSizeMb}")
+
+        return@withLock try {
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/mediapipe/MediaPipeModelManager.kt:114
+        Log.i(TAG, "model loading | id=${spec.modelId} | sizeMb=${spec.approxSizeMb}")
+
+        return@withLock try {
+            val startedAt = System.currentTimeMillis()
+            val created = withContext(dispatchers.default) {
+                runtimeFactory.create(modelPath = file.absolutePath, spec = spec)
+            }
+            val loadTimeMs = System.currentTimeMillis() - startedAt
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/mediapipe/MediaPipeModelManager.kt:125
+            Log.i(
+                TAG,
+                "model = ${spec.modelId} | runtime = ${created.runtimeId} | loaded = true | " +
+                    "loadTimeMs = $loadTimeMs"
+            )
+            currentState
+        } catch (e: CancellationException) {
+            currentState = LocalModelState.NotInitialized
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/mediapipe/MediaPipeModelManager.kt:140
+            Log.e(TAG, "model load failed | id=${spec.modelId}", e)
+            currentState
+        }
+    }
+
+    override suspend fun unload() = lifecycleMutex.withLock {
+        closeRuntime()
+    }
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/mediapipe/MediaPipeModelManager.kt:161
+            Log.i(TAG, "model unloaded")
+        } catch (e: Exception) {
+            Log.w(TAG, "model unload: сбой освобождения нативных ресурсов", e)
+        }
+    }
+
+    /**
+     * Грубая проверка доступной памяти. Цель — не «точно предсказать», а не
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/mediapipe/MediaPipeModelManager.kt:163
+            Log.w(TAG, "model unload: сбой освобождения нативных ресурсов", e)
+        }
+    }
+
+    /**
+     * Грубая проверка доступной памяти. Цель — не «точно предсказать», а не
+     * пытаться грузить ~1 ГБ на устройстве, которое уже в lowMemory.
+     */
+
+### app/src/main/java/com/jarvis/assistant/agent/localai/mediapipe/MediaPipeModelManager.kt:183
+            Log.w(TAG, "available RAM = ${availableMb}MB < required ${spec.minRuntimeMemoryMb}MB")
+        }
+        return enough
+    }
+}
+
+### app/src/main/java/com/jarvis/assistant/agent/parser/ToolCallParser.kt:28
+            Log.w(TAG, "parse: ответ LLM превышает безопасный предел")
+            return emptyList()
+        }
+
+        val trimmed = rawLlmOutput.trim()
+        if (trimmed.isEmpty()) return emptyList()
+
+        for (candidate in extractJsonObjects(trimmed)) {
+
+### app/src/main/java/com/jarvis/assistant/agent/parser/ToolCallParser.kt:39
+                Log.w(TAG, "parse: пропущен некорректный JSON-объект (${e.javaClass.simpleName})")
+                null
+            } ?: continue
+
+            val calls = parseObject(element)
+            if (calls.isNotEmpty()) return calls
+        }
+
+
+### app/src/main/java/com/jarvis/assistant/agent/tools/accessibility/JarvisAccessibilityService.kt:78
+                Log.d(TAG, "clickByText result=$success targetChars=${targetText.length}")
+                return success
+            }
+
+            Log.w(TAG, "clickByText element not found targetChars=${targetText.length}")
+            return false
+        }
+
+
+### app/src/main/java/com/jarvis/assistant/agent/tools/accessibility/JarvisAccessibilityService.kt:82
+            Log.w(TAG, "clickByText element not found targetChars=${targetText.length}")
+            return false
+        }
+
+        /**
+         * Вводит текст в сфокусированное редактируемое поле (ACTION_SET_TEXT).
+         *
+         * Используется в цепочке «открой приложение → найди поле поиска →
+
+### app/src/main/java/com/jarvis/assistant/agent/tools/accessibility/JarvisAccessibilityService.kt:100
+                    Log.w(TAG, "typeText: no editable field found on screen")
+                    return false
+                }
+
+            val setTextArgs = Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+            }
+            val success = editable.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, setTextArgs)
+
+### app/src/main/java/com/jarvis/assistant/agent/tools/accessibility/JarvisAccessibilityService.kt:110
+            Log.d(TAG, "typeText into editable field result: $success, chars=${text.length}")
+            return success
+        }
+
+        private fun findEditableNode(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+            if (node == null) return null
+
+            // Сначала сфокусированное поле ввода.
+
+### app/src/main/java/com/jarvis/assistant/agent/tools/accessibility/JarvisAccessibilityService.kt:190
+        Log.d(TAG, "JarvisAccessibilityService connected and active")
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event == null) return
+        val eventType = AccessibilityEvent.eventTypeToString(event.eventType)
+        val pkg = event.packageName?.toString() ?: ""
+        Log.d(TAG, "onAccessibilityEvent: type=$eventType, package=$pkg")
+
+### app/src/main/java/com/jarvis/assistant/agent/tools/accessibility/JarvisAccessibilityService.kt:197
+        Log.d(TAG, "onAccessibilityEvent: type=$eventType, package=$pkg")
+    }
+
+    override fun onInterrupt() {
+        Log.d(TAG, "JarvisAccessibilityService interrupted")
+    }
+
+    override fun onDestroy() {
+
+### app/src/main/java/com/jarvis/assistant/agent/tools/accessibility/JarvisAccessibilityService.kt:201
+        Log.d(TAG, "JarvisAccessibilityService interrupted")
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.d(TAG, "JarvisAccessibilityService destroyed")
+        instance = null
+    }
+
+### app/src/main/java/com/jarvis/assistant/agent/tools/accessibility/JarvisAccessibilityService.kt:206
+        Log.d(TAG, "JarvisAccessibilityService destroyed")
+        instance = null
+    }
+}
+
+### app/src/main/java/com/jarvis/assistant/agent/translator/LiveTranslatorEngine.kt:125
+                Log.d(TAG, "Provider ${provider.providerId} unavailable, trying next")
+                lastFailure = if (provider.isOffline) {
+                    TranslationResult.ModelUnavailable("Офлайн-модель перевода не готова")
+                } else {
+                    TranslationResult.NetworkRequired("Онлайн-переводчик недоступен без сети")
+                }
+                continue
+            }
+
+### app/src/main/java/com/jarvis/assistant/agent/translator/LiveTranslatorEngine.kt:137
+                    Log.w(
+                        TAG,
+                        "Provider ${provider.providerId} failed | type=${result.javaClass.simpleName}"
+                    )
+                    lastFailure = result
+                }
+            }
+        }
+
+### app/src/main/java/com/jarvis/assistant/core/battery/BatteryOptimizationHelper.kt:42
+                    Log.e(TAG, "openBatterySettings: не удалось открыть настройки батареи", e)
+                }
+            }
+        }
+    }
+
+    fun getDeviceManufacturerName(): String {
+        return Build.MANUFACTURER.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+
+### app/src/main/java/com/jarvis/assistant/core/battery/BatteryOptimizationHelper.kt:58
+        Log.d(TAG, "Opening OEM autostart settings for: $manufacturer")
+
+        val intents = when {
+            manufacturer.contains("samsung") -> listOf(
+                Intent().setComponent(ComponentName("com.samsung.android.lool", "com.samsung.android.sm.ui.battery.BatteryActivity")),
+                Intent().setComponent(ComponentName("com.samsung.android.sm", "com.samsung.android.sm.ui.battery.BatteryActivity")),
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).setData(Uri.parse("package:${context.packageName}"))
+            )
+
+### app/src/main/java/com/jarvis/assistant/core/battery/BatteryOptimizationHelper.kt:95
+                Log.e(TAG, "openOptimizationSettings: не удалось открыть настройки оптимизации", e)
+            }
+        }
+
+        return false
+    }
+}
+
+### app/src/main/java/com/jarvis/assistant/data/remote/JarvisApiClient.kt:155
+                        Log.d(TAG, "ai request ok | requestId=${parsed.requestId}")
+                        return@use Resource.Success(parsed.text)
+                    }
+                    return@use Resource.Error(
+                        JarvisApiException("EMPTY_RESPONSE", requestId, "Пустой ответ сервера"),
+                        "Сервер вернул пустой ответ."
+                    )
+                }
+
+### app/src/main/java/com/jarvis/assistant/data/remote/JarvisApiClient.kt:171
+                Log.w(TAG, "ai request failed | code=${error.code} | requestId=${error.requestId}")
+
+                Resource.Error(
+                    JarvisApiException(error.code, error.requestId, error.message),
+                    userMessageFor(error.code)
+                )
+            }
+        } catch (e: ResponseBodyTooLargeException) {
+
+### app/src/main/java/com/jarvis/assistant/data/remote/JarvisApiClient.kt:179
+            Log.w(TAG, "oversized response | requestId=$requestId")
+            Resource.Error(e, "Сервер JARVIS вернул слишком большой ответ.")
+        } catch (e: SocketTimeoutException) {
+            Log.w(TAG, "timeout | requestId=$requestId")
+            Resource.Error(e, "Таймаут подключения к серверу JARVIS. Проверьте интернет.")
+        } catch (e: IOException) {
+            Log.w(TAG, "network error | requestId=$requestId")
+            Resource.Error(e, "Ошибка сети при обращении к серверу JARVIS.")
+
+### app/src/main/java/com/jarvis/assistant/data/remote/JarvisApiClient.kt:182
+            Log.w(TAG, "timeout | requestId=$requestId")
+            Resource.Error(e, "Таймаут подключения к серверу JARVIS. Проверьте интернет.")
+        } catch (e: IOException) {
+            Log.w(TAG, "network error | requestId=$requestId")
+            Resource.Error(e, "Ошибка сети при обращении к серверу JARVIS.")
+        } catch (e: Exception) {
+            Log.e(TAG, "unexpected failure | requestId=$requestId | type=${e.javaClass.simpleName}")
+            Resource.Error(e, "Не удалось выполнить запрос.")
+
+### app/src/main/java/com/jarvis/assistant/data/remote/JarvisApiClient.kt:185
+            Log.w(TAG, "network error | requestId=$requestId")
+            Resource.Error(e, "Ошибка сети при обращении к серверу JARVIS.")
+        } catch (e: Exception) {
+            Log.e(TAG, "unexpected failure | requestId=$requestId | type=${e.javaClass.simpleName}")
+            Resource.Error(e, "Не удалось выполнить запрос.")
+        }
+    }
+
+
+### app/src/main/java/com/jarvis/assistant/data/remote/JarvisApiClient.kt:188
+            Log.e(TAG, "unexpected failure | requestId=$requestId | type=${e.javaClass.simpleName}")
+            Resource.Error(e, "Не удалось выполнить запрос.")
+        }
+    }
+
+    /** Понятные пользователю сообщения по machine-readable кодам сервера. */
+    private fun userMessageFor(code: String): String = when (code) {
+        "UNAUTHORIZED" -> "Требуется активация. Проверьте код в настройках."
+
+### app/src/main/java/com/jarvis/assistant/voice/audio/BluetoothAudioManager.kt:45
+            Log.e(TAG, "startScoReceiver: не удалось зарегистрировать SCO-ресивер", e)
+        }
+    }
+
+    private fun checkConnectedDevices() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val devices = audioManager?.getDevices(AudioManager.GET_DEVICES_INPUTS) ?: emptyArray()
+            val hasBt = devices.any { 
+
+### app/src/main/java/com/jarvis/assistant/voice/audio/BluetoothAudioManager.kt:67
+            Log.e(TAG, "startBluetoothSco: не удалось запустить SCO", e)
+        }
+    }
+
+    fun stopBluetoothSco() {
+        try {
+            audioManager?.let { am ->
+                am.isBluetoothScoOn = false
+
+### app/src/main/java/com/jarvis/assistant/voice/audio/BluetoothAudioManager.kt:79
+            Log.e(TAG, "stopBluetoothSco: не удалось остановить SCO", e)
+        }
+    }
+
+    fun requestAudioFocus(): Boolean {
+        // Simple and robust audio focus request for voice interactions
+        return audioManager?.requestAudioFocus(
+            null,
+
+### app/src/main/java/com/jarvis/assistant/voice/audio/BluetoothAudioManager.kt:96
+            Log.e(TAG, "abandonAudioFocus: не удалось освободить audio focus", e)
+        }
+    }
+}
+
+### app/src/main/java/com/jarvis/assistant/voice/audio/BluetoothAudioRouter.kt:136
+            Log.e(TAG, "registerConnectionReceiver: не удалось зарегистрировать ресивер", e)
+        }
+    }
+
+    private fun triggerHeadphoneAutomation() {
+        scope.launch {
+            automationEngine.onSystemEvent(AutomationTriggerType.HEADPHONES_CONNECTED)
+        }
+
+### app/src/main/java/com/jarvis/assistant/voice/audio/BluetoothAudioRouter.kt:186
+                        Log.d(TAG, "Communication device routed to headset: ${headset.productName}")
+                        return
+                    }
+                }
+
+                am.mode = AudioManager.MODE_IN_COMMUNICATION
+                am.startBluetoothSco()
+                am.isBluetoothScoOn = true
+
+### app/src/main/java/com/jarvis/assistant/voice/audio/BluetoothAudioRouter.kt:194
+                Log.d(TAG, "Bluetooth SCO started")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to route to earbud: ${e.localizedMessage}")
+        }
+    }
+
+    /**
+
+### app/src/main/java/com/jarvis/assistant/voice/audio/BluetoothAudioRouter.kt:197
+            Log.w(TAG, "Failed to route to earbud: ${e.localizedMessage}")
+        }
+    }
+
+    /**
+     * Возврат звука и микрофона на стандартный динамик смартфона
+     */
+    fun routeAudioToSpeaker() {
+
+### app/src/main/java/com/jarvis/assistant/voice/audio/BluetoothAudioRouter.kt:216
+                Log.d(TAG, "Audio routed back to normal speaker/mic")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to route to speaker: ${e.localizedMessage}")
+        }
+    }
+}
+
+### app/src/main/java/com/jarvis/assistant/voice/audio/BluetoothAudioRouter.kt:219
+            Log.w(TAG, "Failed to route to speaker: ${e.localizedMessage}")
+        }
+    }
+}
+
+### app/src/main/java/com/jarvis/assistant/voice/orchestrator/VoiceInteractionOrchestrator.kt:125
+            Log.e(TAG, "initToneGenerator: не удалось инициализировать ToneGenerator", e)
+        }
+    }
+
+    private fun observePipelines() {
+        observeSettings()
+        observeHeadsetPlugging()
+        observeWakeDetector()
+
+### app/src/main/java/com/jarvis/assistant/voice/orchestrator/VoiceInteractionOrchestrator.kt:427
+            Log.d(
+                TAG,
+                "Query already processing; duplicate skipped | chars=${clean.length} | " +
+                    "privacy=${_privacyClassification.value.level}"
+            )
+            return
+        }
+
+
+### app/src/main/java/com/jarvis/assistant/voice/orchestrator/VoiceInteractionOrchestrator.kt:672
+            Log.e(TAG, "playWakeChime: не удалось проиграть звук", e)
+        }
+    }
+
+    private fun playCancelChime() {
+        try {
+            toneGenerator?.startTone(ToneGenerator.TONE_PROP_NACK, 70)
+        } catch (e: Exception) {
+
+### app/src/main/java/com/jarvis/assistant/voice/orchestrator/VoiceInteractionOrchestrator.kt:680
+            Log.e(TAG, "playCancelChime: не удалось проиграть звук", e)
+        }
+    }
+
+    fun pauseForPhoneCall() {
+        stopAll()
+        _currentMode.value = OrchestratorMode.PAUSED_CALL_OR_SLEEP
+    }
+
+### app/src/main/java/com/jarvis/assistant/voice/orchestrator/VoiceInteractionOrchestrator.kt:718
+            Log.e(TAG, "releaseToneGenerator: не удалось освободить ToneGenerator", e)
+        }
+        toneGenerator = null
+    }
+}
+
+### app/src/main/java/com/jarvis/assistant/voice/service/JarvisVoiceService.kt:148
+            Log.e(TAG, "initWorkingMemoryDefaults: не удалось прочитать уровень батареи", e)
+        }
+    }
+
+    private fun registerSystemReceivers() {
+        try {
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_HEADSET_PLUG)
+
+### app/src/main/java/com/jarvis/assistant/voice/service/JarvisVoiceService.kt:163
+            Log.e(TAG, "registerSystemReceivers: не удалось зарегистрировать ресиверы", e)
+        }
+    }
+
+    /**
+     * Регистрация слушателя телефонных звонков.
+     * Использует TelephonyCallback для Android 12+ и fallback для старых версий.
+     */
+
+### app/src/main/java/com/jarvis/assistant/voice/service/JarvisVoiceService.kt:186
+            Log.e(TAG, "registerTelephonyListener: не удалось зарегистрировать слушатель звонков", e)
+        }
+    }
+
+    private fun unregisterTelephonyListener() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                telephonyCallback?.let { callback ->
+
+### app/src/main/java/com/jarvis/assistant/voice/service/JarvisVoiceService.kt:198
+            Log.e(TAG, "unregisterTelephonyListener: не удалось отменить регистрацию", e)
+        }
+    }
+
+    private fun startServiceForeground(notification: Notification) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                NOTIFICATION_ID,
+
+### app/src/main/java/com/jarvis/assistant/voice/service/JarvisVoiceService.kt:255
+            Log.e(TAG, "releaseWakeLock: не удалось освободить wake lock", e)
+        }
+        wakeLock = null
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+
+### app/src/main/java/com/jarvis/assistant/voice/service/JarvisVoiceService.kt:314
+            Log.e(TAG, "onDestroy: не удалось отменить ресивер", e)
+        }
+        
+        unregisterTelephonyListener()
+        telephonyExecutor.shutdown()
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+### app/src/main/java/com/jarvis/assistant/voice/service/SystemEventReceiver.kt:38
+        Log.d(TAG, "onReceive action: $action")
+
+        val automationEngine = try {
+            EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                SystemEventReceiverEntryPoint::class.java
+            ).automationEngine()
+        } catch (e: Exception) {
+
+### app/src/main/java/com/jarvis/assistant/voice/service/SystemEventReceiver.kt:46
+            Log.e(TAG, "Cannot obtain automation engine", e)
+            return
+        }
+
+        when (action) {
+            Intent.ACTION_HEADSET_PLUG -> {
+                when (intent.getIntExtra("state", -1)) {
+                    1 -> dispatch(automationEngine, AutomationTriggerType.HEADPHONES_CONNECTED)
+
+### app/src/main/java/com/jarvis/assistant/voice/service/SystemEventReceiver.kt:55
+                    else -> Log.w(TAG, "HEADSET_PLUG without a valid state")
+                }
+            }
+
+            BluetoothDevice.ACTION_ACL_CONNECTED -> {
+                if (isAudioBluetoothDevice(intent)) {
+                    dispatch(automationEngine, AutomationTriggerType.HEADPHONES_CONNECTED)
+                }
+
+### app/src/main/java/com/jarvis/assistant/voice/service/SystemEventReceiver.kt:97
+                Log.e(TAG, "Automation failed for $trigger", e)
+            } finally {
+                pendingResult.finish()
+            }
+        }
+    }
+
+    private fun isWifiConnected(context: Context): Boolean {
+
+### app/src/main/java/com/jarvis/assistant/voice/stt/SpeechRecognizerManager.kt:87
+            Log.d(TAG, "SpeechRecognizer started listening (continuous=$continuous, lang=$languageTag)")
+        } catch (e: Exception) {
+            isListening = false
+            Log.e(TAG, "Failed to start speech recognizer: ${e.localizedMessage}")
+            _speechState.value = SpeechRecognitionEvent.RecognitionError(context.getString(R.string.ne_udalos_otkryt_mikrofon), -1)
+        }
+    }
+
+
+### app/src/main/java/com/jarvis/assistant/voice/stt/SpeechRecognizerManager.kt:90
+            Log.e(TAG, "Failed to start speech recognizer: ${e.localizedMessage}")
+            _speechState.value = SpeechRecognitionEvent.RecognitionError(context.getString(R.string.ne_udalos_otkryt_mikrofon), -1)
+        }
+    }
+
+    fun stopListening() {
+        isContinuousMode = false
+        if (!isListening && speechRecognizer == null) return
+
+### app/src/main/java/com/jarvis/assistant/voice/stt/SpeechRecognizerManager.kt:104
+            Log.e(TAG, "stopListening: не удалось остановить распознаватель", e)
+        }
+        speechRecognizer = null
+    }
+
+    fun destroy() {
+        stopListening()
+        _speechState.value = SpeechRecognitionEvent.Idle
+
+### app/src/main/java/com/jarvis/assistant/voice/stt/SpeechRecognizerManager.kt:127
+        Log.w(TAG, "Speech recognition error code: $error")
+
+        if (isContinuousMode && (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT)) {
+            // В режиме непрерывного синхронного переводчика пауза собеседника не завершает сессию
+            scope.launch {
+                delay(50)
+                if (isContinuousMode) {
+                    startListening(currentLanguageTag, continuous = true)
+
+### app/src/main/java/com/jarvis/assistant/voice/tts/TextToSpeechManager.kt:63
+                Log.d(TAG, "TTS initialized successfully")
+            } else {
+                _ttsState.value = TtsState.Error
+                Log.e(TAG, "TTS initialization failed with status: $status")
+            }
+        }
+    }
+
+
+### app/src/main/java/com/jarvis/assistant/voice/tts/TextToSpeechManager.kt:66
+                Log.e(TAG, "TTS initialization failed with status: $status")
+            }
+        }
+    }
+
+    private fun configureTts() {
+        tts?.apply {
+            // Настройка русского языка
+
+### app/src/main/java/com/jarvis/assistant/voice/tts/TextToSpeechManager.kt:80
+                Log.w(TAG, "Russian TTS not available, using English")
+            }
+            
+            // Listener для отслеживания состояния
+            setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {
+                    _ttsState.value = TtsState.Speaking
+                    Log.d(TAG, "TTS started: $utteranceId")
+
+### app/src/main/java/com/jarvis/assistant/voice/tts/TextToSpeechManager.kt:87
+                    Log.d(TAG, "TTS started: $utteranceId")
+                }
+
+                override fun onDone(utteranceId: String?) {
+                    _ttsState.value = TtsState.Done
+                    Log.d(TAG, "TTS done: $utteranceId")
+                }
+
+
+### app/src/main/java/com/jarvis/assistant/voice/tts/TextToSpeechManager.kt:92
+                    Log.d(TAG, "TTS done: $utteranceId")
+                }
+
+                @Deprecated("Deprecated in Java")
+                override fun onError(utteranceId: String?) {
+                    _ttsState.value = TtsState.Error
+                    Log.e(TAG, "TTS error: $utteranceId")
+                }
+
+### app/src/main/java/com/jarvis/assistant/voice/tts/TextToSpeechManager.kt:98
+                    Log.e(TAG, "TTS error: $utteranceId")
+                }
+
+                override fun onError(utteranceId: String?, errorCode: Int) {
+                    _ttsState.value = TtsState.Error
+                    Log.e(TAG, "TTS error: $utteranceId, code: $errorCode")
+                }
+
+
+### app/src/main/java/com/jarvis/assistant/voice/tts/TextToSpeechManager.kt:103
+                    Log.e(TAG, "TTS error: $utteranceId, code: $errorCode")
+                }
+
+                override fun onStop(utteranceId: String?, interrupted: Boolean) {
+                    _ttsState.value = TtsState.Ready
+                    Log.d(TAG, "TTS stopped: $utteranceId, interrupted: $interrupted")
+                }
+            })
+
+### app/src/main/java/com/jarvis/assistant/voice/tts/TextToSpeechManager.kt:108
+                    Log.d(TAG, "TTS stopped: $utteranceId, interrupted: $interrupted")
+                }
+            })
+        }
+    }
+
+    /**
+     * Озвучивает текст с заданными параметрами
+
+### app/src/main/java/com/jarvis/assistant/voice/tts/TextToSpeechManager.kt:129
+            Log.w(TAG, "Empty text, skipping TTS")
+            return
+        }
+        
+        val engine = tts
+        if (engine == null || !_isInitialized.value) {
+            Log.w(TAG, "TTS not initialized, reinitializing...")
+            initializeTts()
+
+### app/src/main/java/com/jarvis/assistant/voice/tts/TextToSpeechManager.kt:135
+            Log.w(TAG, "TTS not initialized, reinitializing...")
+            initializeTts()
+            return
+        }
+
+        // Применяем настройки
+        engine.setSpeechRate(speechRate.coerceIn(0.5f, 2.0f))
+        engine.setPitch(pitch.coerceIn(0.5f, 2.0f))
+
+### app/src/main/java/com/jarvis/assistant/voice/tts/TextToSpeechManager.kt:150
+            Log.e(TAG, "TTS speak() returned error")
+            _ttsState.value = TtsState.Error
+        }
+    }
+
+    /**
+     * Добавляет текст в очередь озвучивания (не прерывает текущее)
+     */
+
+### app/src/main/java/com/jarvis/assistant/voice/tts/TextToSpeechManager.kt:182
+        Log.d(TAG, "Shutting down TTS")
+        try {
+            tts?.stop()
+            tts?.shutdown()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error shutting down TTS", e)
+        } finally {
+            tts = null
+
+### app/src/main/java/com/jarvis/assistant/voice/tts/TextToSpeechManager.kt:187
+            Log.e(TAG, "Error shutting down TTS", e)
+        } finally {
+            tts = null
+            _isInitialized.value = false
+            _ttsState.value = TtsState.Idle
+        }
+    }
+
+
+### app/src/main/java/com/jarvis/assistant/voice/wakeword/AlisaStyleWakeWordEngine.kt:198
+            Log.e(TAG, "stopListening: не удалось остановить AudioRecord", e)
+        }
+        audioRecord = null
+    }
+
+    override fun destroy() {
+        stopListening()
+        supervisorJob.cancel()
+
+### server/src/main/kotlin/com/jarvis/server/Main.kt:212
+        logger.error(
+            "no client tokens configured; every request will be rejected with 401",
+            "hint" to "set JARVIS_CLIENT_TOKENS=token:clientId"
+        )
+    }
+
+    val configuredProviders = config.providers.filter { it.enabled && it.hasKey }
+    if (configuredProviders.isEmpty()) {
+
+### server/src/main/kotlin/com/jarvis/server/Main.kt:220
+        logger.error(
+            "no AI provider configured; all requests will fail",
+            "hint" to "set GROQ_API_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY"
+        )
+    } else {
+        logger.info(
+            "providers configured",
+            "providers" to configuredProviders.joinToString("|") { it.id.name }
+
+### server/src/main/kotlin/com/jarvis/server/Main.kt:225
+        logger.info(
+            "providers configured",
+            "providers" to configuredProviders.joinToString("|") { it.id.name }
+        )
+    }
+
+    val handler = ServerBootstrap.buildHandler(config)
+    val proxySecurity = ProxyRequestSecurity(config.deployment)
+
+### server/src/main/kotlin/com/jarvis/server/Main.kt:292
+            logger.error("unhandled request failure", "error" to e.javaClass.simpleName)
+            runCatching {
+                respond(
+                    500,
+                    """{"success":false,"error":{"code":"INTERNAL_ERROR",""" +
+                        """"message":"Internal server error","requestId":"-"}}"""
+                )
+            }
+
+### server/src/main/kotlin/com/jarvis/server/Main.kt:305
+    logger.info(
+        "JARVIS API started",
+        "environment" to config.deployment.environment.name,
+        "bindHost" to config.deployment.bindHost,
+        "port" to config.port.toString()
+    )
+    server.start()
+}
+
+### server/src/main/kotlin/com/jarvis/server/http/JarvisApiHandler.kt:123
+                logger.warn("unauthorized request", "requestId" to requestId, "path" to request.path)
+                return error(ApiErrorCode.UNAUTHORIZED, requestId)
+            }
+        }
+
+        // ------------------------------------------------- 2. Authorization
+        if (!authorizer.isAllowed(client, Permission.EXECUTE_AI)) {
+            logger.warn(
+
+### server/src/main/kotlin/com/jarvis/server/http/JarvisApiHandler.kt:130
+            logger.warn(
+                "forbidden request",
+                "requestId" to requestId,
+                "clientId" to client.clientId,
+                "tier" to client.tier.name
+            )
+            return error(ApiErrorCode.FORBIDDEN, requestId)
+        }
+
+### server/src/main/kotlin/com/jarvis/server/http/JarvisApiHandler.kt:152
+                logger.warn(
+                    "rate limited",
+                    "requestId" to requestId,
+                    "clientId" to client.clientId,
+                    "scope" to decision.scope
+                )
+                return error(
+                    ApiErrorCode.RATE_LIMITED,
+
+### server/src/main/kotlin/com/jarvis/server/http/JarvisApiHandler.kt:172
+            logger.warn(
+                "malformed request body",
+                "requestId" to requestId,
+                "clientId" to client.clientId,
+                "error" to e.javaClass.simpleName
+            )
+            return error(ApiErrorCode.INVALID_REQUEST, requestId)
+        }
+
+### server/src/main/kotlin/com/jarvis/server/http/LicenseBillingHttpHandler.kt:93
+            logger.error(
+                "license/billing request failed",
+                "path" to request.path,
+                "requestId" to fallbackRequestId,
+                "error" to failure.javaClass.simpleName
+            )
+            error(ApiErrorCode.INTERNAL_ERROR, fallbackRequestId)
+        }
+
+### server/src/main/kotlin/com/jarvis/server/http/LicenseBillingHttpHandler.kt:340
+                logger.warn("license/billing unauthorized", "path" to request.path, "requestId" to requestId)
+                null
+            }
+        }
+
+    private fun unauthorized(requestId: String) = error(ApiErrorCode.UNAUTHORIZED, requestId)
+
+    private fun rateLimit(
+
+### server/src/main/kotlin/com/jarvis/server/provider/ProviderManager.kt:112
+            logger.warn(
+                "no provider candidates",
+                "requestId" to request.requestId,
+                "requiresWeb" to requirements.requiresWeb.toString()
+            )
+            return ManagerOutcome.Failure(lastKind = null, attempted = emptyList(), noCandidates = true)
+        }
+
+
+### server/src/main/kotlin/com/jarvis/server/provider/ProviderManager.kt:137
+                    logger.warn(
+                        "provider failed, trying fallback",
+                        "requestId" to request.requestId,
+                        "provider" to provider.id.name,
+                        "failureKind" to (lastKind?.name ?: "UNKNOWN")
+                    )
+                }
+            }
+
+### server/src/main/kotlin/com/jarvis/server/provider/ProviderManager.kt:203
+                    logger.info(
+                        "provider success",
+                        "requestId" to request.requestId,
+                        "provider" to provider.id.name,
+                        "model" to result.model,
+                        "latencyMs" to latency.toString(),
+                        "attempt" to attempt.toString()
+                    )
+
+### server/src/main/kotlin/com/jarvis/server/provider/ProviderManager.kt:226
+                    logger.warn(
+                        "provider failure",
+                        "requestId" to request.requestId,
+                        "provider" to provider.id.name,
+                        "failureKind" to result.kind.name,
+                        "httpStatus" to (result.httpStatus?.toString() ?: "-"),
+                        "latencyMs" to latency.toString(),
+                        "attempt" to attempt.toString(),
+
+### server/src/main/kotlin/com/jarvis/server/router/AiRouter.kt:69
+            logger.warn(
+                "request validation failed",
+                "requestId" to requestId,
+                "clientId" to client.clientId,
+                "code" to validationError.name
+            )
+            metrics.recordFailure()
+            recordUsage(requestId, client, null, null, clock() - startedAt, null, request, 0, validationError.name)
+
+### server/src/main/kotlin/com/jarvis/server/router/AiRouter.kt:96
+            logger.warn(
+                "privacy policy blocked cloud execution",
+                "requestId" to requestId,
+                "clientId" to client.clientId,
+                "privacyLevel" to effectivePrivacy.name,
+                "declaredPrivacyLevel" to request.privacyLevel.name,
+                "privacyReasons" to automaticPrivacy.reasons.joinToString("|") { it.name }
+            )
+
+### server/src/main/kotlin/com/jarvis/server/router/AiRouter.kt:116
+        logger.info(
+            "ai request accepted",
+            "requestId" to requestId,
+            "clientId" to client.clientId,
+            "source" to request.source.name,
+            "privacyLevel" to effectivePrivacy.name,
+            "requiresWeb" to request.requiresWeb.toString(),
+            // Текст промпта НЕ логируется — только его размер.
+
+### server/src/main/kotlin/com/jarvis/server/router/AiRouter.kt:153
+                logger.info(
+                    "ai request completed",
+                    "requestId" to requestId,
+                    "clientId" to client.clientId,
+                    "provider" to outcome.providerId.name,
+                    "model" to outcome.model,
+                    "latencyMs" to totalLatency.toString(),
+                    "totalTokens" to (outcome.totalTokens?.toString() ?: "-"),
+
+### server/src/main/kotlin/com/jarvis/server/router/AiRouter.kt:180
+                logger.error(
+                    "ai request failed",
+                    "requestId" to requestId,
+                    "clientId" to client.clientId,
+                    "attemptedProviders" to outcome.attempted.joinToString("|") { it.name },
+                    "errorCode" to code.name,
+                    "latencyMs" to totalLatency.toString(),
+                    "status" to "failure"
