@@ -129,15 +129,17 @@ Detekt 1.23.8 was added with a reviewed high-signal configuration at
 `config/detekt/detekt.yml`. App/server HTML, XML, and SARIF reports are enabled.
 Existing lint was retained with `warningsAsErrors`; no quality check was removed.
 
-The final lint baseline has exactly 100 entries:
+The final portable lint baseline has exactly 88 entries:
 
-- 69 `GradleDependency` entries (23 unique messages repeated across flavors);
-- 3 unchanged `AndroidGradlePluginVersion` entries;
+- 57 `GradleDependency` entries (19 unique messages repeated across flavors);
+- 3 `AndroidGradlePluginVersion` entries;
 - 28 unchanged non-dependency Android source/resource entries.
 
-The 15-entry increase from the starting baseline is fully explained by five
-new/refreshed dependency messages repeated across three flavors. No new
-non-dependency production warning was baselined.
+A controlled metadata refresh removed four dependency identities no longer
+reported by lint. It also replaced the machine-specific version-catalog location
+with `../gradle/libs.versions.toml`, so the same baseline works in local clones
+and GitHub Actions. Signature comparison confirmed that all 28 non-dependency
+findings are unchanged and no new production warning was baselined.
 
 ### 3.4 Strict dependency locking compatibility
 

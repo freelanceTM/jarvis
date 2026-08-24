@@ -10,12 +10,18 @@ reports one dependency finding for each analyzed flavor, those 54 entries
 represented 18 unique dependency messages, not 54 independent libraries and
 not code coverage.
 
-After adding explicitly pinned test-quality dependencies, the reviewed baseline
-contains 100 entries: 69 `GradleDependency` messages (23 unique messages repeated
-for three flavors), the same 3 `AndroidGradlePluginVersion` entries, and the same
-28 non-dependency Android source/resource findings. The increase is fully
-accounted for by coroutines-test, Compose UI test, MockK, and refreshed compatible
-dependency versions; no new non-dependency lint issue was baselined.
+After adding explicitly pinned test-quality dependencies, the first reviewed
+Phase 3 baseline contained 100 entries. A later lint metadata refresh stopped
+reporting four of those unique dependency identities. The final portable baseline
+therefore contains 88 entries: 57 `GradleDependency` messages (19 unique messages
+repeated for three flavors), 3 `AndroidGradlePluginVersion` entries, and the same
+28 non-dependency Android source/resource findings.
+
+The dependency/tooling entries use `../gradle/libs.versions.toml` relative to the
+app baseline rather than a machine-specific `$HOME/...` path. This preserves the
+same exact issue/message/location checks in local clones and GitHub Actions. The
+refresh was signature-compared against the prior baseline: all 28 non-dependency
+findings are unchanged and no new production lint issue was baselined.
 
 Updates were evaluated against the current coupled toolchain:
 

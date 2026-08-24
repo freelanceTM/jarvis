@@ -152,9 +152,9 @@ android {
         jacocoVersion = "0.8.11"
     }
 
-    // Lint blocks every new warning/error. The reviewed baseline currently has
-    // 100 entries: 69 are deferred dependency messages repeated per flavor;
-    // the remaining Android debt is tracked in docs/DEPENDENCY_UPDATE_PLAN.md.
+    // Lint blocks every new warning/error. The reviewed portable baseline has
+    // 88 entries: 60 deferred dependency/tooling messages repeated per flavor
+    // and 28 unchanged Android findings tracked in the dependency update plan.
     // The baseline must never be refreshed wholesale without reviewing its diff.
     lint {
         warningsAsErrors = true

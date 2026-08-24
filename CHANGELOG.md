@@ -46,6 +46,9 @@ must be added only when the repository owner creates an actual release.
 - Excluded the legacy `kotlin-stdlib-common` metadata artifact from Android
   configurations so AGP lint artifact views remain compatible with strict
   locks; the Android/JVM implementation stays pinned to Kotlin stdlib 1.9.24.
+- Made dependency/tooling lint-baseline locations repository-relative and
+  signature-reviewed the metadata refresh; all 28 non-dependency findings remain
+  unchanged.
 - CI now runs explicit dev-flavor coverage verification, Detekt, lint,
   PostgreSQL-backed server tests, report publication, and dev app/test APK
   assembly instead of relying on a single generic debug path.
