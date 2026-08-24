@@ -1,6 +1,7 @@
 package com.jarvis.assistant.data.remote
 
 import android.util.Log
+import com.jarvis.assistant.core.constants.AppConstants
 import com.jarvis.assistant.core.network.ResponseBodyTooLargeException
 import com.jarvis.assistant.core.network.readUtf8Bounded
 import com.jarvis.assistant.core.result.Resource
@@ -43,6 +44,7 @@ data class JarvisAiRequestDto(
     @SerialName("source") val source: String,
     @SerialName("privacyLevel") val privacyLevel: String,
     @SerialName("requiresWeb") val requiresWeb: Boolean,
+    @SerialName("cloudExplicitlyAllowed") val cloudExplicitlyAllowed: Boolean = false,
     @SerialName("requestId") val requestId: String,
     @SerialName("systemContext") val systemContext: String? = null
 )
@@ -87,7 +89,7 @@ class JarvisApiClient @Inject constructor(
         /**
          * Базовый URL JARVIS API. Тот же хост использует LicenseServerValidator.
          */
-        const val BASE_URL = "https://api.jarvis.ai"
+        val BASE_URL: String = AppConstants.JARVIS_API_BASE_URL
         const val EXECUTE_PATH = "/v1/ai/execute"
         private const val MAX_RESPONSE_BYTES = 1L * 1024 * 1024
         private const val CALL_TIMEOUT_SECONDS = 35L
@@ -95,6 +97,9 @@ class JarvisApiClient @Inject constructor(
 
     private val mediaType = "application/json; charset=utf-8".toMediaType()
     private val apiHttpClient = okHttpClient.newBuilder()
+        // Authenticated API calls must never rely on HTTP(S) redirects.
+        .followRedirects(false)
+        .followSslRedirects(false)
         .callTimeout(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .build()
 
@@ -107,7 +112,8 @@ class JarvisApiClient @Inject constructor(
         source: String,
         privacyLevel: String,
         requiresWeb: Boolean,
-        systemContext: String? = null
+        systemContext: String? = null,
+        cloudExplicitlyAllowed: Boolean = false
     ): Resource<String> = withContext(Dispatchers.IO) {
         val token = securityManager.getAccessToken()
         if (!AccessTokenPolicy.isValid(token)) {
@@ -126,6 +132,7 @@ class JarvisApiClient @Inject constructor(
                 source = source,
                 privacyLevel = privacyLevel,
                 requiresWeb = requiresWeb,
+                cloudExplicitlyAllowed = cloudExplicitlyAllowed,
                 requestId = requestId,
                 systemContext = systemContext?.takeIf { it.isNotBlank() }
             )
@@ -178,7 +185,7 @@ class JarvisApiClient @Inject constructor(
             Log.w(TAG, "network error | requestId=$requestId")
             Resource.Error(e, "Ошибка сети при обращении к серверу JARVIS.")
         } catch (e: Exception) {
-            Log.e(TAG, "unexpected failure | requestId=$requestId", e)
+            Log.e(TAG, "unexpected failure | requestId=$requestId | type=${e.javaClass.simpleName}")
             Resource.Error(e, "Не удалось выполнить запрос.")
         }
     }
