@@ -40,7 +40,8 @@ class ExecutionDecisionEngineTest {
     private class ScriptedTool(
         override val toolId: String,
         private val result: ToolExecutionResult? = null,
-        private val throwOnExecute: Boolean = false
+        private val throwOnExecute: Boolean = false,
+        override val isOffline: Boolean = true
     ) : JarvisTool {
         var calls = 0
             private set
@@ -331,6 +332,27 @@ class ExecutionDecisionEngineTest {
         assertEquals(1, cloud.calls)
     }
 
+    @Test
+    fun `AGENT-010 intentionally uses cloud because no executable local comparison plan exists`() = runBlocking {
+        val local = FakeLocalAi(LocalAiOutcome.Uncertain, hasWebCapability = false)
+        val cloud = FakeCloudAi(Resource.Success("Сравнение по актуальному каталогу"))
+        val agent = FakeAgent(plan = null)
+        val engine = buildEngine(localAi = local, cloudAi = cloud, agent = agent)
+
+        val result = engine.execute(
+            request(
+                "Сравни десять вариантов ноутбуков и выбери лучший в пределах бюджета",
+                requiresWeb = true
+            )
+        )
+
+        assertTrue(result is ExecutionResult.Success)
+        assertEquals(ExecutionType.CLOUD_AI, (result as ExecutionResult.Success).executionType)
+        assertEquals(0, agent.runCalls)
+        assertEquals(0, local.calls)
+        assertEquals(1, cloud.calls)
+    }
+
     /** Test 7b: requiresWeb + PRIVATE → ни локально, ни в облако — честный Error. */
     @Test
     fun `private web request is refused instead of leaking to cloud`() = runBlocking {
@@ -453,13 +475,92 @@ class ExecutionDecisionEngineTest {
         assertEquals(1, agent.runCalls)
     }
 
-    /** Дополнительно: приватный текст не попадает в логируемое представление. */
     @Test
-    fun `private request text is redacted for logging`() {
+    fun `unknown classifier result never reaches cloud even with consent`() = runBlocking {
+        val cloud = FakeCloudAi()
+        val engine = buildEngine(cloudAi = cloud)
+        val request = ExecutionRequest(
+            text = "ordinary question",
+            source = RequestSource.CHAT,
+            privacyLevel = PrivacyLevel.NORMAL,
+            cloudExplicitlyAllowed = true,
+            privacyClassification = PrivacyClassification.unknown(PrivacyReason.CLASSIFIER_FAILURE)
+        )
+
+        val result = engine.execute(request)
+
+        assertTrue(result is ExecutionResult.Error)
+        assertEquals(DecisionReason.CLOUD_BLOCKED_BY_PRIVACY, (result as ExecutionResult.Error).reason)
+        assertEquals(0, cloud.calls)
+    }
+
+    @Test
+    fun `sensitive history blocks otherwise normal cloud request`() = runBlocking {
+        val cloud = FakeCloudAi()
+        val engine = buildEngine(cloudAi = cloud)
+        val request = ExecutionRequest(
+            text = "continue our discussion",
+            source = RequestSource.CHAT,
+            history = listOf(
+                com.jarvis.assistant.domain.models.Message(
+                    role = com.jarvis.assistant.domain.models.MessageRole.USER,
+                    text = "password=history-secret"
+                )
+            )
+        )
+
+        val result = engine.execute(request)
+
+        assertTrue(result is ExecutionResult.Error)
+        assertEquals(0, cloud.calls)
+    }
+
+    @Test
+    fun `sensitive fast route cannot call external weather tool`() = runBlocking {
+        val weather = ScriptedTool(
+            toolId = "intelligence.weather",
+            result = ToolExecutionResult.success("must not execute"),
+            isOffline = false
+        )
+        val cloud = FakeCloudAi()
+        val engine = buildEngine(tools = setOf(weather), cloudAi = cloud)
+
+        val result = engine.execute(request("какая погода, password=actual-secret"))
+
+        assertTrue(result is ExecutionResult.Error)
+        assertEquals(
+            DecisionReason.EXTERNAL_TOOL_BLOCKED_BY_PRIVACY,
+            (result as ExecutionResult.Error).reason
+        )
+        assertEquals(0, weather.calls)
+        assertEquals(0, cloud.calls)
+    }
+
+    @Test
+    fun `sensitive agent plan cannot call external tool`() = runBlocking {
+        val web = ScriptedTool("intelligence.web_search", isOffline = false)
+        val plan = ExecutionPlan(
+            goal = "external",
+            steps = listOf(PlanStep(toolCall = ToolCall(web.toolId, buildJsonObject { })))
+        )
+        val agent = FakeAgent(plan = plan)
+        val engine = buildEngine(tools = setOf(web), agent = agent)
+
+        val result = engine.execute(request("password=actual-secret затем найди в сети"))
+
+        assertTrue(result is ExecutionResult.Error)
+        assertEquals(0, agent.runCalls)
+        assertEquals(0, web.calls)
+    }
+
+    /** Любой prompt, включая NORMAL, в логах представлен только размером. */
+    @Test
+    fun `request text is always redacted for logging`() {
         val normal = request("обычный запрос", privacy = PrivacyLevel.NORMAL)
         val private = request("секретный текст", privacy = PrivacyLevel.PRIVATE)
 
-        assertEquals("обычный запрос", normal.loggableText)
+        assertFalse(normal.loggableText.contains("обычный запрос"))
+        assertTrue(normal.loggableText.startsWith("<redacted:"))
         assertFalse(private.loggableText.contains("секретный"))
         assertTrue(private.loggableText.startsWith("<redacted:"))
     }
