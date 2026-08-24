@@ -1,0 +1,50 @@
+{
+	admin off
+	auto_https disable_redirects
+	email {$ACME_EMAIL}
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+# Port 80 never proxies to the application. Query strings are deliberately
+# dropped so accidental credentials in a URL cannot be copied into Location.
+http://{$PUBLIC_DOMAIN} {
+	redir https://{$PUBLIC_DOMAIN}{http.request.uri.path} 308
+}
+
+https://{$PUBLIC_DOMAIN} {
+	tls {
+		protocols tls1.2 tls1.3
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	# Keep method/URI/status/client IP, but drop the entire request-header map so
+	# Authorization/Cookie/proxy-header values can never enter access logs.
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>headers delete
+			}
+		}
+	}
+
+	reverse_proxy jarvis-server:8080 {
+		# Delete standardized Forwarded and overwrite every X-Forwarded identity
+		# header with one authoritative hop. Application trusts only proxy CIDR.
+		header_up -Forwarded
+		header_up X-Forwarded-For {http.request.remote.host}
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Host {http.request.hostport}
+		header_up X-Real-IP {http.request.remote.host}
+		header_up Host {http.request.hostport}
+	}
+}
