@@ -23,6 +23,8 @@ fun JarvisOrbVisualizer(
     modifier: Modifier = Modifier,
     rmsDb: Float = 0f
 ) {
+    val audioReactiveScale = 1f + rmsDb.coerceIn(0f, 100f) / 100f * 0.08f
+
     // Автономная GPU-анимация (без лишних recomposition дерева Compose)
     val infiniteTransition = rememberInfiniteTransition(label = "jarvis_orb_smooth")
 
@@ -61,7 +63,7 @@ fun JarvisOrbVisualizer(
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val center = Offset(size.width / 2, size.height / 2)
-            val baseRadius = (size.minDimension / 2) * 0.65f * pulseScale
+            val baseRadius = (size.minDimension / 2) * 0.65f * pulseScale * audioReactiveScale
 
             // Внешний ореол
             drawCircle(
