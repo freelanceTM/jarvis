@@ -1,5 +1,8 @@
 package com.jarvis.assistant.ai
 
+import com.jarvis.assistant.agent.decision.PrivacyClassifier
+import com.jarvis.assistant.agent.decision.PrivacyContent
+import com.jarvis.assistant.agent.decision.PrivacyLevel
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.data.remote.JarvisApiClient
 import com.jarvis.assistant.domain.models.Message
@@ -20,10 +23,26 @@ import javax.inject.Singleton
  * перегрузке [completeWithContext]; базовый [complete] сохраняет прежнюю
  * сигнатуру, чтобы существующие вызывающие (LiveTranslatorEngine) не ломались.
  */
+class PrivacyCloudBlockedException(level: PrivacyLevel) :
+    IllegalStateException("Cloud blocked by privacy classification: ${level.name}")
+
+/** A client that preserves classified privacy metadata and per-request consent. */
+interface ContextualCloudAIClient {
+    suspend fun completeWithContext(
+        prompt: String,
+        systemPrompt: String,
+        source: String,
+        privacyLevel: String,
+        requiresWeb: Boolean,
+        cloudExplicitlyAllowed: Boolean = false,
+        relatedContent: List<String> = emptyList()
+    ): Resource<String>
+}
+
 @Singleton
 class JarvisApiAiClient @Inject constructor(
     private val apiClient: JarvisApiClient
-) : AIClient {
+) : AIClient, ContextualCloudAIClient {
 
     override suspend fun complete(
         prompt: String,
@@ -34,8 +53,10 @@ class JarvisApiAiClient @Inject constructor(
         prompt = prompt,
         systemPrompt = systemPrompt,
         source = "CHAT",
-        privacyLevel = "NORMAL",
-        requiresWeb = false
+        privacyLevel = PrivacyLevel.UNKNOWN.name,
+        requiresWeb = false,
+        cloudExplicitlyAllowed = false,
+        relatedContent = history.map(Message::text)
     )
 
     /**
@@ -44,17 +65,39 @@ class JarvisApiAiClient @Inject constructor(
      * `modelOverride` намеренно игнорируется: выбор модели — server-side
      * (пункт 29 ТЗ), клиент не имеет права его навязывать.
      */
-    suspend fun completeWithContext(
+    override suspend fun completeWithContext(
         prompt: String,
         systemPrompt: String,
         source: String,
         privacyLevel: String,
-        requiresWeb: Boolean
-    ): Resource<String> = apiClient.execute(
-        text = prompt,
-        source = source,
-        privacyLevel = privacyLevel,
-        requiresWeb = requiresWeb,
-        systemContext = systemPrompt
-    )
+        requiresWeb: Boolean,
+        cloudExplicitlyAllowed: Boolean,
+        relatedContent: List<String>
+    ): Resource<String> {
+        val declared = PrivacyLevel.entries.firstOrNull { it.name == privacyLevel.uppercase() }
+            ?: return Resource.Error(
+                PrivacyCloudBlockedException(PrivacyLevel.UNKNOWN),
+                "Облачная обработка запрещена политикой приватности"
+            )
+        val automatic = PrivacyClassifier.classifySafely(
+            PrivacyContent(prompt, listOf(systemPrompt) + relatedContent)
+        )
+        val effective = PrivacyClassifier.effective(declared, automatic)
+        val permitted = effective == PrivacyLevel.NORMAL ||
+            (effective in setOf(PrivacyLevel.PRIVATE, PrivacyLevel.SENSITIVE) && cloudExplicitlyAllowed)
+        if (!permitted) {
+            return Resource.Error(
+                PrivacyCloudBlockedException(effective),
+                "Облачная обработка запрещена политикой приватности"
+            )
+        }
+        return apiClient.execute(
+            text = prompt,
+            source = source,
+            privacyLevel = effective.name,
+            requiresWeb = requiresWeb,
+            systemContext = systemPrompt,
+            cloudExplicitlyAllowed = cloudExplicitlyAllowed
+        )
+    }
 }
