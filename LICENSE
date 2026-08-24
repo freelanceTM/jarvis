@@ -1,0 +1,25 @@
+PROJECT LICENSE — OWNER DECISION REQUIRED
+
+[OWNER ACTION REQUIRED]
+
+No project-wide software license was identified in the repository at the time
+this file was added. The Apache 2.0 notice in the generated Gradle wrapper
+scripts applies to those wrapper scripts; it does not establish a license for
+JARVIS application or server source code.
+
+The repository owner must select and approve the project license before public
+redistribution or third-party contribution. Replace this placeholder with the
+complete, unmodified text of the chosen license and update README/contribution
+documentation accordingly.
+
+Required decisions:
+
+1. open-source, source-available, or proprietary distribution;
+2. copyright holder/legal entity and applicable years;
+3. treatment of third-party assets, AI model weights, icons, and generated code;
+4. contribution terms;
+5. compatibility with MediaPipe, Gemma model licensing, and all dependency
+   notices.
+
+This placeholder intentionally does not select a license or invent a copyright
+holder.
