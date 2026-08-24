@@ -86,7 +86,7 @@ class ToolPermissionManager @Inject constructor(
      * Проверяет, разрешено ли автоматическое выполнение инструмента без
      * подтверждения пользователя.
      */
-    fun isExecutionAllowed(tool: JarvisTool, call: ToolCall): Boolean = !requiresConfirmation(tool)
+    fun isExecutionAllowed(tool: JarvisTool): Boolean = !requiresConfirmation(tool)
 
     private fun requiresConfirmation(tool: JarvisTool): Boolean {
         if (tool is CapabilityAwareTool && tool.capabilityContract.confirmationRequired) return true
