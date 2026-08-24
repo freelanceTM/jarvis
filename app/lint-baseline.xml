@@ -19,7 +19,7 @@
         errorLine2="                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/jarvis/assistant/voice/audio/BluetoothAudioRouter.kt"
-            line="152"
+            line="153"
             column="28"/>
     </issue>
 
@@ -30,7 +30,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/jarvis/assistant/voice/service/JarvisVoiceService.kt"
-            line="206"
+            line="255"
             column="17"/>
     </issue>
 
@@ -41,13 +41,13 @@
         errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/jarvis/assistant/presentation/permissions/PermissionsScreen.kt"
-            line="96"
+            line="101"
             column="30"/>
     </issue>
 
     <issue
         id="AndroidGradlePluginVersion"
-        message="A newer version of com.android.application than 8.5.2 is available: 9.3.1"
+        message="A newer version of com.android.application than 8.5.2 is available: 9.3.2"
         errorLine1="agp = &quot;8.5.2&quot;"
         errorLine2="      ~~~~~~~">
         <location
@@ -58,7 +58,7 @@
 
     <issue
         id="AndroidGradlePluginVersion"
-        message="A newer version of com.android.application than 8.5.2 is available: 9.3.1"
+        message="A newer version of com.android.application than 8.5.2 is available: 9.3.2"
         errorLine1="agp = &quot;8.5.2&quot;"
         errorLine2="      ~~~~~~~">
         <location
@@ -69,7 +69,7 @@
 
     <issue
         id="AndroidGradlePluginVersion"
-        message="A newer version of com.android.application than 8.5.2 is available: 9.3.1"
+        message="A newer version of com.android.application than 8.5.2 is available: 9.3.2"
         errorLine1="agp = &quot;8.5.2&quot;"
         errorLine2="      ~~~~~~~">
         <location
@@ -113,8 +113,8 @@
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.4 is available: 2.11.0"
-        errorLine1="lifecycleRuntimeKtx = &quot;2.8.4&quot;"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.7 is available: 2.11.0"
+        errorLine1="lifecycleRuntimeKtx = &quot;2.8.7&quot;"
         errorLine2="                      ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
@@ -124,8 +124,8 @@
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.4 is available: 2.11.0"
-        errorLine1="lifecycleRuntimeKtx = &quot;2.8.4&quot;"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.7 is available: 2.11.0"
+        errorLine1="lifecycleRuntimeKtx = &quot;2.8.7&quot;"
         errorLine2="                      ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
@@ -135,8 +135,8 @@
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.4 is available: 2.11.0"
-        errorLine1="lifecycleRuntimeKtx = &quot;2.8.4&quot;"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.7 is available: 2.11.0"
+        errorLine1="lifecycleRuntimeKtx = &quot;2.8.7&quot;"
         errorLine2="                      ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
@@ -146,8 +146,8 @@
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.8.4 is available: 2.11.0"
-        errorLine1="lifecycleRuntimeKtx = &quot;2.8.4&quot;"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.8.7 is available: 2.11.0"
+        errorLine1="lifecycleRuntimeKtx = &quot;2.8.7&quot;"
         errorLine2="                      ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
@@ -157,8 +157,8 @@
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.8.4 is available: 2.11.0"
-        errorLine1="lifecycleRuntimeKtx = &quot;2.8.4&quot;"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.8.7 is available: 2.11.0"
+        errorLine1="lifecycleRuntimeKtx = &quot;2.8.7&quot;"
         errorLine2="                      ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
@@ -168,8 +168,8 @@
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.8.4 is available: 2.11.0"
-        errorLine1="lifecycleRuntimeKtx = &quot;2.8.4&quot;"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.8.7 is available: 2.11.0"
+        errorLine1="lifecycleRuntimeKtx = &quot;2.8.7&quot;"
         errorLine2="                      ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
@@ -179,8 +179,8 @@
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.4 is available: 2.11.0"
-        errorLine1="lifecycleRuntimeKtx = &quot;2.8.4&quot;"
+        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.7 is available: 2.11.0"
+        errorLine1="lifecycleRuntimeKtx = &quot;2.8.7&quot;"
         errorLine2="                      ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
@@ -190,8 +190,8 @@
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.4 is available: 2.11.0"
-        errorLine1="lifecycleRuntimeKtx = &quot;2.8.4&quot;"
+        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.7 is available: 2.11.0"
+        errorLine1="lifecycleRuntimeKtx = &quot;2.8.7&quot;"
         errorLine2="                      ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
@@ -201,8 +201,8 @@
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.4 is available: 2.11.0"
-        errorLine1="lifecycleRuntimeKtx = &quot;2.8.4&quot;"
+        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.7 is available: 2.11.0"
+        errorLine1="lifecycleRuntimeKtx = &quot;2.8.7&quot;"
         errorLine2="                      ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
@@ -212,8 +212,8 @@
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.activity:activity-compose than 1.9.1 is available: 1.13.0"
-        errorLine1="activityCompose = &quot;1.9.1&quot;"
+        message="A newer version of androidx.activity:activity-compose than 1.9.3 is available: 1.13.0"
+        errorLine1="activityCompose = &quot;1.9.3&quot;"
         errorLine2="                  ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
@@ -223,8 +223,8 @@
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.activity:activity-compose than 1.9.1 is available: 1.13.0"
-        errorLine1="activityCompose = &quot;1.9.1&quot;"
+        message="A newer version of androidx.activity:activity-compose than 1.9.3 is available: 1.13.0"
+        errorLine1="activityCompose = &quot;1.9.3&quot;"
         errorLine2="                  ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
@@ -234,8 +234,8 @@
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.activity:activity-compose than 1.9.1 is available: 1.13.0"
-        errorLine1="activityCompose = &quot;1.9.1&quot;"
+        message="A newer version of androidx.activity:activity-compose than 1.9.3 is available: 1.13.0"
+        errorLine1="activityCompose = &quot;1.9.3&quot;"
         errorLine2="                  ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
@@ -476,8 +476,8 @@
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.datastore:datastore-preferences than 1.1.1 is available: 1.2.1"
-        errorLine1="datastore = &quot;1.1.1&quot;"
+        message="A newer version of androidx.datastore:datastore-preferences than 1.1.7 is available: 1.2.1"
+        errorLine1="datastore = &quot;1.1.7&quot;"
         errorLine2="            ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
@@ -487,8 +487,8 @@
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.datastore:datastore-preferences than 1.1.1 is available: 1.2.1"
-        errorLine1="datastore = &quot;1.1.1&quot;"
+        message="A newer version of androidx.datastore:datastore-preferences than 1.1.7 is available: 1.2.1"
+        errorLine1="datastore = &quot;1.1.7&quot;"
         errorLine2="            ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
@@ -498,8 +498,8 @@
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.datastore:datastore-preferences than 1.1.1 is available: 1.2.1"
-        errorLine1="datastore = &quot;1.1.1&quot;"
+        message="A newer version of androidx.datastore:datastore-preferences than 1.1.7 is available: 1.2.1"
+        errorLine1="datastore = &quot;1.1.7&quot;"
         errorLine2="            ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
@@ -509,35 +509,101 @@
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.security:security-crypto-ktx than 1.1.0-alpha06 is available: 1.1.0"
-        errorLine1="securityCrypto = &quot;1.1.0-alpha06&quot;"
-        errorLine2="                 ~~~~~~~~~~~~~~~">
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-android than 1.8.1 is available: 1.10.2"
+        errorLine1="coroutines = &quot;1.8.1&quot;"
+        errorLine2="             ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
-            line="17"
-            column="18"/>
+            line="22"
+            column="14"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.security:security-crypto-ktx than 1.1.0-alpha06 is available: 1.1.0"
-        errorLine1="securityCrypto = &quot;1.1.0-alpha06&quot;"
-        errorLine2="                 ~~~~~~~~~~~~~~~">
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-android than 1.8.1 is available: 1.10.2"
+        errorLine1="coroutines = &quot;1.8.1&quot;"
+        errorLine2="             ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
-            line="17"
-            column="18"/>
+            line="22"
+            column="14"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.security:security-crypto-ktx than 1.1.0-alpha06 is available: 1.1.0"
-        errorLine1="securityCrypto = &quot;1.1.0-alpha06&quot;"
-        errorLine2="                 ~~~~~~~~~~~~~~~">
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-android than 1.8.1 is available: 1.10.2"
+        errorLine1="coroutines = &quot;1.8.1&quot;"
+        errorLine2="             ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
-            line="17"
-            column="18"/>
+            line="22"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-core than 1.8.1 is available: 1.10.2"
+        errorLine1="coroutines = &quot;1.8.1&quot;"
+        errorLine2="             ~~~~~~~">
+        <location
+            file="$HOME/jarvis/gradle/libs.versions.toml"
+            line="22"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-core than 1.8.1 is available: 1.10.2"
+        errorLine1="coroutines = &quot;1.8.1&quot;"
+        errorLine2="             ~~~~~~~">
+        <location
+            file="$HOME/jarvis/gradle/libs.versions.toml"
+            line="22"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-core than 1.8.1 is available: 1.10.2"
+        errorLine1="coroutines = &quot;1.8.1&quot;"
+        errorLine2="             ~~~~~~~">
+        <location
+            file="$HOME/jarvis/gradle/libs.versions.toml"
+            line="22"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-test than 1.8.1 is available: 1.10.2"
+        errorLine1="coroutines = &quot;1.8.1&quot;"
+        errorLine2="             ~~~~~~~">
+        <location
+            file="$HOME/jarvis/gradle/libs.versions.toml"
+            line="22"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-test than 1.8.1 is available: 1.10.2"
+        errorLine1="coroutines = &quot;1.8.1&quot;"
+        errorLine2="             ~~~~~~~">
+        <location
+            file="$HOME/jarvis/gradle/libs.versions.toml"
+            line="22"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-test than 1.8.1 is available: 1.10.2"
+        errorLine1="coroutines = &quot;1.8.1&quot;"
+        errorLine2="             ~~~~~~~">
+        <location
+            file="$HOME/jarvis/gradle/libs.versions.toml"
+            line="22"
+            column="14"/>
     </issue>
 
     <issue
@@ -547,7 +613,7 @@
         errorLine2="                        ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
-            line="19"
+            line="25"
             column="25"/>
     </issue>
 
@@ -558,7 +624,7 @@
         errorLine2="                        ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
-            line="19"
+            line="25"
             column="25"/>
     </issue>
 
@@ -569,106 +635,205 @@
         errorLine2="                        ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
-            line="19"
+            line="25"
             column="25"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.test.ext:junit than 1.1.5 is available: 1.3.0"
-        errorLine1="androidxTestJunit = &quot;1.1.5&quot;"
+        message="A newer version of androidx.compose.ui:ui-test-junit4 than 1.6.8 is available: 1.12.0"
+        errorLine1="materialIconsExtended = &quot;1.6.8&quot;"
+        errorLine2="                        ~~~~~~~">
+        <location
+            file="$HOME/jarvis/gradle/libs.versions.toml"
+            line="25"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose.ui:ui-test-junit4 than 1.6.8 is available: 1.12.0"
+        errorLine1="materialIconsExtended = &quot;1.6.8&quot;"
+        errorLine2="                        ~~~~~~~">
+        <location
+            file="$HOME/jarvis/gradle/libs.versions.toml"
+            line="25"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose.ui:ui-test-junit4 than 1.6.8 is available: 1.12.0"
+        errorLine1="materialIconsExtended = &quot;1.6.8&quot;"
+        errorLine2="                        ~~~~~~~">
+        <location
+            file="$HOME/jarvis/gradle/libs.versions.toml"
+            line="25"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose.ui:ui-test-manifest than 1.6.8 is available: 1.12.0"
+        errorLine1="materialIconsExtended = &quot;1.6.8&quot;"
+        errorLine2="                        ~~~~~~~">
+        <location
+            file="$HOME/jarvis/gradle/libs.versions.toml"
+            line="25"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose.ui:ui-test-manifest than 1.6.8 is available: 1.12.0"
+        errorLine1="materialIconsExtended = &quot;1.6.8&quot;"
+        errorLine2="                        ~~~~~~~">
+        <location
+            file="$HOME/jarvis/gradle/libs.versions.toml"
+            line="25"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose.ui:ui-test-manifest than 1.6.8 is available: 1.12.0"
+        errorLine1="materialIconsExtended = &quot;1.6.8&quot;"
+        errorLine2="                        ~~~~~~~">
+        <location
+            file="$HOME/jarvis/gradle/libs.versions.toml"
+            line="25"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of io.mockk:mockk than 1.13.12 is available: 1.14.11"
+        errorLine1="mockk = &quot;1.13.12&quot;"
+        errorLine2="        ~~~~~~~~~">
+        <location
+            file="$HOME/jarvis/gradle/libs.versions.toml"
+            line="27"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of io.mockk:mockk than 1.13.12 is available: 1.14.11"
+        errorLine1="mockk = &quot;1.13.12&quot;"
+        errorLine2="        ~~~~~~~~~">
+        <location
+            file="$HOME/jarvis/gradle/libs.versions.toml"
+            line="27"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of io.mockk:mockk than 1.13.12 is available: 1.14.11"
+        errorLine1="mockk = &quot;1.13.12&quot;"
+        errorLine2="        ~~~~~~~~~">
+        <location
+            file="$HOME/jarvis/gradle/libs.versions.toml"
+            line="27"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test.ext:junit than 1.2.1 is available: 1.3.0"
+        errorLine1="androidxTestJunit = &quot;1.2.1&quot;"
         errorLine2="                    ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
-            line="21"
+            line="30"
             column="21"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.test.ext:junit than 1.1.5 is available: 1.3.0"
-        errorLine1="androidxTestJunit = &quot;1.1.5&quot;"
+        message="A newer version of androidx.test.ext:junit than 1.2.1 is available: 1.3.0"
+        errorLine1="androidxTestJunit = &quot;1.2.1&quot;"
         errorLine2="                    ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
-            line="21"
+            line="30"
             column="21"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.test.ext:junit than 1.1.5 is available: 1.3.0"
-        errorLine1="androidxTestJunit = &quot;1.1.5&quot;"
+        message="A newer version of androidx.test.ext:junit than 1.2.1 is available: 1.3.0"
+        errorLine1="androidxTestJunit = &quot;1.2.1&quot;"
         errorLine2="                    ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
-            line="21"
+            line="30"
             column="21"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.test:core than 1.5.0 is available: 1.7.0"
-        errorLine1="androidxTestCore = &quot;1.5.0&quot;"
+        message="A newer version of androidx.test:core than 1.6.1 is available: 1.7.0"
+        errorLine1="androidxTestCore = &quot;1.6.1&quot;"
         errorLine2="                   ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
-            line="22"
+            line="31"
             column="20"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.test:core than 1.5.0 is available: 1.7.0"
-        errorLine1="androidxTestCore = &quot;1.5.0&quot;"
+        message="A newer version of androidx.test:core than 1.6.1 is available: 1.7.0"
+        errorLine1="androidxTestCore = &quot;1.6.1&quot;"
         errorLine2="                   ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
-            line="22"
+            line="31"
             column="20"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.test:core than 1.5.0 is available: 1.7.0"
-        errorLine1="androidxTestCore = &quot;1.5.0&quot;"
+        message="A newer version of androidx.test:core than 1.6.1 is available: 1.7.0"
+        errorLine1="androidxTestCore = &quot;1.6.1&quot;"
         errorLine2="                   ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
-            line="22"
+            line="31"
             column="20"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.test:runner than 1.5.2 is available: 1.7.0"
-        errorLine1="androidxTestRunner = &quot;1.5.2&quot;"
+        message="A newer version of androidx.test:runner than 1.6.2 is available: 1.7.0"
+        errorLine1="androidxTestRunner = &quot;1.6.2&quot;"
         errorLine2="                     ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
-            line="23"
+            line="32"
             column="22"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.test:runner than 1.5.2 is available: 1.7.0"
-        errorLine1="androidxTestRunner = &quot;1.5.2&quot;"
+        message="A newer version of androidx.test:runner than 1.6.2 is available: 1.7.0"
+        errorLine1="androidxTestRunner = &quot;1.6.2&quot;"
         errorLine2="                     ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
-            line="23"
+            line="32"
             column="22"/>
     </issue>
 
     <issue
         id="GradleDependency"
-        message="A newer version of androidx.test:runner than 1.5.2 is available: 1.7.0"
-        errorLine1="androidxTestRunner = &quot;1.5.2&quot;"
+        message="A newer version of androidx.test:runner than 1.6.2 is available: 1.7.0"
+        errorLine1="androidxTestRunner = &quot;1.6.2&quot;"
         errorLine2="                     ~~~~~~~">
         <location
             file="$HOME/jarvis/gradle/libs.versions.toml"
-            line="23"
+            line="32"
             column="22"/>
     </issue>
 
@@ -679,7 +844,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/AndroidManifest.xml"
-            line="81"
+            line="87"
             column="13"/>
     </issue>
 
@@ -701,7 +866,7 @@
         errorLine2="    ~~~~~~~~">
         <location
             file="src/main/java/com/jarvis/assistant/presentation/components/MessageItem.kt"
-            line="50"
+            line="52"
             column="5"/>
     </issue>
 
@@ -712,7 +877,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/AndroidManifest.xml"
-            line="81"
+            line="87"
             column="13"/>
     </issue>
 
@@ -756,7 +921,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/jarvis/assistant/voice/audio/BluetoothAudioRouter.kt"
-            line="147"
+            line="148"
             column="13"/>
     </issue>
 
@@ -774,12 +939,12 @@
     <issue
         id="ObsoleteSdkInt"
         message="Unnecessary; SDK_INT is always >= 29"
-        errorLine1="            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {"
-        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        errorLine1="                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/jarvis/assistant/voice/service/JarvisVoiceService.kt"
-            line="74"
-            column="17"/>
+            line="86"
+            column="21"/>
     </issue>
 
     <issue
@@ -789,7 +954,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/jarvis/assistant/voice/service/JarvisVoiceService.kt"
-            line="202"
+            line="251"
             column="13"/>
     </issue>
 
@@ -800,7 +965,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/jarvis/assistant/voice/service/JarvisVoiceService.kt"
-            line="260"
+            line="309"
             column="13"/>
     </issue>
 
@@ -829,7 +994,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="3"
+            line="7"
             column="13"/>
     </issue>
 
@@ -840,7 +1005,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="4"
+            line="8"
             column="13"/>
     </issue>
 
@@ -851,7 +1016,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="5"
+            line="9"
             column="13"/>
     </issue>
 
@@ -862,7 +1027,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="6"
+            line="10"
             column="13"/>
     </issue>
 
@@ -873,7 +1038,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="7"
+            line="11"
             column="13"/>
     </issue>
 
@@ -884,7 +1049,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="8"
+            line="12"
             column="13"/>
     </issue>
 
@@ -895,7 +1060,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="9"
+            line="13"
             column="13"/>
     </issue>
 
@@ -906,7 +1071,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="10"
+            line="14"
             column="13"/>
     </issue>
 
