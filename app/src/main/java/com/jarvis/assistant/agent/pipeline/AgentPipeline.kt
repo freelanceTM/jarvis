@@ -58,14 +58,16 @@ class AgentPipeline @Inject constructor(
         query: String,
         history: List<Message>,
         source: RequestSource,
-        privacyLevel: PrivacyLevel = PrivacyLevel.NORMAL,
-        requiresWeb: Boolean = false
+        privacyLevel: PrivacyLevel = PrivacyLevel.UNKNOWN,
+        requiresWeb: Boolean = false,
+        cloudExplicitlyAllowed: Boolean = false
     ): Resource<PromptExecutionResult> = process(
         ExecutionRequest(
             text = query,
             source = source,
             requiresWeb = requiresWeb,
             privacyLevel = privacyLevel,
+            cloudExplicitlyAllowed = cloudExplicitlyAllowed,
             history = history
         )
     )
