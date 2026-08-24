@@ -22,6 +22,7 @@ class CalendarTool @Inject constructor(
     override val category: ToolCategory = ToolCategory.PRODUCTIVITY
     override val riskLevel: ToolRisk = ToolRisk.LOW
     override val isOffline: Boolean = true
+    override val mayDiscloseUserContentExternally: Boolean = true
     override val requiresForeground: Boolean = true
 
     override val parametersSchema: JsonObject = buildJsonObject {
