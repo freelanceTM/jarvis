@@ -22,11 +22,13 @@ enum class RequestSource {
  * автоматически обнаруженный PRIVATE/SENSITIVE нельзя понизить до NORMAL.
  */
 enum class PrivacyLevel {
+    /** Classification отсутствует, завершилась ошибкой или не может быть доверенной. */
+    UNKNOWN,
     NORMAL,
     PRIVATE,
     SENSITIVE;
 
-    /** true — облачная обработка запрещена без явного разрешения. */
+    /** UNKNOWN также блокирует cloud: отсутствие решения не является разрешением. */
     val isCloudRestricted: Boolean get() = this != NORMAL
 }
 
@@ -54,31 +56,32 @@ data class ExecutionRequest(
     val source: RequestSource,
     val requiresWeb: Boolean = false,
     val requiresDeviceControl: Boolean = false,
-    val privacyLevel: PrivacyLevel = PrivacyLevel.NORMAL,
+    /** Client/UI hint only. UNKNOWN forces local classification before routing. */
+    val privacyLevel: PrivacyLevel = PrivacyLevel.UNKNOWN,
     val cloudExplicitlyAllowed: Boolean = false,
-    val history: List<Message> = emptyList()
+    val history: List<Message> = emptyList(),
+    val privacyClassification: PrivacyClassification = PrivacyClassifier.classifySafely(
+        PrivacyContent.from(text, history)
+    )
 ) {
     /** Автоматически обнаруженный уровень, вычисленный до логирования/роутинга. */
-    val detectedPrivacyLevel: PrivacyLevel = PrivacyClassifier.classify(text)
+    val detectedPrivacyLevel: PrivacyLevel = privacyClassification.level
 
-    /** Явный уровень нельзя ослабить, а автоматически найденный — понизить. */
+    /** UNKNOWN/failure не может быть ослаблен declared NORMAL. */
     val effectivePrivacyLevel: PrivacyLevel =
-        PrivacyClassifier.strongest(privacyLevel, detectedPrivacyLevel)
+        PrivacyClassifier.effective(privacyLevel, privacyClassification)
 
-    /** Можно ли отправлять этот запрос в облако. */
+    /** Явное consent не преодолевает UNKNOWN/classifier failure. */
     val isCloudAllowed: Boolean
-        get() = !effectivePrivacyLevel.isCloudRestricted || cloudExplicitlyAllowed
-
-    /**
-     * Текст, безопасный для логов: приватные запросы не логируются дословно
-     * (пункт 12 ТЗ этапа 1).
-     */
-    val loggableText: String
-        get() = if (effectivePrivacyLevel == PrivacyLevel.NORMAL) {
-            text
-        } else {
-            "<redacted:${text.length} chars>"
+        get() = when (effectivePrivacyLevel) {
+            PrivacyLevel.NORMAL -> true
+            PrivacyLevel.PRIVATE, PrivacyLevel.SENSITIVE -> cloudExplicitlyAllowed
+            PrivacyLevel.UNKNOWN -> false
         }
+
+    /** Prompt plaintext никогда не нужен в routing logs, даже при NORMAL. */
+    val loggableText: String
+        get() = "<redacted:${text.length} chars>"
 }
 
 /**
@@ -112,6 +115,7 @@ enum class DecisionReason {
     LOCAL_AI_UNCERTAIN,
     LOCAL_AI_NO_WEB_CAPABILITY,
     CLOUD_BLOCKED_BY_PRIVACY,
+    EXTERNAL_TOOL_BLOCKED_BY_PRIVACY,
     CLOUD_FAILED,
     CLOUD_PLAN_DETECTED,
     DEVICE_TOOL_FAILED,
