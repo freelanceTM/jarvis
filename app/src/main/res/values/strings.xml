@@ -19,7 +19,7 @@
     <string name="sotrite_zaschitnyy_sloy_na_kartochke_v_korobke_vashih_naushn">Сотрите защитный слой на карточке в коробке ваших наушников и введите код активации:</string>
     <string name="aktivirovat_jarvis">Активировать JARVIS</string>
     <string name="s_30_dney_vklyucheno_besplatno">30 дней включено бесплатно</string>
-    <string name="aktivaciya_privyazyvaet_naushniki_k_vashemu_ustroystvu_prodl">Активация привязывает наушники к вашему устройству. Продление со 2-го месяца — 50 TMT/мес.</string>
+    <string name="aktivaciya_privyazyvaet_naushniki_k_vashemu_ustroystvu_prodl">Активация атомарно привязывает лицензию к устройству на сервере. Срок и доступ определяет только сервер JARVIS.</string>
     <string name="chat_s_jarvis">Чат с JARVIS</string>
     <string name="tekstovyy_i_golosovoy_rezhim_dialoga">Текстовый и голосовой режим диалога</string>
     <string name="nazad">Назад</string>
@@ -184,6 +184,7 @@
     <!-- ===== License & UseCase (audit #17) ===== -->
     <string name="nevernyy_kod_aktivacii">Неверный код активации. Проверьте код на карточке в коробке наушников.</string>
     <string name="server_licenziy_nedostupen">Сервер активации временно недоступен. Код не был активирован — повторите позже.</string>
+    <string name="slishkom_mnogo_popytok_aktivacii">Слишком много попыток активации. Подождите и повторите позже.</string>
     <string name="jarvis_uspeshno_aktivirovan">JARVIS Earclip успешно активирован! Первые 30 дней использования включены бесплатно, сэр.</string>
     <string name="pustoy_zapros">Пустой запрос</string>
     <string name="zapros_ne_mozhet_byt_pustym">Запрос не может быть пустым</string>
@@ -204,4 +205,8 @@
     <string name="bluetooth_uzhe_vklyuchen">Bluetooth уже включён, сэр.</string>
     <string name="bluetooth_uzhe_vyklyuchen">Bluetooth уже выключен, сэр.</string>
     <string name="chtoby_upravlyat_bluetooth">Чтобы управлять Bluetooth, нужно разрешение на доступ к Bluetooth</string>
+    <string name="privacy_unknown_local_only">Приватность: неизвестно — только локально</string>
+    <string name="privacy_normal_cloud_possible">Приватность: обычный запрос — облако разрешено</string>
+    <string name="privacy_private_local_only">Приватность: приватный запрос — только локально</string>
+    <string name="privacy_sensitive_local_only">Приватность: чувствительные данные — только локально</string>
 </resources>
