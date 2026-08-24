@@ -23,7 +23,7 @@ class ToolCallParser @Inject constructor(
      * Извлекает список структурированных вызовов инструментов из ответа LLM.
      * Поддерживает чистый JSON и JSON-объект внутри обычного текста/code fence.
      */
-    fun parse(rawLlmOutput: String, userPrompt: String = ""): List<ToolCall> {
+    fun parse(rawLlmOutput: String): List<ToolCall> {
         if (rawLlmOutput.length > MAX_LLM_OUTPUT_CHARS) {
             Log.w(TAG, "parse: ответ LLM превышает безопасный предел")
             return emptyList()
