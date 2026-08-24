@@ -41,6 +41,7 @@ class OpenAppTool @Inject constructor(
     override val category: ToolCategory = ToolCategory.DEVICE
     override val riskLevel: ToolRisk = ToolRisk.LOW
     override val isOffline: Boolean = true
+    override val mayDiscloseUserContentExternally: Boolean = true
     override val requiresForeground: Boolean = true
 
     override val capabilityContract = ToolCapabilityContract(
