@@ -124,7 +124,7 @@ open class CognitivePlanner @Inject constructor(
         // LLM-BASED PLANNING: Парсинг tool_calls из ответа AI
         // =========================================================================
         if (!llmRawOutput.isNullOrBlank()) {
-            val toolCalls = toolCallParser.parse(llmRawOutput, userPrompt)
+            val toolCalls = toolCallParser.parse(llmRawOutput)
             if (toolCalls.isNotEmpty()) {
                 val steps = toolCalls.map { call ->
                     PlanStep(
