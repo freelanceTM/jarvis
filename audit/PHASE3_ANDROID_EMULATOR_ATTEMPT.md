@@ -106,6 +106,8 @@ The workflow passes YAML parsing and actionlint 1.7.12 locally. Hosted execution
 must be assessed from the corresponding GitHub Actions run rather than inferred
 from this local software-emulator attempt.
 
-A hardware-accelerated CI runner, physical device, or KVM-enabled local host is
-still required to close the production LicenseManager/Android coverage evidence
-gap.
+A later hardware-accelerated GitHub run closed the ordinary emulator gap:
+`android-instrumentation` completed successfully on API 34 in run `32783667894`
+and published Android test/coverage evidence. This does not change the local TCG
+result above and does not replace physical voice, Bluetooth, telephony,
+Accessibility, or separately installed real-model validation.

@@ -30,9 +30,9 @@ must be added only when the repository owner creates an actual release.
 - CI execution for the dev JVM suite, JaCoCo gates, Detekt, lint,
   PostgreSQL-backed server verification, and dev app/test APK compilation;
   quality reports and the dev app APK are published as workflow artifacts.
-- Configuration for a dedicated KVM-backed Android API 34 CI job that runs the
-  ordinary instrumentation suite, generates Android coverage, and publishes
-  test and coverage evidence; emulator diagnostics remain in the workflow log.
+- A dedicated KVM-backed Android API 34 CI job that runs the ordinary
+  instrumentation suite, generates Android coverage, and publishes test and
+  coverage evidence. The corrected job completed successfully in hosted CI.
 
 ### Changed
 

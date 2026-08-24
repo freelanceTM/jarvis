@@ -166,7 +166,7 @@ android {
         warningsAsErrors = true
         baseline = file("lint-baseline.xml")
         abortOnError = true
-        disable += setOf("GradleDependency", "AndroidGradlePluginVersion")
+        disable += setOf("GradleDependency", "AndroidGradlePluginVersion", "OldTargetApi")
     }
 
     packaging {

@@ -72,12 +72,16 @@ physical voice tests remain explicitly gated; ordinary device coverage must not
 claim those paths when their prerequisites are absent.
 
 The `android-instrumentation` job in `.github/workflows/build.yml` provisions a
-KVM-backed API 34 emulator and runs this coverage task. Its workflow syntax is
-validated locally, but no GitHub-hosted run result is claimed in this workspace.
-A local software-emulation attempt was not valid execution evidence: `/dev/kvm`
-was absent, boot required approximately 21 minutes, and Android `system_server`
-crashed before the APK could be installed. A hardware-accelerated CI/device run
-therefore remains required.
+KVM-backed API 34 emulator and runs this coverage task. It completed successfully
+in GitHub Actions run `32783667894` and published the
+`android-api34-instrumentation` artifact. The separately installed real model and
+physical voice/Bluetooth tests remained gated.
+
+The earlier local software-emulation attempt is still not valid execution
+evidence: `/dev/kvm` was absent, boot required approximately 21 minutes, and
+Android `system_server` crashed before APK installation. Physical-device coverage
+remains a separate follow-up even though the ordinary API 34 emulator gate is now
+green.
 
 ## Coverage policy
 

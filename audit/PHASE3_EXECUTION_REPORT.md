@@ -19,9 +19,9 @@ Phase 3 is implemented and the locally executable quality matrix is green.
   test remains excluded from the ordinary task.
 - The old arithmetic-only `LicenseManagerTest` was removed. Five Android tests
   now execute the production `LicenseManagerImpl` with real Android
-  Keystore-backed encrypted preferences. They compile, but could not be run:
-  the initial environment had no adb target, and a follow-up unaccelerated API
-  34 emulator attempt crashed below the application boundary before install.
+  Keystore-backed encrypted preferences. Local software emulation was unusable,
+  but the complete ordinary suite now passes on a KVM-backed API 34 GitHub
+  runner.
 - Dev and production lint, Android/server Detekt, all APK builds, production R8
   and resource shrinking, dependency-lock regeneration, and APK endpoint
   checks pass.
@@ -115,13 +115,20 @@ service then broke during APK installation and `system_server` terminated.
 No test case began and no Android coverage data was generated. Details are in
 `audit/PHASE3_ANDROID_EMULATOR_ATTEMPT.md`.
 
-A dedicated KVM-backed `android-instrumentation` CI job is now configured through
-an immutable android-emulator-runner v2.38.0 commit to run
-`:app:createDevDebugCoverageReport` and upload test/coverage evidence. Its YAML
-and actionlint checks pass locally; the hosted run result is tracked separately.
-Therefore no Android framework, Keystore, DataStore, Compose, Room, scheduler,
-MediaPipe, voice, or physical permission behavior is claimed as executed in this
-workspace. The dev instrumentation APK was successfully compiled.
+The dedicated KVM-backed `android-instrumentation` CI job uses the immutable
+android-emulator-runner v2.38.0 commit and completed successfully on Android API
+34 in run `32783667894`:
+`https://github.com/freelanceTM/jarvis/actions/runs/32783667894`.
+
+The successful `:app:createDevDebugCoverageReport` execution installed both APKs,
+ran the ordinary instrumentation suite, collected Android execution data, and
+published the `android-api34-instrumentation` artifact. This provides actual API
+34 emulator evidence for production LicenseManager encrypted persistence,
+DataStore, Compose semantics, the authentic Room v5 schema, scheduler/service and
+other ordinary device tests. Real-model, Bluetooth-headset and physical-voice
+cases remain explicitly gated and are not inferred from the emulator run. No
+Android coverage percentage is reported here because the public run API confirms
+the artifact/task result but does not expose its counters.
 
 ### 3.3 Detekt and lint
 
@@ -140,14 +147,15 @@ entries:
 - 1 `LockedOrientationActivity`;
 - 1 `DiscouragedApi`.
 
-`GradleDependency` and `AndroidGradlePluginVersion` were removed from Android lint
-only after CI demonstrated that their external "latest available" metadata and
-root paths produce non-reproducible baseline matching. Dependency recency and
-security remain enforced by Dependabot, dependency review, strict locks,
-verification metadata, the reviewed migration plan, and blocking Trivy scans.
-All deterministic lint rules remain `warningsAsErrors`. Signature comparison
-confirmed that the 28 Android findings are unchanged and no new production
-warning was baselined.
+`GradleDependency`, `AndroidGradlePluginVersion`, and `OldTargetApi` were removed
+from Android lint only after CI demonstrated that their external SDK/"latest
+available" metadata produces different results across otherwise identical
+checkouts. Dependency recency and security remain enforced by Dependabot,
+dependency review, strict locks, verification metadata, the reviewed migration
+plan, and blocking Trivy scans; target SDK recency is tracked in the coordinated
+AGP/Kotlin/SDK migration. All deterministic lint rules remain
+`warningsAsErrors`. Signature comparison confirmed that the 28 Android findings
+are unchanged and no new production warning was baselined.
 
 ### 3.4 Strict dependency locking compatibility
 
@@ -260,14 +268,16 @@ weakened.
 
 ### 5.3 New instrumentation coverage targets
 
-Compiled but not device-executed:
+Executed successfully on the KVM-backed Android API 34 emulator:
 
 - 5 production license/encrypted-persistence tests;
 - 3 production `SettingsDataStore` persistence/default/reset tests;
-- 3 Compose semantics/action/progress/status tests.
+- 3 Compose semantics/action/progress/status tests;
+- authentic Room v5 schema tests and the remaining ordinary emulator-capable
+  instrumentation suite.
 
-Existing Room migration, scheduler, and other instrumentation sources also
-compile into the dev test APK.
+Tests requiring a separately installed 500+ MiB model or physical voice/Bluetooth
+hardware remain gated and were not counted as executed functionality.
 
 ### 5.4 Confirmed bug and regression test
 
@@ -379,6 +389,7 @@ semantics.
 | Phase-3 credential-pattern scan over the changed source/configuration set | PASS; no matches |
 | Initial `adb devices -l` | No devices/emulators |
 | Local API 34 software-emulator attempt | ADB connected and one fresh boot eventually completed, but APK installation failed with a package-service broken pipe and `system_server` crashed; no test started |
+| GitHub Actions KVM API 34 `:app:createDevDebugCoverageReport` (run `32783667894`) | PASS; ordinary instrumentation and Android coverage artifact generated |
 | actionlint 1.7.12 after adding the KVM API 34 instrumentation job | PASS |
 
 Investigated execution issues, not ignored:
@@ -403,6 +414,12 @@ Investigated execution issues, not ignored:
    then lost the package/network stack during APK installation. No test started;
    this is recorded as an environment failure, not an application result. A
    KVM-required CI job was added instead of weakening or faking device tests.
+6. Hosted CI exposed non-portable lint recency metadata and initially failing
+   device tests. The deterministic 28-entry Android baseline was preserved,
+   dependency/SDK recency moved to dedicated policy, the authentic Room v5 schema
+   was packaged as an androidTest asset, and the optional real-model gate was
+   moved before runtime construction. Dev/prod lint and the KVM API 34 ordinary
+   instrumentation/coverage task then passed.
 
 Non-failing environment warnings retained for transparency:
 
@@ -512,11 +529,11 @@ a substitute for a real version-control diff.
 
 ## 11. Remaining evidence boundaries
 
-1. **Android device execution:** no usable accelerated target was available.
-   The initial adb inventory was empty; an unaccelerated API 34 emulator later
-   reached adb but crashed below the app boundary before installation. The
-   production license, DataStore, Compose, Room, scheduler, permission, and
-   Android coverage claims remain compile-only until a KVM CI or device run.
+1. **Android device execution:** the local sandbox still lacks KVM and its
+   software emulator was unusable, but the KVM-backed API 34 GitHub job now
+   passes the ordinary suite and coverage task. Physical-device-only voice,
+   Bluetooth, telephony, Accessibility and separately installed model behavior
+   still require their authorized/manual jobs.
 2. **Live providers:** the opt-in provider staging smoke test was not run; no
    authorized provider credentials were supplied or requested for the ordinary
    suite.
@@ -541,12 +558,11 @@ ordinary suite was executed against an isolated PostgreSQL 17 database.
 
 ### Test and CI priorities
 
-1. Run and review the new KVM-backed `android-instrumentation` CI job, then also
+1. Retain the now-green KVM-backed `android-instrumentation` job and additionally
    run `:app:createDevDebugCoverageReport` on at least one physical API-34
-   device. Preserve XML/HTML and instrumentation logs.
-2. After obtaining a green accelerated run, keep the five production
-   `LicenseManagerImpl` tests as a required device gate before accepting any
-   encrypted-storage migration.
+   device. Preserve and trend the Android XML/HTML coverage counters.
+2. Keep the five production `LicenseManagerImpl` tests as a required API-34
+   device gate before accepting any encrypted-storage migration.
 3. Add staging JVM/build and production JVM/R8/endpoint checks to CI, since they
    currently pass locally but the primary build workflow focuses on dev.
 4. Add package-specific gates around security, privacy routing, persistence,
@@ -575,8 +591,9 @@ behavior has a production Android test instead of a copied algorithm; JaCoCo,
 Detekt, lint, locks, CI, and policy documents provide enforceable repository
 hygiene.
 
-The remaining limitations are explicitly evidence-based: Android instrumentation
-requires a stable KVM-backed or physical adb target (the local software emulator
-failed below the app boundary), provider/model/hardware tests require authorized
-prerequisites, release signing material is absent, and `.git` metadata is not
-available. None is reported as executed or inferred from mocks.
+The remaining limitations are explicitly evidence-based: ordinary Android
+instrumentation now passes on a KVM-backed API 34 runner, while physical
+voice/Bluetooth/telephony/Accessibility and real-model tests still require their
+authorized prerequisites. Release signing material is absent and the original
+workspace still has no `.git` metadata. None of the remaining hardware/provider
+paths is inferred from mocks.

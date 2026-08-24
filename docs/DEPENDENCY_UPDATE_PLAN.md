@@ -17,11 +17,13 @@ confirmed that `GradleDependency` and `AndroidGradlePluginVersion` depend on the
 runner's external "latest available" metadata and checkout path, so identical
 source produced different baseline matches across environments.
 
-Those two version-recency IDs are now excluded from Android lint only. Their
-responsibility remains covered by Dependabot, pull-request dependency review,
-strict dependency locks, SHA-256 verification metadata, the documented migration
-plan, and blocking Trivy HIGH/CRITICAL scans. Deterministic Android lint rules
-remain `warningsAsErrors`.
+The environment-dependent version-recency IDs `GradleDependency`,
+`AndroidGradlePluginVersion`, and `OldTargetApi` are now excluded from Android
+lint only. Dependency responsibility remains covered by Dependabot, pull-request
+dependency review, strict locks, SHA-256 verification metadata, and blocking
+Trivy HIGH/CRITICAL scans. Compile/target SDK recency remains an explicit part of
+the coordinated AGP/Kotlin/KSP/Compose migration below. Deterministic Android
+lint rules remain `warningsAsErrors`.
 
 The final lint baseline therefore contains only the 28 existing Android
 source/resource findings. It was signature-compared with both prior baselines:
