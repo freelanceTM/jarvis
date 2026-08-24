@@ -1,301 +1,301 @@
 caseId,category,expectedRoute,actualRoute,routeCorrect,success,latencyMs,cloudRequest,provider,model,inputTokens,outputTokens,totalTokens,errorCode,responseChars,runIndex,timestampMs,command
-DEVICE-001,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,0,1787252737980,Открой Telegram
-DEVICE-002,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,32,0,1787252737992,Открой YouTube
-DEVICE-003,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,0,1787252738005,Открой настройки
-DEVICE-004,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,0,1787252738017,Открой камеру
-DEVICE-005,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,0,1787252738030,Запусти WhatsApp
-DEVICE-006,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,0,1787252738042,Открой калькулятор
-DEVICE-007,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,30,0,1787252738054,Сделай громче
-DEVICE-008,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,0,1787252738067,Убавь громкость
-DEVICE-009,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,30,0,1787252738079,Установи громкость 50 процентов
-DEVICE-010,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,0,1787252738092,Выключи звук
-DEVICE-011,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,34,0,1787252738104,Включи фонарик
-DEVICE-012,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,34,0,1787252738116,Выключи фонарик
-DEVICE-013,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,34,0,1787252738129,Сделай экран ярче
-DEVICE-014,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,34,0,1787252738141,Установи яркость 30 процентов
-DEVICE-015,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,28,0,1787252738154,Включи Wi-Fi
-DEVICE-016,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,33,0,1787252738166,Выключи блютуз
-DEVICE-017,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,31,0,1787252738179,Сколько заряда батареи
-DEVICE-018,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,28,0,1787252738191,Который час
-DEVICE-019,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,34,0,1787252738204,Сделай скриншот
-DEVICE-020,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,27,0,1787252738216,Включи режим не беспокоить
-DEVICE-021,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,0,1787252738229,Включи музыку
-DEVICE-022,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,30,0,1787252738241,Следующий трек
-DEVICE-023,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,0,1787252738254,Поставь музыку на паузу
-DEVICE-024,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,36,0,1787252738266,Проложи маршрут до Амстердама
-DEVICE-025,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,35,0,1787252738279,Какая модель у телефона
-LOCAL-001,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,2277,false,,,,,,,27,0,1787252738291,Что значит квантовая запутанность?
-LOCAL-002,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,0,1787252740569,Что такое NFT?
-LOCAL-003,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252741045,Объясни принцип работы DNS
-LOCAL-004,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252741522,Что такое рекурсия?
-LOCAL-005,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252741999,Объясни разницу между TCP и UDP
-LOCAL-006,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252742476,Что такое REST API?
-LOCAL-007,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,0,1787252742953,Почему небо голубое?
-LOCAL-008,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,0,1787252743430,Расскажи про теорию относительности
-LOCAL-009,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252743906,Как работает блокчейн?
-LOCAL-010,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252744383,Что такое машинное обучение?
-LOCAL-011,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252744860,Объясни что такое кэш процессора
-LOCAL-012,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252745337,В чём разница между HTTP и HTTPS?
-LOCAL-013,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,0,1787252745814,Что означает аббревиатура API?
-LOCAL-014,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252746290,Расскажи анекдот
-LOCAL-015,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252746767,Придумай название для кофейни
-LOCAL-016,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252747244,Как приготовить омлет?
-LOCAL-017,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252747721,Сколько будет 15 процентов от 240?
-LOCAL-018,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252748198,Дай совет как побороть прокрастинацию
-LOCAL-019,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252748675,Что такое чёрная дыра?
-LOCAL-020,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,0,1787252749152,Объясни принцип работы холодильника
-LOCAL-021,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,0,1787252749629,Напиши короткое поздравление с днём рождения
-LOCAL-022,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252750105,Чем отличается вирус от бактерии?
-CLOUD-001,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,624,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787252750582,"Проанализируй следующий договор аренды и выдели риски для арендатора: договор заключается на 11 месяцев с автоматической пролонгацией, депозит равен двум месячным платежам и не возвращается при досрочном расторжении, индексация арендной платы производится ежеквартально по усмотрению арендодателя без ограничения верхнего предела, текущий ремонт полностью за счёт арендатора, а арендодатель вправе расторгнуть договор в одностороннем порядке с уведомлением за 14 дней"
-CLOUD-002,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,620,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787252751206,"Сделай подробное резюме этого технического отчёта: система показала деградацию производительности на 40 процентов при нагрузке свыше десяти тысяч одновременных соединений, основной причиной является блокировка пула соединений с базой данных, вторичным фактором — неоптимальные индексы на таблице событий, а также отсутствие кэширования часто запрашиваемых агрегатов и синхронная запись логов"
-CLOUD-003,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,611,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787252751826,"Напиши подробный бизнес-план для小 кофейни с расчётом окупаемости, структурой затрат, анализом целевой аудитории, маркетинговой стратегией и прогнозом выручки на три года вперёд с разбивкой по кварталам"
-CLOUD-004,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,610,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787252752437,"Проанализируй архитектуру микросервисов и предложи улучшения с учётом отказоустойчивости, наблюдаемости, стоимости эксплуатации и сложности миграции существующих данных между сервисами без простоя"
-CLOUD-005,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787252753047,"Напиши код на Kotlin для реализации потокобезопасного LRU-кэша с поддержкой TTL, ленивой инвалидацией и метриками попаданий"
-CLOUD-006,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,610,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787252753653,"Сравни преимущества и недостатки монолитной и микросервисной архитектуры для команды из пяти разработчиков с учётом стоимости поддержки, скорости вывода функций и требований к отказоустойчивости"
-CLOUD-007,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787252754263,Проанализируй причины оттока клиентов и предложи стратегию удержания с приоритизацией мер по соотношению стоимости и ожидаемого эффекта
-CLOUD-008,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787252754870,"Объясни устройство трансформерной архитектуры нейросетей подробно, включая механизм внимания, позиционное кодирование и нормализацию слоёв"
-CLOUD-009,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787252755476,"Составь подробную инвестиционную стратегию на пять лет с учётом диверсификации, горизонта риска и налоговых последствий"
-CLOUD-010,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787252756082,Проверь этот текст на логические ошибки и предложи улучшенную редакцию с сохранением авторского стиля и структуры аргументации
-CLOUD-011,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787252756689,"Разработай стратегию выхода продукта на европейский рынок с учётом регуляторных требований, локализации и конкурентного окружения"
-CLOUD-012,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787252757295,"Напиши подробную техническую документацию для REST API системы платежей с описанием методов, кодов ошибок, идемпотентности и примерами"
-CLOUD-013,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787252757902,"Проанализируй финансовую отчётность компании и оцени риски с точки зрения ликвидности, долговой нагрузки и качества выручки"
-CLOUD-014,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787252758509,Составь подробный учебный план по изучению Kotlin с нуля до продвинутого уровня на шесть месяцев с еженедельными целями и проектами
-CLOUD-015,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787252759115,"Объясни различия между реляционными и графовыми базами данных подробно, с примерами запросов, моделей данных и сценариев применения"
-WEB-001,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787252759722,Какие новости сегодня?
-WEB-002,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,601,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787252760324,Какая сегодня цена биткоина?
-WEB-003,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787252760925,Найди актуальную цену iPhone 15
-WEB-004,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,601,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787252761527,Какой сейчас курс евро к доллару?
-WEB-005,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787252762129,Что произошло в мире за последнюю неделю?
-WEB-006,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787252762731,Найди отзывы о новом ноутбуке Lenovo
-WEB-007,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,601,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787252763333,Когда следующий матч сборной?
-WEB-008,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,603,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787252763934,Какие сейчас цены на авиабилеты в Стамбул?
-WEB-009,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787252764537,Найди информацию о последнем релизе Kotlin
-WEB-010,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,601,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787252765140,Какой курс акций Apple сейчас?
-AGENT-001,AGENT,AGENT,AGENT,true,true,38,false,,,,,,,83,0,1787252765741,Подготовь телефон ко сну
-AGENT-002,AGENT,AGENT,AGENT,true,true,37,false,,,,,,,87,0,1787252765779,Я ухожу из дома
-AGENT-003,AGENT,AGENT,AGENT,true,true,25,false,,,,,,,54,0,1787252765816,Я пришёл домой
-AGENT-004,AGENT,AGENT,AGENT,true,true,37,false,,,,,,,83,0,1787252765841,Включи ночной режим
-AGENT-005,AGENT,AGENT,AGENT,true,true,25,false,,,,,,,53,0,1787252765878,Режим совещания
-AGENT-006,AGENT,AGENT,AGENT,true,true,25,false,,,,,,,59,0,1787252765903,Подготовь к поездке за рулём
-AGENT-007,AGENT,AGENT,AGENT,true,true,38,false,,,,,,,87,0,1787252765928,Включи режим экономии заряда
-AGENT-008,AGENT,AGENT,AGENT,true,true,49,false,,,,,,,120,0,1787252765966,Проведи диагностику системы
-AGENT-009,AGENT,AGENT,AGENT,true,true,25,false,,,,,,,59,0,1787252766015,Сделай план поездки в Италию на 7 дней и сравни варианты перелёта
-AGENT-010,AGENT,AGENT,CLOUD_AI,false,true,604,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787252766040,Сравни десять вариантов ноутбуков и выбери лучший в пределах бюджета
-AMB-001,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,24,0,1787252766644,Открой
-AMB-002,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,22,0,1787252766644,Найди это
-AMB-003,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,35,0,1787252766644,Что лучше?
-AMB-004,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,26,0,1787252766644,Проверь
-AMB-005,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,43,0,1787252766644,Переведи
-AMB-006,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,30,0,1787252766644,Сделай это
-EDGE-001,EDGE_CASE,REFUSAL,NONE,true,false,0,false,,,,,,INVALID_REQUEST,28,0,1787252766644,
-EDGE-002,EDGE_CASE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,0,1787252766644,открой телегу
-EDGE-003,EDGE_CASE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,33,0,1787252766656,включи блютуз
-EDGE-004,EDGE_CASE,ANY_NON_DEVICE,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252766669,what is quantum entanglement
-EDGE-005,EDGE_CASE,ANY_NON_DEVICE,LOCAL_AI,true,true,476,false,,,,,,,27,0,1787252767146,постав таймер на десять мин
-EDGE-006,EDGE_CASE,CLOUD_AI,CLOUD_AI,true,true,726,true,GROQ,llama-3.3-70b-versatile,,,128,,38,0,1787252767623,аааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааа
-EDGE-007,EDGE_CASE,ANY_NON_DEVICE,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252768349,Сделай мне бутерброд
-PRIV-001,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252768826,Запомни мой пароль от банковского приложения
-PRIV-002,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252769303,Что я записывал о своём здоровье?
-PRIV-003,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,0,1787252769780,Проанализируй мою медицинскую карту
-PRIV-004,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787252770256,Мои личные заметки о финансах
-PRIV-005,PRIVACY,REFUSAL,NONE,true,false,1,false,,,,,,CLOUD_BLOCKED_BY_PRIVACY,128,0,1787252770733,Найди в интернете информацию о моём диагнозе
-DEVICE-001,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,1,1787252770734,Открой Telegram
-DEVICE-002,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,32,1,1787252770746,Открой YouTube
-DEVICE-003,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,32,1,1787252770759,Открой настройки
-DEVICE-004,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,1,1787252770772,Открой камеру
-DEVICE-005,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,1,1787252770785,Запусти WhatsApp
-DEVICE-006,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,1,1787252770797,Открой калькулятор
-DEVICE-007,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,30,1,1787252770809,Сделай громче
-DEVICE-008,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,1,1787252770822,Убавь громкость
-DEVICE-009,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,30,1,1787252770834,Установи громкость 50 процентов
-DEVICE-010,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,1,1787252770847,Выключи звук
-DEVICE-011,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,34,1,1787252770859,Включи фонарик
-DEVICE-012,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,34,1,1787252770872,Выключи фонарик
-DEVICE-013,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,34,1,1787252770884,Сделай экран ярче
-DEVICE-014,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,34,1,1787252770897,Установи яркость 30 процентов
-DEVICE-015,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,28,1,1787252770909,Включи Wi-Fi
-DEVICE-016,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,33,1,1787252770922,Выключи блютуз
-DEVICE-017,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,31,1,1787252770934,Сколько заряда батареи
-DEVICE-018,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,28,1,1787252770947,Который час
-DEVICE-019,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,34,1,1787252770959,Сделай скриншот
-DEVICE-020,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,27,1,1787252770972,Включи режим не беспокоить
-DEVICE-021,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,30,1,1787252770984,Включи музыку
-DEVICE-022,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,1,1787252770997,Следующий трек
-DEVICE-023,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,30,1,1787252771009,Поставь музыку на паузу
-DEVICE-024,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,36,1,1787252771022,Проложи маршрут до Амстердама
-DEVICE-025,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,35,1,1787252771034,Какая модель у телефона
-LOCAL-001,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252771047,Что значит квантовая запутанность?
-LOCAL-002,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252771524,Что такое NFT?
-LOCAL-003,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252772001,Объясни принцип работы DNS
-LOCAL-004,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252772478,Что такое рекурсия?
-LOCAL-005,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252772955,Объясни разницу между TCP и UDP
-LOCAL-006,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252773432,Что такое REST API?
-LOCAL-007,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,1,1787252773909,Почему небо голубое?
-LOCAL-008,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252774385,Расскажи про теорию относительности
-LOCAL-009,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252774862,Как работает блокчейн?
-LOCAL-010,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252775339,Что такое машинное обучение?
-LOCAL-011,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252775816,Объясни что такое кэш процессора
-LOCAL-012,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252776293,В чём разница между HTTP и HTTPS?
-LOCAL-013,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252776770,Что означает аббревиатура API?
-LOCAL-014,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,1,1787252777247,Расскажи анекдот
-LOCAL-015,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252777723,Придумай название для кофейни
-LOCAL-016,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252778200,Как приготовить омлет?
-LOCAL-017,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,478,false,,,,,,,27,1,1787252778677,Сколько будет 15 процентов от 240?
-LOCAL-018,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252779155,Дай совет как побороть прокрастинацию
-LOCAL-019,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252779632,Что такое чёрная дыра?
-LOCAL-020,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252780109,Объясни принцип работы холодильника
-LOCAL-021,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,1,1787252780586,Напиши короткое поздравление с днём рождения
-LOCAL-022,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252781062,Чем отличается вирус от бактерии?
-CLOUD-001,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,624,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787252781539,"Проанализируй следующий договор аренды и выдели риски для арендатора: договор заключается на 11 месяцев с автоматической пролонгацией, депозит равен двум месячным платежам и не возвращается при досрочном расторжении, индексация арендной платы производится ежеквартально по усмотрению арендодателя без ограничения верхнего предела, текущий ремонт полностью за счёт арендатора, а арендодатель вправе расторгнуть договор в одностороннем порядке с уведомлением за 14 дней"
-CLOUD-002,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,620,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787252782163,"Сделай подробное резюме этого технического отчёта: система показала деградацию производительности на 40 процентов при нагрузке свыше десяти тысяч одновременных соединений, основной причиной является блокировка пула соединений с базой данных, вторичным фактором — неоптимальные индексы на таблице событий, а также отсутствие кэширования часто запрашиваемых агрегатов и синхронная запись логов"
-CLOUD-003,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,611,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787252782783,"Напиши подробный бизнес-план для小 кофейни с расчётом окупаемости, структурой затрат, анализом целевой аудитории, маркетинговой стратегией и прогнозом выручки на три года вперёд с разбивкой по кварталам"
-CLOUD-004,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,609,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787252783394,"Проанализируй архитектуру микросервисов и предложи улучшения с учётом отказоустойчивости, наблюдаемости, стоимости эксплуатации и сложности миграции существующих данных между сервисами без простоя"
-CLOUD-005,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787252784003,"Напиши код на Kotlin для реализации потокобезопасного LRU-кэша с поддержкой TTL, ленивой инвалидацией и метриками попаданий"
-CLOUD-006,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,610,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787252784610,"Сравни преимущества и недостатки монолитной и микросервисной архитектуры для команды из пяти разработчиков с учётом стоимости поддержки, скорости вывода функций и требований к отказоустойчивости"
-CLOUD-007,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787252785220,Проанализируй причины оттока клиентов и предложи стратегию удержания с приоритизацией мер по соотношению стоимости и ожидаемого эффекта
-CLOUD-008,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787252785826,"Объясни устройство трансформерной архитектуры нейросетей подробно, включая механизм внимания, позиционное кодирование и нормализацию слоёв"
-CLOUD-009,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787252786433,"Составь подробную инвестиционную стратегию на пять лет с учётом диверсификации, горизонта риска и налоговых последствий"
-CLOUD-010,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787252787039,Проверь этот текст на логические ошибки и предложи улучшенную редакцию с сохранением авторского стиля и структуры аргументации
-CLOUD-011,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787252787645,"Разработай стратегию выхода продукта на европейский рынок с учётом регуляторных требований, локализации и конкурентного окружения"
-CLOUD-012,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787252788252,"Напиши подробную техническую документацию для REST API системы платежей с описанием методов, кодов ошибок, идемпотентности и примерами"
-CLOUD-013,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787252788859,"Проанализируй финансовую отчётность компании и оцени риски с точки зрения ликвидности, долговой нагрузки и качества выручки"
-CLOUD-014,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787252789465,Составь подробный учебный план по изучению Kotlin с нуля до продвинутого уровня на шесть месяцев с еженедельными целями и проектами
-CLOUD-015,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787252790072,"Объясни различия между реляционными и графовыми базами данных подробно, с примерами запросов, моделей данных и сценариев применения"
-WEB-001,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787252790678,Какие новости сегодня?
-WEB-002,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,601,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787252791280,Какая сегодня цена биткоина?
-WEB-003,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,601,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787252791882,Найди актуальную цену iPhone 15
-WEB-004,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787252792483,Какой сейчас курс евро к доллару?
-WEB-005,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787252793085,Что произошло в мире за последнюю неделю?
-WEB-006,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787252793687,Найди отзывы о новом ноутбуке Lenovo
-WEB-007,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,601,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787252794289,Когда следующий матч сборной?
-WEB-008,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,603,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787252794890,Какие сейчас цены на авиабилеты в Стамбул?
-WEB-009,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787252795493,Найди информацию о последнем релизе Kotlin
-WEB-010,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787252796095,Какой курс акций Apple сейчас?
-AGENT-001,AGENT,AGENT,AGENT,true,true,38,false,,,,,,,83,1,1787252796697,Подготовь телефон ко сну
-AGENT-002,AGENT,AGENT,AGENT,true,true,37,false,,,,,,,87,1,1787252796735,Я ухожу из дома
-AGENT-003,AGENT,AGENT,AGENT,true,true,25,false,,,,,,,54,1,1787252796772,Я пришёл домой
-AGENT-004,AGENT,AGENT,AGENT,true,true,37,false,,,,,,,83,1,1787252796797,Включи ночной режим
-AGENT-005,AGENT,AGENT,AGENT,true,true,25,false,,,,,,,53,1,1787252796834,Режим совещания
-AGENT-006,AGENT,AGENT,AGENT,true,true,25,false,,,,,,,59,1,1787252796859,Подготовь к поездке за рулём
-AGENT-007,AGENT,AGENT,AGENT,true,true,37,false,,,,,,,87,1,1787252796884,Включи режим экономии заряда
-AGENT-008,AGENT,AGENT,AGENT,true,true,50,false,,,,,,,120,1,1787252796921,Проведи диагностику системы
-AGENT-009,AGENT,AGENT,AGENT,true,true,24,false,,,,,,,59,1,1787252796971,Сделай план поездки в Италию на 7 дней и сравни варианты перелёта
-AGENT-010,AGENT,AGENT,CLOUD_AI,false,true,604,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787252796995,Сравни десять вариантов ноутбуков и выбери лучший в пределах бюджета
-AMB-001,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,24,1,1787252797599,Открой
-AMB-002,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,22,1,1787252797599,Найди это
-AMB-003,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,35,1,1787252797599,Что лучше?
-AMB-004,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,26,1,1787252797599,Проверь
-AMB-005,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,43,1,1787252797599,Переведи
-AMB-006,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,30,1,1787252797599,Сделай это
-EDGE-001,EDGE_CASE,REFUSAL,NONE,true,false,0,false,,,,,,INVALID_REQUEST,28,1,1787252797599,
-EDGE-002,EDGE_CASE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,32,1,1787252797599,открой телегу
-EDGE-003,EDGE_CASE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,33,1,1787252797612,включи блютуз
-EDGE-004,EDGE_CASE,ANY_NON_DEVICE,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252797625,what is quantum entanglement
-EDGE-005,EDGE_CASE,ANY_NON_DEVICE,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252798102,постав таймер на десять мин
-EDGE-006,EDGE_CASE,CLOUD_AI,CLOUD_AI,true,true,726,true,GROQ,llama-3.3-70b-versatile,,,128,,38,1,1787252798579,аааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааа
-EDGE-007,EDGE_CASE,ANY_NON_DEVICE,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252799305,Сделай мне бутерброд
-PRIV-001,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,1,1787252799782,Запомни мой пароль от банковского приложения
-PRIV-002,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,1,1787252800259,Что я записывал о своём здоровье?
-PRIV-003,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252800735,Проанализируй мою медицинскую карту
-PRIV-004,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787252801212,Мои личные заметки о финансах
-PRIV-005,PRIVACY,REFUSAL,NONE,true,false,0,false,,,,,,CLOUD_BLOCKED_BY_PRIVACY,128,1,1787252801689,Найди в интернете информацию о моём диагнозе
-DEVICE-001,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,32,2,1787252801689,Открой Telegram
-DEVICE-002,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,2,1787252801702,Открой YouTube
-DEVICE-003,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,32,2,1787252801714,Открой настройки
-DEVICE-004,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,2,1787252801727,Открой камеру
-DEVICE-005,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,32,2,1787252801739,Запусти WhatsApp
-DEVICE-006,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,2,1787252801752,Открой калькулятор
-DEVICE-007,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,30,2,1787252801764,Сделай громче
-DEVICE-008,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,2,1787252801777,Убавь громкость
-DEVICE-009,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,30,2,1787252801789,Установи громкость 50 процентов
-DEVICE-010,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,2,1787252801802,Выключи звук
-DEVICE-011,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,34,2,1787252801814,Включи фонарик
-DEVICE-012,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,34,2,1787252801827,Выключи фонарик
-DEVICE-013,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,34,2,1787252801839,Сделай экран ярче
-DEVICE-014,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,34,2,1787252801852,Установи яркость 30 процентов
-DEVICE-015,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,28,2,1787252801864,Включи Wi-Fi
-DEVICE-016,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,33,2,1787252801877,Выключи блютуз
-DEVICE-017,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,31,2,1787252801889,Сколько заряда батареи
-DEVICE-018,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,28,2,1787252801902,Который час
-DEVICE-019,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,34,2,1787252801914,Сделай скриншот
-DEVICE-020,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,27,2,1787252801927,Включи режим не беспокоить
-DEVICE-021,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,2,1787252801939,Включи музыку
-DEVICE-022,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,30,2,1787252801951,Следующий трек
-DEVICE-023,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,2,1787252801964,Поставь музыку на паузу
-DEVICE-024,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,36,2,1787252801976,Проложи маршрут до Амстердама
-DEVICE-025,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,35,2,1787252801989,Какая модель у телефона
-LOCAL-001,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252802001,Что значит квантовая запутанность?
-LOCAL-002,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252802478,Что такое NFT?
-LOCAL-003,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252802955,Объясни принцип работы DNS
-LOCAL-004,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,2,1787252803432,Что такое рекурсия?
-LOCAL-005,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252803908,Объясни разницу между TCP и UDP
-LOCAL-006,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252804385,Что такое REST API?
-LOCAL-007,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252804862,Почему небо голубое?
-LOCAL-008,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,2,1787252805339,Расскажи про теорию относительности
-LOCAL-009,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252805815,Как работает блокчейн?
-LOCAL-010,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252806292,Что такое машинное обучение?
-LOCAL-011,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252806769,Объясни что такое кэш процессора
-LOCAL-012,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252807246,В чём разница между HTTP и HTTPS?
-LOCAL-013,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252807723,Что означает аббревиатура API?
-LOCAL-014,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,2,1787252808200,Расскажи анекдот
-LOCAL-015,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252808676,Придумай название для кофейни
-LOCAL-016,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252809153,Как приготовить омлет?
-LOCAL-017,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252809630,Сколько будет 15 процентов от 240?
-LOCAL-018,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252810107,Дай совет как побороть прокрастинацию
-LOCAL-019,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252810584,Что такое чёрная дыра?
-LOCAL-020,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252811061,Объясни принцип работы холодильника
-LOCAL-021,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,2,1787252811538,Напиши короткое поздравление с днём рождения
-LOCAL-022,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252812014,Чем отличается вирус от бактерии?
-CLOUD-001,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,624,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787252812491,"Проанализируй следующий договор аренды и выдели риски для арендатора: договор заключается на 11 месяцев с автоматической пролонгацией, депозит равен двум месячным платежам и не возвращается при досрочном расторжении, индексация арендной платы производится ежеквартально по усмотрению арендодателя без ограничения верхнего предела, текущий ремонт полностью за счёт арендатора, а арендодатель вправе расторгнуть договор в одностороннем порядке с уведомлением за 14 дней"
-CLOUD-002,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,620,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787252813115,"Сделай подробное резюме этого технического отчёта: система показала деградацию производительности на 40 процентов при нагрузке свыше десяти тысяч одновременных соединений, основной причиной является блокировка пула соединений с базой данных, вторичным фактором — неоптимальные индексы на таблице событий, а также отсутствие кэширования часто запрашиваемых агрегатов и синхронная запись логов"
-CLOUD-003,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,610,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787252813735,"Напиши подробный бизнес-план для小 кофейни с расчётом окупаемости, структурой затрат, анализом целевой аудитории, маркетинговой стратегией и прогнозом выручки на три года вперёд с разбивкой по кварталам"
-CLOUD-004,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,610,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787252814345,"Проанализируй архитектуру микросервисов и предложи улучшения с учётом отказоустойчивости, наблюдаемости, стоимости эксплуатации и сложности миграции существующих данных между сервисами без простоя"
-CLOUD-005,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787252814955,"Напиши код на Kotlin для реализации потокобезопасного LRU-кэша с поддержкой TTL, ленивой инвалидацией и метриками попаданий"
-CLOUD-006,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,609,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787252815562,"Сравни преимущества и недостатки монолитной и микросервисной архитектуры для команды из пяти разработчиков с учётом стоимости поддержки, скорости вывода функций и требований к отказоустойчивости"
-CLOUD-007,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787252816171,Проанализируй причины оттока клиентов и предложи стратегию удержания с приоритизацией мер по соотношению стоимости и ожидаемого эффекта
-CLOUD-008,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787252816778,"Объясни устройство трансформерной архитектуры нейросетей подробно, включая механизм внимания, позиционное кодирование и нормализацию слоёв"
-CLOUD-009,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,605,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787252817385,"Составь подробную инвестиционную стратегию на пять лет с учётом диверсификации, горизонта риска и налоговых последствий"
-CLOUD-010,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787252817990,Проверь этот текст на логические ошибки и предложи улучшенную редакцию с сохранением авторского стиля и структуры аргументации
-CLOUD-011,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787252818597,"Разработай стратегию выхода продукта на европейский рынок с учётом регуляторных требований, локализации и конкурентного окружения"
-CLOUD-012,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787252819203,"Напиши подробную техническую документацию для REST API системы платежей с описанием методов, кодов ошибок, идемпотентности и примерами"
-CLOUD-013,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787252819810,"Проанализируй финансовую отчётность компании и оцени риски с точки зрения ликвидности, долговой нагрузки и качества выручки"
-CLOUD-014,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787252820417,Составь подробный учебный план по изучению Kotlin с нуля до продвинутого уровня на шесть месяцев с еженедельными целями и проектами
-CLOUD-015,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787252821023,"Объясни различия между реляционными и графовыми базами данных подробно, с примерами запросов, моделей данных и сценариев применения"
-WEB-001,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,601,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787252821630,Какие новости сегодня?
-WEB-002,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787252822231,Какая сегодня цена биткоина?
-WEB-003,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787252822833,Найди актуальную цену iPhone 15
-WEB-004,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,601,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787252823435,Какой сейчас курс евро к доллару?
-WEB-005,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,603,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787252824036,Что произошло в мире за последнюю неделю?
-WEB-006,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,601,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787252824639,Найди отзывы о новом ноутбуке Lenovo
-WEB-007,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787252825240,Когда следующий матч сборной?
-WEB-008,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787252825842,Какие сейчас цены на авиабилеты в Стамбул?
-WEB-009,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,603,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787252826444,Найди информацию о последнем релизе Kotlin
-WEB-010,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787252827047,Какой курс акций Apple сейчас?
-AGENT-001,AGENT,AGENT,AGENT,true,true,37,false,,,,,,,83,2,1787252827649,Подготовь телефон ко сну
-AGENT-002,AGENT,AGENT,AGENT,true,true,37,false,,,,,,,87,2,1787252827686,Я ухожу из дома
-AGENT-003,AGENT,AGENT,AGENT,true,true,25,false,,,,,,,54,2,1787252827723,Я пришёл домой
-AGENT-004,AGENT,AGENT,AGENT,true,true,37,false,,,,,,,83,2,1787252827748,Включи ночной режим
-AGENT-005,AGENT,AGENT,AGENT,true,true,25,false,,,,,,,53,2,1787252827785,Режим совещания
-AGENT-006,AGENT,AGENT,AGENT,true,true,24,false,,,,,,,59,2,1787252827810,Подготовь к поездке за рулём
-AGENT-007,AGENT,AGENT,AGENT,true,true,37,false,,,,,,,87,2,1787252827834,Включи режим экономии заряда
-AGENT-008,AGENT,AGENT,AGENT,true,true,50,false,,,,,,,120,2,1787252827871,Проведи диагностику системы
-AGENT-009,AGENT,AGENT,AGENT,true,true,24,false,,,,,,,59,2,1787252827921,Сделай план поездки в Италию на 7 дней и сравни варианты перелёта
-AGENT-010,AGENT,AGENT,CLOUD_AI,false,true,604,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787252827945,Сравни десять вариантов ноутбуков и выбери лучший в пределах бюджета
-AMB-001,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,24,2,1787252828549,Открой
-AMB-002,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,22,2,1787252828549,Найди это
-AMB-003,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,35,2,1787252828549,Что лучше?
-AMB-004,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,26,2,1787252828549,Проверь
-AMB-005,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,43,2,1787252828549,Переведи
-AMB-006,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,30,2,1787252828549,Сделай это
-EDGE-001,EDGE_CASE,REFUSAL,NONE,true,false,0,false,,,,,,INVALID_REQUEST,28,2,1787252828549,
-EDGE-002,EDGE_CASE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,32,2,1787252828549,открой телегу
-EDGE-003,EDGE_CASE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,33,2,1787252828562,включи блютуз
-EDGE-004,EDGE_CASE,ANY_NON_DEVICE,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252828574,what is quantum entanglement
-EDGE-005,EDGE_CASE,ANY_NON_DEVICE,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252829051,постав таймер на десять мин
-EDGE-006,EDGE_CASE,CLOUD_AI,CLOUD_AI,true,true,726,true,GROQ,llama-3.3-70b-versatile,,,128,,38,2,1787252829528,аааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааа
-EDGE-007,EDGE_CASE,ANY_NON_DEVICE,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252830254,Сделай мне бутерброд
-PRIV-001,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252830731,Запомни мой пароль от банковского приложения
-PRIV-002,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252831208,Что я записывал о своём здоровье?
-PRIV-003,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,2,1787252831685,Проанализируй мою медицинскую карту
-PRIV-004,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787252832161,Мои личные заметки о финансах
-PRIV-005,PRIVACY,REFUSAL,NONE,true,false,0,false,,,,,,CLOUD_BLOCKED_BY_PRIVACY,128,2,1787252832638,Найди в интернете информацию о моём диагнозе
+DEVICE-001,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,17,false,,,,,,,32,0,1787553662566,Открой Telegram
+DEVICE-002,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,32,0,1787553662583,Открой YouTube
+DEVICE-003,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,32,0,1787553662596,Открой настройки
+DEVICE-004,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,0,1787553662609,Открой камеру
+DEVICE-005,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,32,0,1787553662621,Запусти WhatsApp
+DEVICE-006,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,0,1787553662634,Открой калькулятор
+DEVICE-007,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,30,0,1787553662646,Сделай громче
+DEVICE-008,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,0,1787553662659,Убавь громкость
+DEVICE-009,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,30,0,1787553662671,Установи громкость 50 процентов
+DEVICE-010,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,0,1787553662684,Выключи звук
+DEVICE-011,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,34,0,1787553662696,Включи фонарик
+DEVICE-012,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,34,0,1787553662709,Выключи фонарик
+DEVICE-013,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,34,0,1787553662721,Сделай экран ярче
+DEVICE-014,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,34,0,1787553662734,Установи яркость 30 процентов
+DEVICE-015,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,28,0,1787553662747,Включи Wi-Fi
+DEVICE-016,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,33,0,1787553662759,Выключи блютуз
+DEVICE-017,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,31,0,1787553662772,Сколько заряда батареи
+DEVICE-018,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,28,0,1787553662785,Который час
+DEVICE-019,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,34,0,1787553662797,Сделай скриншот
+DEVICE-020,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,27,0,1787553662810,Включи режим не беспокоить
+DEVICE-021,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,30,0,1787553662822,Включи музыку
+DEVICE-022,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,0,1787553662835,Следующий трек
+DEVICE-023,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,0,1787553662848,Поставь музыку на паузу
+DEVICE-024,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,36,0,1787553662860,Проложи маршрут до Амстердама
+DEVICE-025,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,35,0,1787553662873,Какая модель у телефона
+LOCAL-001,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,2277,false,,,,,,,27,0,1787553662886,Что значит квантовая запутанность?
+LOCAL-002,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,0,1787553665163,Что такое NFT?
+LOCAL-003,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,0,1787553665640,Объясни принцип работы DNS
+LOCAL-004,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553666116,Что такое рекурсия?
+LOCAL-005,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553666593,Объясни разницу между TCP и UDP
+LOCAL-006,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553667070,Что такое REST API?
+LOCAL-007,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553667547,Почему небо голубое?
+LOCAL-008,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553668024,Расскажи про теорию относительности
+LOCAL-009,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,0,1787553668501,Как работает блокчейн?
+LOCAL-010,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,0,1787553668978,Что такое машинное обучение?
+LOCAL-011,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553669454,Объясни что такое кэш процессора
+LOCAL-012,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553669931,В чём разница между HTTP и HTTPS?
+LOCAL-013,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553670408,Что означает аббревиатура API?
+LOCAL-014,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553670885,Расскажи анекдот
+LOCAL-015,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553671362,Придумай название для кофейни
+LOCAL-016,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553671839,Как приготовить омлет?
+LOCAL-017,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553672316,Сколько будет 15 процентов от 240?
+LOCAL-018,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553672793,Дай совет как побороть прокрастинацию
+LOCAL-019,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,0,1787553673270,Что такое чёрная дыра?
+LOCAL-020,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,0,1787553673747,Объясни принцип работы холодильника
+LOCAL-021,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553674223,Напиши короткое поздравление с днём рождения
+LOCAL-022,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553674700,Чем отличается вирус от бактерии?
+CLOUD-001,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,623,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787553675178,"Проанализируй следующий договор аренды и выдели риски для арендатора: договор заключается на 11 месяцев с автоматической пролонгацией, депозит равен двум месячным платежам и не возвращается при досрочном расторжении, индексация арендной платы производится ежеквартально по усмотрению арендодателя без ограничения верхнего предела, текущий ремонт полностью за счёт арендатора, а арендодатель вправе расторгнуть договор в одностороннем порядке с уведомлением за 14 дней"
+CLOUD-002,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,619,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787553675802,"Сделай подробное резюме этого технического отчёта: система показала деградацию производительности на 40 процентов при нагрузке свыше десяти тысяч одновременных соединений, основной причиной является блокировка пула соединений с базой данных, вторичным фактором — неоптимальные индексы на таблице событий, а также отсутствие кэширования часто запрашиваемых агрегатов и синхронная запись логов"
+CLOUD-003,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,610,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787553676422,"Напиши подробный бизнес-план для小 кофейни с расчётом окупаемости, структурой затрат, анализом целевой аудитории, маркетинговой стратегией и прогнозом выручки на три года вперёд с разбивкой по кварталам"
+CLOUD-004,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,609,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787553677033,"Проанализируй архитектуру микросервисов и предложи улучшения с учётом отказоустойчивости, наблюдаемости, стоимости эксплуатации и сложности миграции существующих данных между сервисами без простоя"
+CLOUD-005,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787553677642,"Напиши код на Kotlin для реализации потокобезопасного LRU-кэша с поддержкой TTL, ленивой инвалидацией и метриками попаданий"
+CLOUD-006,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,610,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787553678249,"Сравни преимущества и недостатки монолитной и микросервисной архитектуры для команды из пяти разработчиков с учётом стоимости поддержки, скорости вывода функций и требований к отказоустойчивости"
+CLOUD-007,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787553678859,Проанализируй причины оттока клиентов и предложи стратегию удержания с приоритизацией мер по соотношению стоимости и ожидаемого эффекта
+CLOUD-008,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787553679466,"Объясни устройство трансформерной архитектуры нейросетей подробно, включая механизм внимания, позиционное кодирование и нормализацию слоёв"
+CLOUD-009,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787553680073,"Составь подробную инвестиционную стратегию на пять лет с учётом диверсификации, горизонта риска и налоговых последствий"
+CLOUD-010,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787553680679,Проверь этот текст на логические ошибки и предложи улучшенную редакцию с сохранением авторского стиля и структуры аргументации
+CLOUD-011,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787553681286,"Разработай стратегию выхода продукта на европейский рынок с учётом регуляторных требований, локализации и конкурентного окружения"
+CLOUD-012,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787553681893,"Напиши подробную техническую документацию для REST API системы платежей с описанием методов, кодов ошибок, идемпотентности и примерами"
+CLOUD-013,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787553682500,"Проанализируй финансовую отчётность компании и оцени риски с точки зрения ликвидности, долговой нагрузки и качества выручки"
+CLOUD-014,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787553683107,Составь подробный учебный план по изучению Kotlin с нуля до продвинутого уровня на шесть месяцев с еженедельными целями и проектами
+CLOUD-015,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,0,1787553683713,"Объясни различия между реляционными и графовыми базами данных подробно, с примерами запросов, моделей данных и сценариев применения"
+WEB-001,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787553684320,Какие новости сегодня?
+WEB-002,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,601,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787553684922,Какая сегодня цена биткоина?
+WEB-003,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787553685523,Найди актуальную цену iPhone 15
+WEB-004,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787553686125,Какой сейчас курс евро к доллару?
+WEB-005,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787553686727,Что произошло в мире за последнюю неделю?
+WEB-006,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787553687329,Найди отзывы о новом ноутбуке Lenovo
+WEB-007,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787553687931,Когда следующий матч сборной?
+WEB-008,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787553688533,Какие сейчас цены на авиабилеты в Стамбул?
+WEB-009,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787553689136,Найди информацию о последнем релизе Kotlin
+WEB-010,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787553689738,Какой курс акций Apple сейчас?
+AGENT-001,AGENT,AGENT,AGENT,true,true,38,false,,,,,,,83,0,1787553690340,Подготовь телефон ко сну
+AGENT-002,AGENT,AGENT,AGENT,true,true,37,false,,,,,,,87,0,1787553690378,Я ухожу из дома
+AGENT-003,AGENT,AGENT,AGENT,true,true,25,false,,,,,,,54,0,1787553690416,Я пришёл домой
+AGENT-004,AGENT,AGENT,AGENT,true,true,37,false,,,,,,,83,0,1787553690442,Включи ночной режим
+AGENT-005,AGENT,AGENT,AGENT,true,true,25,false,,,,,,,53,0,1787553690479,Режим совещания
+AGENT-006,AGENT,AGENT,AGENT,true,true,26,false,,,,,,,59,0,1787553690504,Подготовь к поездке за рулём
+AGENT-007,AGENT,AGENT,AGENT,true,true,43,false,,,,,,,87,0,1787553690530,Включи режим экономии заряда
+AGENT-008,AGENT,AGENT,AGENT,true,true,50,false,,,,,,,120,0,1787553690573,Проведи диагностику системы
+AGENT-009,AGENT,AGENT,AGENT,true,true,25,false,,,,,,,59,0,1787553690623,Сделай план поездки в Италию на 7 дней и сравни варианты перелёта
+AGENT-010,AGENT,CLOUD_AI,CLOUD_AI,true,true,603,true,GROQ,llama-3.3-70b-versatile,,,128,,36,0,1787553690649,Сравни десять вариантов ноутбуков и выбери лучший в пределах бюджета
+AMB-001,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,24,0,1787553691252,Открой
+AMB-002,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,22,0,1787553691253,Найди это
+AMB-003,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,35,0,1787553691253,Что лучше?
+AMB-004,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,26,0,1787553691253,Проверь
+AMB-005,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,43,0,1787553691253,Переведи
+AMB-006,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,30,0,1787553691253,Сделай это
+EDGE-001,EDGE_CASE,REFUSAL,NONE,true,false,0,false,,,,,,INVALID_REQUEST,28,0,1787553691253,
+EDGE-002,EDGE_CASE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,0,1787553691253,открой телегу
+EDGE-003,EDGE_CASE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,33,0,1787553691265,включи блютуз
+EDGE-004,EDGE_CASE,ANY_NON_DEVICE,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553691278,what is quantum entanglement
+EDGE-005,EDGE_CASE,ANY_NON_DEVICE,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553691755,постав таймер на десять мин
+EDGE-006,EDGE_CASE,CLOUD_AI,CLOUD_AI,true,true,726,true,GROQ,llama-3.3-70b-versatile,,,128,,38,0,1787553692234,аааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааа
+EDGE-007,EDGE_CASE,ANY_NON_DEVICE,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553692960,Сделай мне бутерброд
+PRIV-001,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553693437,Запомни мой пароль от банковского приложения
+PRIV-002,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553693914,Что я записывал о своём здоровье?
+PRIV-003,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553694391,Проанализируй мою медицинскую карту
+PRIV-004,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,0,1787553694868,Мои личные заметки о финансах
+PRIV-005,PRIVACY,REFUSAL,NONE,true,false,0,false,,,,,,CLOUD_BLOCKED_BY_PRIVACY,103,0,1787553695345,Найди в интернете информацию о моём диагнозе
+DEVICE-001,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,32,1,1787553695345,Открой Telegram
+DEVICE-002,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,1,1787553695358,Открой YouTube
+DEVICE-003,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,32,1,1787553695370,Открой настройки
+DEVICE-004,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,32,1,1787553695383,Открой камеру
+DEVICE-005,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,1,1787553695396,Запусти WhatsApp
+DEVICE-006,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,32,1,1787553695408,Открой калькулятор
+DEVICE-007,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,1,1787553695421,Сделай громче
+DEVICE-008,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,30,1,1787553695433,Убавь громкость
+DEVICE-009,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,1,1787553695446,Установи громкость 50 процентов
+DEVICE-010,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,30,1,1787553695458,Выключи звук
+DEVICE-011,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,34,1,1787553695471,Включи фонарик
+DEVICE-012,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,34,1,1787553695483,Выключи фонарик
+DEVICE-013,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,34,1,1787553695496,Сделай экран ярче
+DEVICE-014,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,34,1,1787553695508,Установи яркость 30 процентов
+DEVICE-015,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,28,1,1787553695521,Включи Wi-Fi
+DEVICE-016,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,33,1,1787553695534,Выключи блютуз
+DEVICE-017,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,31,1,1787553695546,Сколько заряда батареи
+DEVICE-018,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,28,1,1787553695559,Который час
+DEVICE-019,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,34,1,1787553695571,Сделай скриншот
+DEVICE-020,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,27,1,1787553695584,Включи режим не беспокоить
+DEVICE-021,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,30,1,1787553695596,Включи музыку
+DEVICE-022,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,1,1787553695609,Следующий трек
+DEVICE-023,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,1,1787553695622,Поставь музыку на паузу
+DEVICE-024,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,36,1,1787553695634,Проложи маршрут до Амстердама
+DEVICE-025,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,35,1,1787553695647,Какая модель у телефона
+LOCAL-001,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553695659,Что значит квантовая запутанность?
+LOCAL-002,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553696136,Что такое NFT?
+LOCAL-003,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553696613,Объясни принцип работы DNS
+LOCAL-004,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,1,1787553697090,Что такое рекурсия?
+LOCAL-005,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,1,1787553697567,Объясни разницу между TCP и UDP
+LOCAL-006,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553698043,Что такое REST API?
+LOCAL-007,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553698520,Почему небо голубое?
+LOCAL-008,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553698997,Расскажи про теорию относительности
+LOCAL-009,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553699474,Как работает блокчейн?
+LOCAL-010,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553699951,Что такое машинное обучение?
+LOCAL-011,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,1,1787553700428,Объясни что такое кэш процессора
+LOCAL-012,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553700904,В чём разница между HTTP и HTTPS?
+LOCAL-013,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553701381,Что означает аббревиатура API?
+LOCAL-014,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553701858,Расскажи анекдот
+LOCAL-015,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553702335,Придумай название для кофейни
+LOCAL-016,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553702812,Как приготовить омлет?
+LOCAL-017,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553703289,Сколько будет 15 процентов от 240?
+LOCAL-018,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553703766,Дай совет как побороть прокрастинацию
+LOCAL-019,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553704243,Что такое чёрная дыра?
+LOCAL-020,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553704720,Объясни принцип работы холодильника
+LOCAL-021,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553705197,Напиши короткое поздравление с днём рождения
+LOCAL-022,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,1,1787553705674,Чем отличается вирус от бактерии?
+CLOUD-001,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,624,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787553706151,"Проанализируй следующий договор аренды и выдели риски для арендатора: договор заключается на 11 месяцев с автоматической пролонгацией, депозит равен двум месячным платежам и не возвращается при досрочном расторжении, индексация арендной платы производится ежеквартально по усмотрению арендодателя без ограничения верхнего предела, текущий ремонт полностью за счёт арендатора, а арендодатель вправе расторгнуть договор в одностороннем порядке с уведомлением за 14 дней"
+CLOUD-002,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,620,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787553706775,"Сделай подробное резюме этого технического отчёта: система показала деградацию производительности на 40 процентов при нагрузке свыше десяти тысяч одновременных соединений, основной причиной является блокировка пула соединений с базой данных, вторичным фактором — неоптимальные индексы на таблице событий, а также отсутствие кэширования часто запрашиваемых агрегатов и синхронная запись логов"
+CLOUD-003,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,611,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787553707395,"Напиши подробный бизнес-план для小 кофейни с расчётом окупаемости, структурой затрат, анализом целевой аудитории, маркетинговой стратегией и прогнозом выручки на три года вперёд с разбивкой по кварталам"
+CLOUD-004,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,610,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787553708006,"Проанализируй архитектуру микросервисов и предложи улучшения с учётом отказоустойчивости, наблюдаемости, стоимости эксплуатации и сложности миграции существующих данных между сервисами без простоя"
+CLOUD-005,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787553708616,"Напиши код на Kotlin для реализации потокобезопасного LRU-кэша с поддержкой TTL, ленивой инвалидацией и метриками попаданий"
+CLOUD-006,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,609,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787553709223,"Сравни преимущества и недостатки монолитной и микросервисной архитектуры для команды из пяти разработчиков с учётом стоимости поддержки, скорости вывода функций и требований к отказоустойчивости"
+CLOUD-007,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787553709832,Проанализируй причины оттока клиентов и предложи стратегию удержания с приоритизацией мер по соотношению стоимости и ожидаемого эффекта
+CLOUD-008,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787553710439,"Объясни устройство трансформерной архитектуры нейросетей подробно, включая механизм внимания, позиционное кодирование и нормализацию слоёв"
+CLOUD-009,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787553711046,"Составь подробную инвестиционную стратегию на пять лет с учётом диверсификации, горизонта риска и налоговых последствий"
+CLOUD-010,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787553711652,Проверь этот текст на логические ошибки и предложи улучшенную редакцию с сохранением авторского стиля и структуры аргументации
+CLOUD-011,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787553712259,"Разработай стратегию выхода продукта на европейский рынок с учётом регуляторных требований, локализации и конкурентного окружения"
+CLOUD-012,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787553712865,"Напиши подробную техническую документацию для REST API системы платежей с описанием методов, кодов ошибок, идемпотентности и примерами"
+CLOUD-013,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787553713472,"Проанализируй финансовую отчётность компании и оцени риски с точки зрения ликвидности, долговой нагрузки и качества выручки"
+CLOUD-014,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787553714079,Составь подробный учебный план по изучению Kotlin с нуля до продвинутого уровня на шесть месяцев с еженедельными целями и проектами
+CLOUD-015,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,1,1787553714686,"Объясни различия между реляционными и графовыми базами данных подробно, с примерами запросов, моделей данных и сценариев применения"
+WEB-001,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787553715292,Какие новости сегодня?
+WEB-002,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,601,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787553715894,Какая сегодня цена биткоина?
+WEB-003,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,601,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787553716496,Найди актуальную цену iPhone 15
+WEB-004,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787553717097,Какой сейчас курс евро к доллару?
+WEB-005,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787553717699,Что произошло в мире за последнюю неделю?
+WEB-006,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,601,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787553718302,Найди отзывы о новом ноутбуке Lenovo
+WEB-007,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787553718903,Когда следующий матч сборной?
+WEB-008,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787553719505,Какие сейчас цены на авиабилеты в Стамбул?
+WEB-009,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787553720108,Найди информацию о последнем релизе Kotlin
+WEB-010,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787553720710,Какой курс акций Apple сейчас?
+AGENT-001,AGENT,AGENT,AGENT,true,true,39,false,,,,,,,83,1,1787553721312,Подготовь телефон ко сну
+AGENT-002,AGENT,AGENT,AGENT,true,true,37,false,,,,,,,87,1,1787553721351,Я ухожу из дома
+AGENT-003,AGENT,AGENT,AGENT,true,true,25,false,,,,,,,54,1,1787553721388,Я пришёл домой
+AGENT-004,AGENT,AGENT,AGENT,true,true,38,false,,,,,,,83,1,1787553721413,Включи ночной режим
+AGENT-005,AGENT,AGENT,AGENT,true,true,25,false,,,,,,,53,1,1787553721451,Режим совещания
+AGENT-006,AGENT,AGENT,AGENT,true,true,25,false,,,,,,,59,1,1787553721476,Подготовь к поездке за рулём
+AGENT-007,AGENT,AGENT,AGENT,true,true,38,false,,,,,,,87,1,1787553721501,Включи режим экономии заряда
+AGENT-008,AGENT,AGENT,AGENT,true,true,49,false,,,,,,,120,1,1787553721539,Проведи диагностику системы
+AGENT-009,AGENT,AGENT,AGENT,true,true,25,false,,,,,,,59,1,1787553721588,Сделай план поездки в Италию на 7 дней и сравни варианты перелёта
+AGENT-010,AGENT,CLOUD_AI,CLOUD_AI,true,true,603,true,GROQ,llama-3.3-70b-versatile,,,128,,36,1,1787553721614,Сравни десять вариантов ноутбуков и выбери лучший в пределах бюджета
+AMB-001,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,24,1,1787553722217,Открой
+AMB-002,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,22,1,1787553722217,Найди это
+AMB-003,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,35,1,1787553722217,Что лучше?
+AMB-004,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,26,1,1787553722217,Проверь
+AMB-005,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,43,1,1787553722217,Переведи
+AMB-006,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,30,1,1787553722217,Сделай это
+EDGE-001,EDGE_CASE,REFUSAL,NONE,true,false,0,false,,,,,,INVALID_REQUEST,28,1,1787553722217,
+EDGE-002,EDGE_CASE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,32,1,1787553722217,открой телегу
+EDGE-003,EDGE_CASE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,33,1,1787553722230,включи блютуз
+EDGE-004,EDGE_CASE,ANY_NON_DEVICE,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553722243,what is quantum entanglement
+EDGE-005,EDGE_CASE,ANY_NON_DEVICE,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553722720,постав таймер на десять мин
+EDGE-006,EDGE_CASE,CLOUD_AI,CLOUD_AI,true,true,726,true,GROQ,llama-3.3-70b-versatile,,,128,,38,1,1787553723198,аааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааа
+EDGE-007,EDGE_CASE,ANY_NON_DEVICE,LOCAL_AI,true,true,476,false,,,,,,,27,1,1787553723925,Сделай мне бутерброд
+PRIV-001,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553724401,Запомни мой пароль от банковского приложения
+PRIV-002,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553724878,Что я записывал о своём здоровье?
+PRIV-003,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553725355,Проанализируй мою медицинскую карту
+PRIV-004,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,1,1787553725832,Мои личные заметки о финансах
+PRIV-005,PRIVACY,REFUSAL,NONE,true,false,0,false,,,,,,CLOUD_BLOCKED_BY_PRIVACY,103,1,1787553726309,Найди в интернете информацию о моём диагнозе
+DEVICE-001,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,32,2,1787553726309,Открой Telegram
+DEVICE-002,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,2,1787553726322,Открой YouTube
+DEVICE-003,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,2,1787553726335,Открой настройки
+DEVICE-004,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,2,1787553726347,Открой камеру
+DEVICE-005,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,2,1787553726360,Запусти WhatsApp
+DEVICE-006,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,2,1787553726372,Открой калькулятор
+DEVICE-007,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,30,2,1787553726384,Сделай громче
+DEVICE-008,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,2,1787553726397,Убавь громкость
+DEVICE-009,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,30,2,1787553726409,Установи громкость 50 процентов
+DEVICE-010,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,2,1787553726422,Выключи звук
+DEVICE-011,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,34,2,1787553726434,Включи фонарик
+DEVICE-012,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,34,2,1787553726447,Выключи фонарик
+DEVICE-013,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,34,2,1787553726459,Сделай экран ярче
+DEVICE-014,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,34,2,1787553726472,Установи яркость 30 процентов
+DEVICE-015,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,28,2,1787553726484,Включи Wi-Fi
+DEVICE-016,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,33,2,1787553726497,Выключи блютуз
+DEVICE-017,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,31,2,1787553726509,Сколько заряда батареи
+DEVICE-018,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,28,2,1787553726521,Который час
+DEVICE-019,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,34,2,1787553726534,Сделай скриншот
+DEVICE-020,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,27,2,1787553726546,Включи режим не беспокоить
+DEVICE-021,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,2,1787553726559,Включи музыку
+DEVICE-022,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,2,1787553726571,Следующий трек
+DEVICE-023,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,30,2,1787553726584,Поставь музыку на паузу
+DEVICE-024,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,36,2,1787553726596,Проложи маршрут до Амстердама
+DEVICE-025,DEVICE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,35,2,1787553726608,Какая модель у телефона
+LOCAL-001,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553726621,Что значит квантовая запутанность?
+LOCAL-002,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553727098,Что такое NFT?
+LOCAL-003,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,2,1787553727575,Объясни принцип работы DNS
+LOCAL-004,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,2,1787553728052,Что такое рекурсия?
+LOCAL-005,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,2,1787553728529,Объясни разницу между TCP и UDP
+LOCAL-006,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,478,false,,,,,,,27,2,1787553729005,Что такое REST API?
+LOCAL-007,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553729483,Почему небо голубое?
+LOCAL-008,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553729960,Расскажи про теорию относительности
+LOCAL-009,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,2,1787553730437,Как работает блокчейн?
+LOCAL-010,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553730913,Что такое машинное обучение?
+LOCAL-011,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553731390,Объясни что такое кэш процессора
+LOCAL-012,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553731867,В чём разница между HTTP и HTTPS?
+LOCAL-013,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553732344,Что означает аббревиатура API?
+LOCAL-014,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553732821,Расскажи анекдот
+LOCAL-015,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553733298,Придумай название для кофейни
+LOCAL-016,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553733775,Как приготовить омлет?
+LOCAL-017,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553734252,Сколько будет 15 процентов от 240?
+LOCAL-018,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553734729,Дай совет как побороть прокрастинацию
+LOCAL-019,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553735206,Что такое чёрная дыра?
+LOCAL-020,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553735683,Объясни принцип работы холодильника
+LOCAL-021,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,2,1787553736160,Напиши короткое поздравление с днём рождения
+LOCAL-022,LOCAL_AI,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,2,1787553736637,Чем отличается вирус от бактерии?
+CLOUD-001,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,624,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787553737114,"Проанализируй следующий договор аренды и выдели риски для арендатора: договор заключается на 11 месяцев с автоматической пролонгацией, депозит равен двум месячным платежам и не возвращается при досрочном расторжении, индексация арендной платы производится ежеквартально по усмотрению арендодателя без ограничения верхнего предела, текущий ремонт полностью за счёт арендатора, а арендодатель вправе расторгнуть договор в одностороннем порядке с уведомлением за 14 дней"
+CLOUD-002,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,620,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787553737738,"Сделай подробное резюме этого технического отчёта: система показала деградацию производительности на 40 процентов при нагрузке свыше десяти тысяч одновременных соединений, основной причиной является блокировка пула соединений с базой данных, вторичным фактором — неоптимальные индексы на таблице событий, а также отсутствие кэширования часто запрашиваемых агрегатов и синхронная запись логов"
+CLOUD-003,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,611,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787553738358,"Напиши подробный бизнес-план для小 кофейни с расчётом окупаемости, структурой затрат, анализом целевой аудитории, маркетинговой стратегией и прогнозом выручки на три года вперёд с разбивкой по кварталам"
+CLOUD-004,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,611,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787553738969,"Проанализируй архитектуру микросервисов и предложи улучшения с учётом отказоустойчивости, наблюдаемости, стоимости эксплуатации и сложности миграции существующих данных между сервисами без простоя"
+CLOUD-005,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787553739581,"Напиши код на Kotlin для реализации потокобезопасного LRU-кэша с поддержкой TTL, ленивой инвалидацией и метриками попаданий"
+CLOUD-006,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,609,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787553740188,"Сравни преимущества и недостатки монолитной и микросервисной архитектуры для команды из пяти разработчиков с учётом стоимости поддержки, скорости вывода функций и требований к отказоустойчивости"
+CLOUD-007,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787553740797,Проанализируй причины оттока клиентов и предложи стратегию удержания с приоритизацией мер по соотношению стоимости и ожидаемого эффекта
+CLOUD-008,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787553741404,"Объясни устройство трансформерной архитектуры нейросетей подробно, включая механизм внимания, позиционное кодирование и нормализацию слоёв"
+CLOUD-009,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787553742011,"Составь подробную инвестиционную стратегию на пять лет с учётом диверсификации, горизонта риска и налоговых последствий"
+CLOUD-010,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787553742617,Проверь этот текст на логические ошибки и предложи улучшенную редакцию с сохранением авторского стиля и структуры аргументации
+CLOUD-011,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787553743224,"Разработай стратегию выхода продукта на европейский рынок с учётом регуляторных требований, локализации и конкурентного окружения"
+CLOUD-012,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787553743830,"Напиши подробную техническую документацию для REST API системы платежей с описанием методов, кодов ошибок, идемпотентности и примерами"
+CLOUD-013,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787553744437,"Проанализируй финансовую отчётность компании и оцени риски с точки зрения ликвидности, долговой нагрузки и качества выручки"
+CLOUD-014,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,607,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787553745044,Составь подробный учебный план по изучению Kotlin с нуля до продвинутого уровня на шесть месяцев с еженедельными целями и проектами
+CLOUD-015,CLOUD_AI,CLOUD_AI,CLOUD_AI,true,true,606,true,GROQ,llama-3.3-70b-versatile,,,128,,37,2,1787553745651,"Объясни различия между реляционными и графовыми базами данных подробно, с примерами запросов, моделей данных и сценариев применения"
+WEB-001,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,601,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787553746258,Какие новости сегодня?
+WEB-002,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787553746859,Какая сегодня цена биткоина?
+WEB-003,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787553747461,Найди актуальную цену iPhone 15
+WEB-004,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,601,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787553748063,Какой сейчас курс евро к доллару?
+WEB-005,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,603,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787553748664,Что произошло в мире за последнюю неделю?
+WEB-006,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787553749267,Найди отзывы о новом ноутбуке Lenovo
+WEB-007,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,601,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787553749869,Когда следующий матч сборной?
+WEB-008,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787553750471,Какие сейчас цены на авиабилеты в Стамбул?
+WEB-009,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,603,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787553751073,Найди информацию о последнем релизе Kotlin
+WEB-010,CLOUD_WEB,CLOUD_AI,CLOUD_AI,true,true,602,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787553751676,Какой курс акций Apple сейчас?
+AGENT-001,AGENT,AGENT,AGENT,true,true,38,false,,,,,,,83,2,1787553752278,Подготовь телефон ко сну
+AGENT-002,AGENT,AGENT,AGENT,true,true,38,false,,,,,,,87,2,1787553752316,Я ухожу из дома
+AGENT-003,AGENT,AGENT,AGENT,true,true,25,false,,,,,,,54,2,1787553752355,Я пришёл домой
+AGENT-004,AGENT,AGENT,AGENT,true,true,38,false,,,,,,,83,2,1787553752380,Включи ночной режим
+AGENT-005,AGENT,AGENT,AGENT,true,true,26,false,,,,,,,53,2,1787553752418,Режим совещания
+AGENT-006,AGENT,AGENT,AGENT,true,true,25,false,,,,,,,59,2,1787553752444,Подготовь к поездке за рулём
+AGENT-007,AGENT,AGENT,AGENT,true,true,38,false,,,,,,,87,2,1787553752469,Включи режим экономии заряда
+AGENT-008,AGENT,AGENT,AGENT,true,true,51,false,,,,,,,120,2,1787553752507,Проведи диагностику системы
+AGENT-009,AGENT,AGENT,AGENT,true,true,25,false,,,,,,,59,2,1787553752558,Сделай план поездки в Италию на 7 дней и сравни варианты перелёта
+AGENT-010,AGENT,CLOUD_AI,CLOUD_AI,true,true,603,true,GROQ,llama-3.3-70b-versatile,,,128,,36,2,1787553752584,Сравни десять вариантов ноутбуков и выбери лучший в пределах бюджета
+AMB-001,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,24,2,1787553753187,Открой
+AMB-002,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,22,2,1787553753187,Найди это
+AMB-003,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,35,2,1787553753187,Что лучше?
+AMB-004,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,26,2,1787553753187,Проверь
+AMB-005,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,43,2,1787553753187,Переведи
+AMB-006,AMBIGUOUS,CLARIFICATION,NONE,true,true,0,false,,,,,,,30,2,1787553753187,Сделай это
+EDGE-001,EDGE_CASE,REFUSAL,NONE,true,false,0,false,,,,,,INVALID_REQUEST,28,2,1787553753187,
+EDGE-002,EDGE_CASE,DEVICE_TOOL,DEVICE_TOOL,true,true,12,false,,,,,,,32,2,1787553753188,открой телегу
+EDGE-003,EDGE_CASE,DEVICE_TOOL,DEVICE_TOOL,true,true,13,false,,,,,,,33,2,1787553753200,включи блютуз
+EDGE-004,EDGE_CASE,ANY_NON_DEVICE,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553753213,what is quantum entanglement
+EDGE-005,EDGE_CASE,ANY_NON_DEVICE,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553753690,постав таймер на десять мин
+EDGE-006,EDGE_CASE,CLOUD_AI,CLOUD_AI,true,true,726,true,GROQ,llama-3.3-70b-versatile,,,128,,38,2,1787553754168,аааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааааа
+EDGE-007,EDGE_CASE,ANY_NON_DEVICE,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553754894,Сделай мне бутерброд
+PRIV-001,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553755371,Запомни мой пароль от банковского приложения
+PRIV-002,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553755848,Что я записывал о своём здоровье?
+PRIV-003,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,477,false,,,,,,,27,2,1787553756325,Проанализируй мою медицинскую карту
+PRIV-004,PRIVACY,LOCAL_AI,LOCAL_AI,true,true,476,false,,,,,,,27,2,1787553756802,Мои личные заметки о финансах
+PRIV-005,PRIVACY,REFUSAL,NONE,true,false,0,false,,,,,,CLOUD_BLOCKED_BY_PRIVACY,103,2,1787553757279,Найди в интернете информацию о моём диагнозе
