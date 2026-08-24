@@ -33,7 +33,6 @@ class SemanticTextMatcher @Inject constructor() {
     companion object {
         const val VECTOR_DIM = 128
         private const val CLUSTER_WEIGHT = 3.5f
-        private const val SYNONYM_WEIGHT = 2.5f
         private const val WORD_WEIGHT = 1.2f
         private const val TRIGRAM_WEIGHT = 0.4f
         private const val BIGRAM_WEIGHT = 0.2f
