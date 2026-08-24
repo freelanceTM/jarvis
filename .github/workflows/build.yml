@@ -72,9 +72,7 @@ jobs:
 
       - name: Lint Android dev
         shell: bash
-        run: |
-          bash ./gradlew :app:lintDevDebug \
-            --stacktrace --no-daemon --no-parallel --max-workers=2
+        run: bash ./scripts/run-ci-android-lint.sh
 
       - name: Build Android dev app and instrumentation APKs
         shell: bash
@@ -104,6 +102,7 @@ jobs:
             app/build/reports/tests/testDevDebugUnitTest/
             app/build/reports/lint-results-devDebug.*
             app/build/reports/detekt/
+            ${{ runner.temp }}/lint-gradle.log
             server/build/reports/jacoco/test/
             server/build/reports/tests/test/
             server/build/reports/detekt/

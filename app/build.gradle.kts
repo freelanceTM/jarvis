@@ -75,6 +75,12 @@ android {
         }
     }
 
+    // MigrationTestHelper reads exported schemas from the instrumentation APK.
+    // Only the authentic v5 schema is packaged; historical schemas are never fabricated.
+    sourceSets {
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
+    }
+
     flavorDimensions += "environment"
     productFlavors {
         create("dev") {

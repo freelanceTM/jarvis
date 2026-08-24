@@ -34,18 +34,24 @@ class RealMediaPipeInferenceInstrumentedTest {
 
     @Test
     fun realModelLoadInferenceConcurrencyCancellationReloadAndCleanup() = runBlocking {
+        val args = InstrumentationRegistry.getArguments()
+        val required = args.getString("requireRealModel") == "true"
+        val expectedSha = args.getString("modelExpectedSha256").orEmpty().lowercase()
+        val expectedFile = java.io.File(
+            java.io.File(context.filesDir, "llm"),
+            LocalModelSpec.GEMMA3_1B_IT_INT4.fileName
+        )
+        if (!expectedFile.exists()) {
+            if (required) throw AssertionError("Required real model is absent at $expectedFile")
+            assumeTrue("Real model not installed; manual/device job required", false)
+        }
+
         val manager = EntryPointAccessors.fromApplication(
             context.applicationContext,
             RealModelTestEntryPoint::class.java
         ).localModelManager()
         val concrete = manager as MediaPipeModelManager
-        val args = InstrumentationRegistry.getArguments()
-        val required = args.getString("requireRealModel") == "true"
-        val expectedSha = args.getString("modelExpectedSha256").orEmpty().lowercase()
-        if (!concrete.modelFile.exists()) {
-            if (required) throw AssertionError("Required real model is absent at ${concrete.modelFile}")
-            assumeTrue("Real model not installed; manual/device job required", false)
-        }
+        assertTrue("model manager path differs from the gated path", concrete.modelFile == expectedFile)
         assertTrue("model file is unexpectedly small", concrete.modelFile.length() > 500L * 1024 * 1024)
         if (expectedSha.isNotBlank()) {
             assertTrue("model SHA-256 mismatch", sha256(concrete.modelFile) == expectedSha)

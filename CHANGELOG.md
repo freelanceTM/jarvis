@@ -50,9 +50,13 @@ must be added only when the repository owner creates an actual release.
   dependency-recency IDs moved to Dependabot/dependency-review/lock/Trivy policy
   after CI proved their `latest available` metadata is environment-dependent;
   all 28 source/resource signatures remain unchanged.
-- CI now runs explicit dev-flavor coverage verification, Detekt, lint,
-  PostgreSQL-backed server tests, report publication, and dev app/test APK
+- CI now runs explicit dev-flavor coverage verification, Detekt, deterministic
+  lint, PostgreSQL-backed server tests, report publication, and dev app/test APK
   assembly instead of relying on a single generic debug path.
+- Android instrumentation now packages the authentic Room v5 schema for
+  `MigrationTestHelper`; the optional real-model test checks model presence
+  before constructing the MediaPipe/Hilt runtime and skips cleanly when the
+  separately distributed model is absent.
 - Battery status tool now returns a structured failure when Android does not
   provide battery data or supplies an invalid status instead of fabricating a
   100% charge value.
