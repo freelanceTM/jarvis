@@ -1,20 +1,16 @@
 package com.jarvis.assistant.agent.tools.system
 
-import android.content.Context
 import android.os.Build
 import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.core.ToolCategory
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.*
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class GetDeviceInfoTool @Inject constructor(
-    @ApplicationContext private val context: Context
-) : JarvisTool {
+class GetDeviceInfoTool @Inject constructor() : JarvisTool {
 
     override val toolId: String = "system.device_info"
     override val description: String = "Возвращает модель устройства, производителя и версию Android"
