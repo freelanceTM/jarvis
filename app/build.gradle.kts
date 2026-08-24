@@ -152,14 +152,15 @@ android {
         jacocoVersion = "0.8.11"
     }
 
-    // Lint blocks every new warning/error. The reviewed portable baseline has
-    // 88 entries: 60 deferred dependency/tooling messages repeated per flavor
-    // and 28 unchanged Android findings tracked in the dependency update plan.
-    // The baseline must never be refreshed wholesale without reviewing its diff.
+    // Lint blocks every new deterministic Android warning/error. Dependency
+    // recency is enforced separately by Dependabot, dependency review, locks,
+    // verification metadata and Trivy because lint's remote "latest available"
+    // metadata is environment-dependent and cannot form a reproducible baseline.
     lint {
         warningsAsErrors = true
         baseline = file("lint-baseline.xml")
         abortOnError = true
+        disable += setOf("GradleDependency", "AndroidGradlePluginVersion")
     }
 
     packaging {

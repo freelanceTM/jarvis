@@ -11,17 +11,21 @@ represented 18 unique dependency messages, not 54 independent libraries and
 not code coverage.
 
 After adding explicitly pinned test-quality dependencies, the first reviewed
-Phase 3 baseline contained 100 entries. A later lint metadata refresh stopped
-reporting four of those unique dependency identities. The final portable baseline
-therefore contains 88 entries: 57 `GradleDependency` messages (19 unique messages
-repeated for three flavors), 3 `AndroidGradlePluginVersion` entries, and the same
-28 non-dependency Android source/resource findings.
+Phase 3 baseline contained 100 entries. A later lint metadata refresh reported 88
+entries because four dependency identities were no longer emitted. CI then
+confirmed that `GradleDependency` and `AndroidGradlePluginVersion` depend on the
+runner's external "latest available" metadata and checkout path, so identical
+source produced different baseline matches across environments.
 
-The dependency/tooling entries use `../gradle/libs.versions.toml` relative to the
-app baseline rather than a machine-specific `$HOME/...` path. This preserves the
-same exact issue/message/location checks in local clones and GitHub Actions. The
-refresh was signature-compared against the prior baseline: all 28 non-dependency
-findings are unchanged and no new production lint issue was baselined.
+Those two version-recency IDs are now excluded from Android lint only. Their
+responsibility remains covered by Dependabot, pull-request dependency review,
+strict dependency locks, SHA-256 verification metadata, the documented migration
+plan, and blocking Trivy HIGH/CRITICAL scans. Deterministic Android lint rules
+remain `warningsAsErrors`.
+
+The final lint baseline therefore contains only the 28 existing Android
+source/resource findings. It was signature-compared with both prior baselines:
+all 28 findings are identical and no new production lint issue was baselined.
 
 Updates were evaluated against the current coupled toolchain:
 

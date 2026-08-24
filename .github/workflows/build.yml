@@ -172,24 +172,7 @@ jobs:
             -no-window -gpu swiftshader_indirect -no-snapshot
             -noaudio -no-boot-anim
           disable-animations: true
-          script: |
-            set -o pipefail
-            LOG_FILE="$RUNNER_TEMP/instrumentation-gradle.log"
-            if ! bash ./gradlew :app:createDevDebugCoverageReport \
-              --stacktrace --no-daemon --no-parallel --max-workers=2 \
-              2>&1 | tee "$LOG_FILE"; then
-              SUMMARY=$(grep -E \
-                'FAILURE:|What went wrong|Execution failed|FAILED|failing tests|error:' \
-                "$LOG_FILE" | tail -n 20 || true)
-              if [[ -z "$SUMMARY" ]]; then
-                SUMMARY=$(tail -n 20 "$LOG_FILE")
-              fi
-              SUMMARY=${SUMMARY//'%'/'%25'}
-              SUMMARY=${SUMMARY//$'\r'/'%0D'}
-              SUMMARY=${SUMMARY//$'\n'/'%0A'}
-              echo "::error title=Android instrumentation failed::$SUMMARY"
-              exit 1
-            fi
+          script: bash ./scripts/run-ci-android-coverage.sh
 
       - name: Upload instrumentation evidence
         if: ${{ always() }}

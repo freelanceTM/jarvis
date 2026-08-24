@@ -129,17 +129,25 @@ Detekt 1.23.8 was added with a reviewed high-signal configuration at
 `config/detekt/detekt.yml`. App/server HTML, XML, and SARIF reports are enabled.
 Existing lint was retained with `warningsAsErrors`; no quality check was removed.
 
-The final portable lint baseline has exactly 88 entries:
+The final deterministic lint baseline has exactly 28 Android source/resource
+entries:
 
-- 57 `GradleDependency` entries (19 unique messages repeated across flavors);
-- 3 `AndroidGradlePluginVersion` entries;
-- 28 unchanged non-dependency Android source/resource entries.
+- 4 `InlinedApi`;
+- 10 `ObsoleteSdkInt`;
+- 8 `UnusedResources`;
+- 2 `ModifierParameter`;
+- 2 `MonochromeLauncherIcon`;
+- 1 `LockedOrientationActivity`;
+- 1 `DiscouragedApi`.
 
-A controlled metadata refresh removed four dependency identities no longer
-reported by lint. It also replaced the machine-specific version-catalog location
-with `../gradle/libs.versions.toml`, so the same baseline works in local clones
-and GitHub Actions. Signature comparison confirmed that all 28 non-dependency
-findings are unchanged and no new production warning was baselined.
+`GradleDependency` and `AndroidGradlePluginVersion` were removed from Android lint
+only after CI demonstrated that their external "latest available" metadata and
+root paths produce non-reproducible baseline matching. Dependency recency and
+security remain enforced by Dependabot, dependency review, strict locks,
+verification metadata, the reviewed migration plan, and blocking Trivy scans.
+All deterministic lint rules remain `warningsAsErrors`. Signature comparison
+confirmed that the 28 Android findings are unchanged and no new production
+warning was baselined.
 
 ### 3.4 Strict dependency locking compatibility
 
