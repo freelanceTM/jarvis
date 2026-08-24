@@ -77,7 +77,7 @@ class CompositeLocalAiExecutor @Inject constructor(
             }
 
             is LocalAiResult.Error -> {
-                Log.w(TAG, "local layer error: ${result.message}")
+                Log.w(TAG, "local layer error | chars=${result.message.length}")
                 LocalAiOutcome.Failed(result.message)
             }
         }
