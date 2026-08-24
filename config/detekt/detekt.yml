@@ -1,0 +1,73 @@
+config:
+  validation: true
+  warningsAsErrors: true
+  checkExhaustiveness: false
+
+# Phase 3 deliberately enables high-signal correctness rules first. The initial
+# full default run produced 1,064 findings, mostly formatting, magic numbers and
+# known large legacy routers. Those debt classes are documented in the Phase 3
+# report instead of being hidden in a generated baseline.
+complexity:
+  active: false
+
+comments:
+  active: false
+
+naming:
+  active: false
+
+empty-blocks:
+  # Android framework listener methods are required even when no callback work
+  # is needed. Compiler/interface conformance already protects their presence.
+  active: false
+
+exceptions:
+  active: true
+  TooGenericExceptionCaught:
+    active: false
+  SwallowedException:
+    # Device tools intentionally normalize platform exceptions into stable,
+    # non-sensitive ToolExecutionResult error codes.
+    active: false
+
+performance:
+  active: true
+  SpreadOperator:
+    # Room addMigrations requires varargs and the migration list is tiny.
+    active: false
+
+style:
+  active: true
+  ForbiddenComment:
+    active: false
+  FunctionOnlyReturningConstant:
+    active: false
+  LoopWithTooManyJumpStatements:
+    active: false
+  MagicNumber:
+    active: false
+  MaxLineLength:
+    active: false
+  ReturnCount:
+    active: false
+  ThrowsCount:
+    active: false
+  UnusedParameter:
+    active: true
+    allowedNames: '(_|ignored|expected)'
+  UnusedPrivateMember:
+    active: true
+    allowedNames: '(_|ignored|expected)'
+  UnusedPrivateProperty:
+    active: true
+    allowedNames: '(_|ignored|expected|serialVersionUID)'
+  UseCheckOrError:
+    active: false
+  WildcardImport:
+    active: false
+
+potential-bugs:
+  active: true
+
+coroutines:
+  active: true
