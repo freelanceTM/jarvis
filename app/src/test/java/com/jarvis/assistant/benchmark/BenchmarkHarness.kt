@@ -217,7 +217,8 @@ object BenchmarkHarness {
             calls.incrementAndGet()
 
             // Серверная privacy-политика (вторая линия защиты).
-            val blocked = when (request.privacyLevel) {
+            val blocked = when (request.effectivePrivacyLevel) {
+                com.jarvis.assistant.agent.decision.PrivacyLevel.UNKNOWN -> true
                 com.jarvis.assistant.agent.decision.PrivacyLevel.NORMAL -> false
                 com.jarvis.assistant.agent.decision.PrivacyLevel.PRIVATE -> !allowPrivate
                 com.jarvis.assistant.agent.decision.PrivacyLevel.SENSITIVE -> !allowSensitive
