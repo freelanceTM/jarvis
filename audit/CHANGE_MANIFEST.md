@@ -1,6 +1,53 @@
 # Change manifest
 
-Compared with `9196b97` (`main`). Generated artifacts under `build/`, `.gradle/`, `.git/`, and local SDK configuration are excluded.
+The published baseline for the current Phase 0 work is `55da095`. The workspace
+has no usable Git metadata, so the Phase 0 delta below is path-based rather than
+an inferred Git diff. Generated artifacts under `build/`, `.gradle/`, `.git/`,
+and local SDK configuration are excluded.
+
+## Phase 0 delta after `55da095`
+
+- Server/config: `.github/workflows/build.yml`, `gradle/libs.versions.toml`,
+  `server/build.gradle.kts`, `server/.env.example`, `server/src/main/kotlin/com/jarvis/server/Main.kt`.
+- License/API/auth/persistence: `api/LicenseBillingDto.kt`, `auth/Auth.kt`,
+  `config/LicenseConfig.kt`, `config/ServerConfig.kt`,
+  `http/LicenseBillingHttpHandler.kt`, `license/LicenseCrypto.kt`,
+  `license/LicenseModels.kt`, `license/LicenseService.kt`,
+  `license/JdbcLicenseRepository.kt`, `persistence/Database.kt`,
+  `persistence/JdbcTime.kt`, `ratelimit/PostgresRateLimiter.kt`.
+- Billing: `billing/BillingModels.kt`, `BillingProviders.kt`, `BillingService.kt`,
+  `JdbcBillingRepository.kt`, `WebhookVerification.kt`.
+- Migrations: `V001__license_core.sql`, `V002__billing_orders_events.sql`,
+  `V003__persistent_license_rate_limits.sql`, `V004__billing_reconciliation_guard.sql`.
+- Android: server-backed files under `app/.../core/license/`, `MainActivity.kt`,
+  activation/settings integration, `HiltModules.kt`, related resources and tests.
+- Server tests: `ApiIntegrationTest.kt`, `BillingPersistenceIntegrationTest.kt`,
+  `BillingProviderSecurityTest.kt`, `LicenseApiIntegrationTest.kt`,
+  `LicenseConfigTest.kt`, `LicensePersistenceIntegrationTest.kt`,
+  `PostgresRateLimiterTest.kt`, `PostgresTestSupport.kt`.
+- Documentation/audit: `docs/LICENSE_BILLING.md`,
+  `audit/PHASE0_LICENSE_BILLING_REPORT.md`, `audit/FINAL_AUDIT_REPORT.md`,
+  `audit/REPOSITORY_INVENTORY.md`, `audit/DEPENDENCY_GRAPH.md`,
+  `audit/generate_inventory.py`, and this manifest.
+
+## TLS deployment delta
+
+- Runtime/config: `server/.../config/DeploymentSecurityConfig.kt`,
+  `ServerConfig.kt`, `server/.../http/ProxyRequestSecurity.kt`,
+  `JarvisApiHandler.kt`, `Main.kt`.
+- Android transport: `LicenseServerValidator.kt`, `JarvisApiClient.kt`,
+  `AuthInterceptor.kt`, plus `ApiTransportSecurityTest.kt`.
+- Deployment: `.dockerignore`, `deploy/server.Dockerfile`,
+  `deploy/docker-compose.production.yml`, `deploy/Caddyfile`,
+  `deploy/.env.production.example`, `deploy/verify-production-config.sh`,
+  `deploy/smoke-production-tls.sh`.
+- Verification: `DeploymentSecurityTest.kt`, `ApiTransportSecurityTest.kt`, CI,
+  README, `docs/PRODUCTION_DEPLOYMENT.md`, server/license docs and audit reports.
+
+## Earlier audit delta (historical)
+
+The retained list below was originally generated against `9196b97` before the
+Phase 0 implementation.
 
 - Modified: 78
 - Added: 24
