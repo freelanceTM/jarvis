@@ -148,7 +148,7 @@ class OnDeviceLocalAi @Inject constructor(
             Log.d(TAG, "inference cancelled")
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "inference failed", e)
+            Log.e(TAG, "inference failed | type=${e.javaClass.simpleName}")
             LocalAiResult.Error("Local inference failed")
         }
     }
