@@ -4,108 +4,108 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 
-/** Лицензирование на клиенте всегда fail closed и не знает master/checksum. */
+/** Client activation only accepts a bounded, server-issued redemption record. */
 class LicenseCodeValidatorTest {
-
     private val validator = LicenseCodeValidator()
     private val hardwareId = "JRV-TEST-DEVICE-ABCDEF"
+    private val start = Instant.parse("2026-08-20T00:00:00Z")
 
     private class FakeServerValidator(
-        private val result: ServerValidationResult
+        private val redeemResult: ServerRedemptionResult
     ) : LicenseServerValidator {
         var calls = 0
         var lastCode: String? = null
         var lastHardwareId: String? = null
 
-        override suspend fun validate(code: String, hardwareId: String): ServerValidationResult {
+        override suspend fun redeem(code: String, hardwareId: String): ServerRedemptionResult {
             calls++
             lastCode = code
             lastHardwareId = hardwareId
-            return result
-        }
-    }
-
-    private fun validate(code: String, result: ServerValidationResult): LicenseCodeValidator.CodeVerdict =
-        runBlocking {
-            validator.validate(code, FakeServerValidator(result), hardwareId)
+            return redeemResult
         }
 
+        override suspend fun validate(hardwareId: String): ServerLicenseValidationResult =
+            ServerLicenseValidationResult.ServiceUnavailable
+    }
+
+    private fun record(days: Long, token: String? = "jrv_" + "x".repeat(43)) = ServerLicenseRecord(
+        accessToken = token,
+        planId = "earclip-monthly",
+        productId = "jarvis-earclip",
+        startsAt = start,
+        expiresAt = start.plus(days, ChronoUnit.DAYS),
+        billingStatus = "GRANTED"
+    )
+
+    private fun redeem(code: String, result: ServerRedemptionResult) = runBlocking {
+        validator.redeem(code, FakeServerValidator(result), hardwareId)
+    }
+
     @Test
-    fun `server valid verdict preserves license duration`() {
+    fun `server redemption preserves authoritative entitlement`() {
+        val license = record(30)
         assertEquals(
-            LicenseCodeValidator.CodeVerdict.BoxCodeValid(30),
-            validate("ABCDEFGHIJKL", ServerValidationResult.Valid(30))
-        )
-        assertEquals(
-            LicenseCodeValidator.CodeVerdict.BoxCodeValid(90),
-            validate("ABCDEFGHIJKL", ServerValidationResult.Valid(90))
+            LicenseCodeValidator.CodeVerdict.BoxCodeValid(license),
+            redeem("JRV-ABCDE-FGHJK-LMNPQ-RSTUV", ServerRedemptionResult.Success(license))
         )
     }
 
     @Test
-    fun `server rejection always wins even for formerly passable checksum`() {
+    fun `server rejection and outage fail closed`() {
         assertEquals(
             LicenseCodeValidator.CodeVerdict.Invalid,
-            validate("ABCDEFGHIJKL", ServerValidationResult.Invalid("used"))
+            redeem("JRV-ABCDE-FGHJK-LMNPQ-RSTUV", ServerRedemptionResult.NotRedeemable)
+        )
+        assertEquals(
+            LicenseCodeValidator.CodeVerdict.ServiceUnavailable,
+            redeem("JRV-ABCDE-FGHJK-LMNPQ-RSTUV", ServerRedemptionResult.ServiceUnavailable)
+        )
+        assertEquals(
+            LicenseCodeValidator.CodeVerdict.RateLimited,
+            redeem("JRV-ABCDE-FGHJK-LMNPQ-RSTUV", ServerRedemptionResult.RateLimited)
         )
     }
 
     @Test
-    fun `server unavailable fails closed for every code shape`() {
-        listOf("ABCDEFGHIJKL", "ABCDEFGHIJKM", "JARVIS2026", "STARTUP2026").forEach { code ->
+    fun `missing token and invalid durations are rejected`() {
+        for (license in listOf(record(0), record(-1), record(3_651), record(30, token = null))) {
             assertEquals(
-                "code=$code",
-                LicenseCodeValidator.CodeVerdict.ServiceUnavailable,
-                validate(code, ServerValidationResult.ServiceUnavailable)
-            )
-        }
-    }
-
-    @Test
-    fun `former master codes have no client-side special path`() {
-        val server = FakeServerValidator(ServerValidationResult.Invalid("not issued"))
-        runBlocking { validator.validate("JARVIS2026", server, hardwareId) }
-        assertEquals(1, server.calls)
-        assertEquals("JARVIS2026", server.lastCode)
-    }
-
-    @Test
-    fun `invalid server durations are rejected`() {
-        for (days in listOf(Int.MIN_VALUE, -1, 0, 3_651, Int.MAX_VALUE)) {
-            assertEquals(
-                "days=$days",
                 LicenseCodeValidator.CodeVerdict.Invalid,
-                validate("ABCDEFGHIJKL", ServerValidationResult.Valid(days))
+                redeem("JRV-ABCDE-FGHJK-LMNPQ-RSTUV", ServerRedemptionResult.Success(license))
             )
         }
     }
 
     @Test
     fun `duration boundaries are accepted`() {
-        assertEquals(
-            LicenseCodeValidator.CodeVerdict.BoxCodeValid(1),
-            validate("ABCDEFGHIJKL", ServerValidationResult.Valid(1))
-        )
-        assertEquals(
-            LicenseCodeValidator.CodeVerdict.BoxCodeValid(3_650),
-            validate("ABCDEFGHIJKL", ServerValidationResult.Valid(3_650))
-        )
+        for (days in listOf(1L, 3_650L)) {
+            val license = record(days)
+            assertEquals(
+                LicenseCodeValidator.CodeVerdict.BoxCodeValid(license),
+                redeem("JRV-ABCDE-FGHJK-LMNPQ-RSTUV", ServerRedemptionResult.Success(license))
+            )
+        }
     }
 
     @Test
-    fun `short codes are rejected before network call`() = runBlocking {
-        val server = FakeServerValidator(ServerValidationResult.Valid())
-        val verdict = validator.validate("SHORT", server, hardwareId)
-        assertTrue(verdict is LicenseCodeValidator.CodeVerdict.Invalid)
-        assertEquals(0, server.calls)
+    fun `short and oversized codes are rejected before network`() = runBlocking {
+        val fake = FakeServerValidator(ServerRedemptionResult.Success(record(30)))
+        assertTrue(validator.redeem("SHORT", fake, hardwareId) is LicenseCodeValidator.CodeVerdict.Invalid)
+        assertTrue(
+            validator.redeem("X".repeat(65), fake, hardwareId) is LicenseCodeValidator.CodeVerdict.Invalid
+        )
+        assertEquals(0, fake.calls)
     }
 
     @Test
-    fun `server receives canonical code and hardware id`() = runBlocking {
-        val server = FakeServerValidator(ServerValidationResult.Valid())
-        validator.validate("ABCDEFGHIJKL", server, hardwareId)
-        assertEquals("ABCDEFGHIJKL", server.lastCode)
-        assertEquals(hardwareId, server.lastHardwareId)
+    fun `canonical code and hardware id reach server`() = runBlocking {
+        val fake = FakeServerValidator(ServerRedemptionResult.Success(record(30)))
+        val code = "JRV-ABCDE-FGHJK-LMNPQ-RSTUV"
+        validator.redeem(code, fake, hardwareId)
+        assertEquals(code, fake.lastCode)
+        assertEquals(hardwareId, fake.lastHardwareId)
     }
 }
