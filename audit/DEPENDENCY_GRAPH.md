@@ -38,14 +38,17 @@ Static package graph inferred from Kotlin imports. Edge weight is import count.
 - `com.jarvis.assistant.presentation`: 22 files
 - `com.jarvis.assistant.voice`: 8 files
 - `com.jarvis.server`: 1 files
-- `com.jarvis.server.api`: 1 files
+- `com.jarvis.server.api`: 2 files
 - `com.jarvis.server.auth`: 1 files
-- `com.jarvis.server.config`: 1 files
-- `com.jarvis.server.http`: 1 files
+- `com.jarvis.server.billing`: 5 files
+- `com.jarvis.server.config`: 3 files
+- `com.jarvis.server.http`: 4 files
+- `com.jarvis.server.license`: 4 files
 - `com.jarvis.server.observability`: 1 files
+- `com.jarvis.server.persistence`: 2 files
 - `com.jarvis.server.privacy`: 1 files
 - `com.jarvis.server.provider`: 5 files
-- `com.jarvis.server.ratelimit`: 1 files
+- `com.jarvis.server.ratelimit`: 2 files
 - `com.jarvis.server.router`: 1 files
 - `com.jarvis.server.usage`: 1 files
 
@@ -131,7 +134,7 @@ Static package graph inferred from Kotlin imports. Edge weight is import count.
 | `com.jarvis.assistant.data` | `com.jarvis.assistant.agent.automation` | 2 |
 | `com.jarvis.assistant.data` | `com.jarvis.assistant.agent.memory` | 2 |
 | `com.jarvis.assistant.data` | `com.jarvis.assistant.ai` | 2 |
-| `com.jarvis.assistant.data` | `com.jarvis.assistant.core` | 10 |
+| `com.jarvis.assistant.data` | `com.jarvis.assistant.core` | 11 |
 | `com.jarvis.assistant.data` | `com.jarvis.assistant.domain` | 7 |
 | `com.jarvis.assistant.di` | `com.jarvis.assistant` | 1 |
 | `com.jarvis.assistant.di` | `com.jarvis.assistant.agent.automation` | 1 |
@@ -173,26 +176,40 @@ Static package graph inferred from Kotlin imports. Edge weight is import count.
 | `com.jarvis.assistant.voice` | `com.jarvis.assistant.core` | 3 |
 | `com.jarvis.assistant.voice` | `com.jarvis.assistant.domain` | 4 |
 | `com.jarvis.assistant.voice` | `com.jarvis.assistant.presentation` | 1 |
-| `com.jarvis.server` | `com.jarvis.server.auth` | 3 |
+| `com.jarvis.server` | `com.jarvis.server.auth` | 5 |
+| `com.jarvis.server` | `com.jarvis.server.billing` | 6 |
 | `com.jarvis.server` | `com.jarvis.server.config` | 1 |
-| `com.jarvis.server` | `com.jarvis.server.http` | 2 |
+| `com.jarvis.server` | `com.jarvis.server.http` | 5 |
+| `com.jarvis.server` | `com.jarvis.server.license` | 3 |
 | `com.jarvis.server` | `com.jarvis.server.observability` | 2 |
+| `com.jarvis.server` | `com.jarvis.server.persistence` | 2 |
 | `com.jarvis.server` | `com.jarvis.server.provider` | 7 |
-| `com.jarvis.server` | `com.jarvis.server.ratelimit` | 1 |
+| `com.jarvis.server` | `com.jarvis.server.ratelimit` | 2 |
 | `com.jarvis.server` | `com.jarvis.server.router` | 1 |
 | `com.jarvis.server` | `com.jarvis.server.usage` | 1 |
+| `com.jarvis.server.auth` | `com.jarvis.server.license` | 1 |
+| `com.jarvis.server.billing` | `com.jarvis.server.license` | 3 |
+| `com.jarvis.server.billing` | `com.jarvis.server.persistence` | 2 |
+| `com.jarvis.server.billing` | `com.jarvis.server.provider` | 2 |
+| `com.jarvis.server.config` | `com.jarvis.server.billing` | 2 |
+| `com.jarvis.server.config` | `com.jarvis.server.license` | 1 |
+| `com.jarvis.server.config` | `com.jarvis.server.persistence` | 1 |
 | `com.jarvis.server.config` | `com.jarvis.server.provider` | 1 |
-| `com.jarvis.server.http` | `com.jarvis.server.api` | 3 |
-| `com.jarvis.server.http` | `com.jarvis.server.auth` | 4 |
-| `com.jarvis.server.http` | `com.jarvis.server.config` | 1 |
-| `com.jarvis.server.http` | `com.jarvis.server.observability` | 2 |
-| `com.jarvis.server.http` | `com.jarvis.server.ratelimit` | 2 |
+| `com.jarvis.server.http` | `com.jarvis.server.api` | 14 |
+| `com.jarvis.server.http` | `com.jarvis.server.auth` | 9 |
+| `com.jarvis.server.http` | `com.jarvis.server.billing` | 8 |
+| `com.jarvis.server.http` | `com.jarvis.server.config` | 4 |
+| `com.jarvis.server.http` | `com.jarvis.server.license` | 5 |
+| `com.jarvis.server.http` | `com.jarvis.server.observability` | 3 |
+| `com.jarvis.server.http` | `com.jarvis.server.ratelimit` | 4 |
 | `com.jarvis.server.http` | `com.jarvis.server.router` | 2 |
+| `com.jarvis.server.license` | `com.jarvis.server.persistence` | 2 |
 | `com.jarvis.server.observability` | `com.jarvis.server.provider` | 2 |
 | `com.jarvis.server.privacy` | `com.jarvis.server.api` | 1 |
 | `com.jarvis.server.provider` | `com.jarvis.server.config` | 4 |
 | `com.jarvis.server.provider` | `com.jarvis.server.observability` | 2 |
-| `com.jarvis.server.ratelimit` | `com.jarvis.server.config` | 1 |
+| `com.jarvis.server.ratelimit` | `com.jarvis.server.config` | 2 |
+| `com.jarvis.server.ratelimit` | `com.jarvis.server.persistence` | 2 |
 | `com.jarvis.server.router` | `com.jarvis.server.api` | 3 |
 | `com.jarvis.server.router` | `com.jarvis.server.auth` | 1 |
 | `com.jarvis.server.router` | `com.jarvis.server.config` | 3 |
@@ -209,9 +226,13 @@ UI / Voice -> SendPromptUseCase -> AgentPipeline -> ExecutionDecisionEngine
   -> CompositeLocalAiExecutor -> MediaPipe Gemma / WorkflowExecutor
   -> AIRepository -> JarvisApiClient -> JARVIS server
 
-HTTP -> authn -> authz -> SlidingWindowRateLimiter -> AiRouter
+Internet HTTPS -> Caddy TLS/replaced proxy headers -> private JDK HTTP listener
+HTTP -> trusted-origin resolution -> authn -> authz -> SlidingWindowRateLimiter -> AiRouter
   -> server PromptPrivacyClassifier -> ProviderManager
   -> Groq/Gemini/OpenRouter -> Usage + Metrics
+
+License/billing HTTP -> DB-backed auth + PostgreSQL rate limits
+  -> PostgreSQL licenses/orders/events -> Paddle/HELEKET + signed webhooks
 
 Room -> Message/Memory/Fact/Preference/Procedure/Automation DAOs
 System broadcasts -> SystemEventReceiver -> PersonalAutomationEngine -> ToolExecutor
