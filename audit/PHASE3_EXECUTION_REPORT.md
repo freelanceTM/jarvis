@@ -115,9 +115,10 @@ service then broke during APK installation and `system_server` terminated.
 No test case began and no Android coverage data was generated. Details are in
 `audit/PHASE3_ANDROID_EMULATOR_ATTEMPT.md`.
 
-A dedicated KVM-backed `android-instrumentation` CI job is now configured to run
-`:app:createDevDebugCoverageReport` and upload device/coverage diagnostics. Its
-YAML and actionlint checks pass locally, but no GitHub-hosted result is claimed.
+A dedicated KVM-backed `android-instrumentation` CI job is now configured through
+an immutable android-emulator-runner v2.38.0 commit to run
+`:app:createDevDebugCoverageReport` and upload test/coverage evidence. Its YAML
+and actionlint checks pass locally; the hosted run result is tracked separately.
 Therefore no Android framework, Keystore, DataStore, Compose, Room, scheduler,
 MediaPipe, voice, or physical permission behavior is claimed as executed in this
 workspace. The dev instrumentation APK was successfully compiled.
@@ -325,10 +326,11 @@ Details and migration prerequisites are in
 `.github/workflows/build.yml` now explicitly runs the dev JVM coverage gate,
 dev lint, app/server Detekt, PostgreSQL-backed server tests and coverage gate,
 dev app/test APK compilation, and quality-report publication. A separate job
-requires KVM, boots an API 34 emulator, runs the ordinary Android instrumentation
-coverage task, and always uploads adb, emulator, logcat, test, and coverage
-evidence. Actions remain pinned to immutable commit SHAs. The job is configured
-and statically validated, not claimed as executed. Local validation additionally
+requires KVM, uses an immutable android-emulator-runner commit to boot API 34,
+runs the ordinary Android instrumentation coverage task, and uploads test and
+coverage evidence while retaining emulator diagnostics in the workflow log.
+Actions remain pinned to immutable commit SHAs. The job is configured and
+statically validated; hosted execution evidence must be assessed from CI. Local validation additionally
 covered staging and production; CI should add those variants when its time
 budget permits.
 

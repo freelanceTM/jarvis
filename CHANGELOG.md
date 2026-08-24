@@ -32,7 +32,7 @@ must be added only when the repository owner creates an actual release.
   quality reports and the dev app APK are published as workflow artifacts.
 - Configuration for a dedicated KVM-backed Android API 34 CI job that runs the
   ordinary instrumentation suite, generates Android coverage, and publishes
-  test, coverage, emulator, adb, and logcat evidence.
+  test and coverage evidence; emulator diagnostics remain in the workflow log.
 
 ### Changed
 

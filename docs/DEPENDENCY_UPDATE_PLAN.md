@@ -81,6 +81,12 @@ all three APK builds passed; Detekt keeps its own Kotlin 2.0.21 tool classpath.
 
 Test dependencies do not enter the production APK.
 
+CI-only tooling now includes ReactiveCircus Android Emulator Runner v2.38.0,
+pinned to the immutable commit
+`a421e43855164a8197daf9d8d40fe71c6996bb0d`. The annotated release tag was
+verified against that peeled commit, its action uses Node 24, and it is limited
+to provisioning the KVM-backed API 34 instrumentation job.
+
 ## Intentionally deferred updates
 
 ### AGP 8.5.2 → 9.x

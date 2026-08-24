@@ -99,12 +99,12 @@ A dedicated `android-instrumentation` job was added to
 2. provisions a Google APIs API 34 x86_64 AVD;
 3. waits for a real `sys.boot_completed=1` result;
 4. runs `:app:createDevDebugCoverageReport`;
-5. publishes instrumentation results, Android coverage, emulator logs, adb
-   inventory, and logcat evidence even when the task fails.
+5. publishes instrumentation results and Android coverage while preserving
+   emulator diagnostics in the workflow log.
 
-The workflow passes YAML parsing and actionlint 1.7.12 locally. No GitHub-hosted
-execution result is available in this workspace, so the new CI job is reported
-as configured, not as passed.
+The workflow passes YAML parsing and actionlint 1.7.12 locally. Hosted execution
+must be assessed from the corresponding GitHub Actions run rather than inferred
+from this local software-emulator attempt.
 
 A hardware-accelerated CI runner, physical device, or KVM-enabled local host is
 still required to close the production LicenseManager/Android coverage evidence

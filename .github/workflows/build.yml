@@ -58,12 +58,29 @@ jobs:
           bash ./gradlew :app:dependencies :server:dependencies --write-locks --no-daemon
           git diff --exit-code -- '**/gradle.lockfile' 'gradle/verification-metadata.xml'
 
-      - name: Test, cover, lint and build Android dev
+      - name: Test Android dev and verify JVM coverage
         shell: bash
         run: |
-          bash ./gradlew :app:jacocoDevDebugCoverageVerification :app:lintDevDebug \
-            :app:assembleDevDebug :app:assembleDevDebugAndroidTest \
-            phase3StaticAnalysis --stacktrace --no-daemon
+          bash ./gradlew :app:jacocoDevDebugCoverageVerification \
+            --stacktrace --no-daemon --no-parallel --max-workers=2
+
+      - name: Run Android and server static analysis
+        shell: bash
+        run: |
+          bash ./gradlew phase3StaticAnalysis \
+            --stacktrace --no-daemon --no-parallel --max-workers=2
+
+      - name: Lint Android dev
+        shell: bash
+        run: |
+          bash ./gradlew :app:lintDevDebug \
+            --stacktrace --no-daemon --no-parallel --max-workers=2
+
+      - name: Build Android dev app and instrumentation APKs
+        shell: bash
+        run: |
+          bash ./gradlew :app:assembleDevDebug :app:assembleDevDebugAndroidTest \
+            --stacktrace --no-daemon --no-parallel --max-workers=2
 
       - name: JARVIS benchmark regression
         shell: bash
@@ -130,73 +147,34 @@ jobs:
           gradle-version: '8.7'
           cache-read-only: ${{ github.event_name == 'pull_request' }}
 
-      - name: Require hardware virtualization
+      - name: Enable KVM access
         shell: bash
         run: |
           set -euo pipefail
           test -c /dev/kvm
-          sudo chmod 0666 /dev/kvm
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
 
-      - name: Install API 34 emulator image
-        shell: bash
-        run: |
-          set -euo pipefail
-          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:?Android SDK root is not configured}}"
-          SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" -type f -path '*/bin/sdkmanager' \
-            | sort -V | tail -n 1)
-          test -n "$SDKMANAGER"
-          test -x "$SDKMANAGER"
-          AVDMANAGER="$(dirname "$SDKMANAGER")/avdmanager"
-          test -x "$AVDMANAGER"
-          "$SDKMANAGER" --install \
-            'platform-tools' \
-            'emulator' \
-            'system-images;android-34;google_apis;x86_64'
-          printf 'no\n' | "$AVDMANAGER" create avd --force \
-            --name jarvis-ci-api34 \
-            --package 'system-images;android-34;google_apis;x86_64'
-          echo "$SDK_ROOT/platform-tools" >>"$GITHUB_PATH"
-          echo "$SDK_ROOT/emulator" >>"$GITHUB_PATH"
-
-      - name: Boot API 34 emulator
-        shell: bash
-        run: |
-          set -euo pipefail
-          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:?Android SDK root is not configured}}"
-          export PATH="$SDK_ROOT/platform-tools:$SDK_ROOT/emulator:$PATH"
-          nohup emulator @jarvis-ci-api34 \
-            -no-window -no-audio -no-boot-anim -no-snapshot \
-            -gpu swiftshader_indirect -accel on -cores 2 -memory 2048 \
-            >"$RUNNER_TEMP/jarvis-emulator.log" 2>&1 &
-          echo "$!" >"$RUNNER_TEMP/jarvis-emulator.pid"
-          adb start-server
-          timeout 180 adb wait-for-device
-          if ! timeout 600 bash -c \
-            'until [[ "$(adb shell getprop sys.boot_completed | tr -d "\r")" == "1" ]]; do sleep 5; done'; then
-            cat "$RUNNER_TEMP/jarvis-emulator.log"
-            adb logcat -d || true
-            exit 1
-          fi
-          adb shell settings put global window_animation_scale 0
-          adb shell settings put global transition_animation_scale 0
-          adb shell settings put global animator_duration_scale 0
-          adb shell svc power stayon true
-
-      - name: Run ordinary instrumentation suite and Android coverage
-        shell: bash
-        run: |
-          bash ./gradlew :app:createDevDebugCoverageReport \
-            --stacktrace --no-daemon
-
-      - name: Capture emulator diagnostics
-        if: ${{ always() }}
-        shell: bash
-        run: |
-          adb devices -l >"$RUNNER_TEMP/adb-devices.txt" || true
-          adb logcat -d >"$RUNNER_TEMP/device-logcat.txt" || true
-          if [[ -f "$RUNNER_TEMP/jarvis-emulator.pid" ]]; then
-            kill "$(cat "$RUNNER_TEMP/jarvis-emulator.pid")" || true
-          fi
+      - name: Run API 34 instrumentation suite and Android coverage
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          cores: 2
+          ram-size: 2048M
+          disk-size: 4G
+          emulator-boot-timeout: 600
+          emulator-options: >-
+            -no-window -gpu swiftshader_indirect -no-snapshot
+            -noaudio -no-boot-anim
+          disable-animations: true
+          script: >-
+            bash ./gradlew :app:createDevDebugCoverageReport
+            --stacktrace --no-daemon --no-parallel --max-workers=2
 
       - name: Upload instrumentation evidence
         if: ${{ always() }}
@@ -207,8 +185,5 @@ jobs:
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
             app/build/reports/coverage/
-            ${{ runner.temp }}/jarvis-emulator.log
-            ${{ runner.temp }}/adb-devices.txt
-            ${{ runner.temp }}/device-logcat.txt
           if-no-files-found: warn
           retention-days: 30
