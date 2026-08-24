@@ -1,5 +1,6 @@
 package com.jarvis.assistant.presentation.main
 
+import com.jarvis.assistant.agent.decision.PrivacyLevel
 import com.jarvis.assistant.domain.models.VoiceAssistantState
 import com.jarvis.assistant.voice.orchestrator.OrchestratorMode
 
@@ -12,6 +13,7 @@ data class MainUiState(
     val bluetoothDeviceName: String = "",
     val lastUserQuery: String = "",
     val lastAssistantResponse: String = "",
+    val privacyLevel: PrivacyLevel = PrivacyLevel.UNKNOWN,
     val liveRmsDb: Float = 0f,
     val isApiKeyConfigured: Boolean = false
 )
