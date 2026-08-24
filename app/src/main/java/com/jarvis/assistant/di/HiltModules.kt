@@ -1,7 +1,6 @@
 package com.jarvis.assistant.di
 
 import android.content.Context
-import androidx.room.Room
 import com.jarvis.assistant.BuildConfig
 import com.jarvis.assistant.agent.automation.dao.AutomationDao
 import com.jarvis.assistant.agent.capability.CapabilityChecker
@@ -73,7 +72,7 @@ import com.jarvis.assistant.core.network.NetworkMonitor
 import com.jarvis.assistant.core.security.SecurityManager
 import com.jarvis.assistant.core.security.SecurityManagerImpl
 import com.jarvis.assistant.data.local.JarvisDatabase
-import com.jarvis.assistant.data.local.JarvisMigrations
+import com.jarvis.assistant.data.local.JarvisDatabaseFactory
 import com.jarvis.assistant.data.local.dao.MessageDao
 import com.jarvis.assistant.data.remote.interceptor.AuthInterceptor
 import com.jarvis.assistant.data.repository.AIRepositoryImpl
@@ -232,15 +231,7 @@ object DatabaseModule {
     fun provideJarvisDatabase(
         @ApplicationContext context: Context
     ): JarvisDatabase {
-        return Room.databaseBuilder(
-            context,
-            JarvisDatabase::class.java,
-            AppConstants.DATABASE_NAME
-        )
-            // Пункт аудита #7: миграции вместо молчаливого стирания данных.
-            // Без подходящей миграции Room бросит исключение, а не пересоздаст БД.
-            .addMigrations(*JarvisMigrations.ALL)
-            .build()
+        return JarvisDatabaseFactory.create(context)
     }
 
     @Provides
