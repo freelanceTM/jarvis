@@ -1,5 +1,8 @@
 package com.jarvis.assistant.tools
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.jarvis.assistant.agent.capability.DeviceCapabilityRegistry
@@ -13,6 +16,7 @@ import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -43,6 +47,7 @@ class CallSmsHonestyInstrumentedTest {
 
     @Test
     fun callByPhoneNumberWithoutPermissionReturnsUserActionRequired() = runBlocking {
+        assumePermissionDenied(Manifest.permission.CALL_PHONE)
         val tool = CallTool(context, capabilities, contactResolver)
 
         val result = tool.execute(buildJsonObject { put("recipient", "+79991234567") })
@@ -62,6 +67,7 @@ class CallSmsHonestyInstrumentedTest {
 
     @Test
     fun callByContactNameWithoutContactsPermissionReturnsPermissionRequired() = runBlocking {
+        assumePermissionDenied(Manifest.permission.READ_CONTACTS)
         val tool = CallTool(context, capabilities, contactResolver)
 
         val result = tool.execute(buildJsonObject { put("recipient", "Иван Иванович") })
@@ -80,6 +86,7 @@ class CallSmsHonestyInstrumentedTest {
 
     @Test
     fun smsWithoutPermissionReturnsPermissionRequired() = runBlocking {
+        assumePermissionDenied(Manifest.permission.SEND_SMS)
         val tool = SmsTool(context, capabilities, contactResolver)
 
         val result = tool.execute(
@@ -114,5 +121,12 @@ class CallSmsHonestyInstrumentedTest {
 
         assertEquals(ToolExecutionStatus.FAILURE, result.status)
         assertEquals("MISSING_RECIPIENT", result.error)
+    }
+
+    private fun assumePermissionDenied(permission: String) {
+        assumeTrue(
+            "Safety precondition: $permission must be denied; test will not perform a real call/SMS",
+            ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED
+        )
     }
 }
