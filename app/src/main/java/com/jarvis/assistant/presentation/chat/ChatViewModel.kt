@@ -4,6 +4,10 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jarvis.assistant.R
+import com.jarvis.assistant.agent.decision.PrivacyClassification
+import com.jarvis.assistant.agent.decision.PrivacyClassifier
+import com.jarvis.assistant.agent.decision.PrivacyContent
+import com.jarvis.assistant.agent.decision.PrivacyReason
 import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.model.ToolCall
 import com.jarvis.assistant.core.confirmation.ConfirmationIntent
@@ -42,6 +46,8 @@ data class ChatUiState(
     val inputText: String = "",
     val isSending: Boolean = false,
     val isVoiceDictating: Boolean = false,
+    val privacyClassification: PrivacyClassification =
+        PrivacyClassification.unknown(PrivacyReason.NOT_CLASSIFIED),
     val pendingConfirmation: PendingConfirmationUi? = null
 )
 
@@ -63,6 +69,7 @@ class ChatViewModel @Inject constructor(
 
     private var speechRate = 1.05f
     private var speechPitch = 0.90f
+    private var systemPrompt = ""
 
     init {
         loadHistory()
@@ -83,6 +90,7 @@ class ChatViewModel @Inject constructor(
             getSettingsUseCase().collectLatest { settings ->
                 speechRate = settings.speechRate
                 speechPitch = settings.speechPitch
+                systemPrompt = settings.systemPrompt
             }
         }
     }
@@ -108,7 +116,10 @@ class ChatViewModel @Inject constructor(
     }
 
     fun onInputTextChanged(newText: String) {
-        _uiState.update { it.copy(inputText = newText) }
+        val classification = PrivacyClassifier.classifySafely(PrivacyContent(newText))
+        _uiState.update {
+            it.copy(inputText = newText, privacyClassification = classification)
+        }
     }
 
     fun sendTextMessage(textToSend: String = _uiState.value.inputText) {
@@ -127,10 +138,24 @@ class ChatViewModel @Inject constructor(
             return
         }
 
-        _uiState.update { it.copy(inputText = "", isSending = true) }
+        val classification = PrivacyClassifier.classifySafely(PrivacyContent(query))
+        _uiState.update {
+            it.copy(inputText = "", isSending = true, privacyClassification = classification)
+        }
 
         viewModelScope.launch {
-            val result = sendPromptUseCase(query)
+            val history = messageRepository.getRecentMessages(limit = 10)
+            val contextualClassification = PrivacyClassifier.classifySafely(
+                PrivacyContent(
+                    text = query,
+                    relatedContent = listOf(systemPrompt) + history.map(Message::text)
+                )
+            )
+            _uiState.update { it.copy(privacyClassification = contextualClassification) }
+            val result = sendPromptUseCase(
+                query,
+                privacyLevel = contextualClassification.level
+            )
             _uiState.update { it.copy(isSending = false) }
 
             when (result) {
