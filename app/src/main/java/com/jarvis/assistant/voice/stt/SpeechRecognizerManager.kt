@@ -12,6 +12,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -56,7 +57,8 @@ class SpeechRecognizerManager @Inject constructor(
     private var isContinuousMode = false
     private var currentLanguageTag = "ru-RU"
 
-    private val scope = CoroutineScope(Dispatchers.Main + Job())
+    private val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
+    private var restartJob: Job? = null
 
     fun startListening(languageTag: String = "ru-RU", continuous: Boolean = false) {
         stopListening()
@@ -94,6 +96,8 @@ class SpeechRecognizerManager @Inject constructor(
 
     fun stopListening() {
         isContinuousMode = false
+        restartJob?.cancel()
+        restartJob = null
         if (!isListening && speechRecognizer == null) return
         isListening = false
         try {
@@ -128,12 +132,7 @@ class SpeechRecognizerManager @Inject constructor(
 
         if (isContinuousMode && (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT)) {
             // В режиме непрерывного синхронного переводчика пауза собеседника не завершает сессию
-            scope.launch {
-                delay(50)
-                if (isContinuousMode) {
-                    startListening(currentLanguageTag, continuous = true)
-                }
-            }
+            scheduleContinuousRestart(50)
             return
         }
 
@@ -158,14 +157,20 @@ class SpeechRecognizerManager @Inject constructor(
 
         // В Continuous Mode мгновенно возобновляем прослушивание следующей фразы собеседника
         if (isContinuousMode) {
-            scope.launch {
-                delay(30)
-                if (isContinuousMode) {
-                    startListening(currentLanguageTag, continuous = true)
-                }
-            }
+            scheduleContinuousRestart(30)
         } else {
             isListening = false
+        }
+    }
+
+    private fun scheduleContinuousRestart(delayMs: Long) {
+        restartJob?.cancel()
+        restartJob = scope.launch {
+            delay(delayMs)
+            if (isContinuousMode) {
+                restartJob = null
+                startListening(currentLanguageTag, continuous = true)
+            }
         }
     }
 
