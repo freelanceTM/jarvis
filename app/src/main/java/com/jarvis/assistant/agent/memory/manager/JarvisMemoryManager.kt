@@ -4,7 +4,6 @@ import com.jarvis.assistant.agent.memory.WorkingMemory
 import com.jarvis.assistant.agent.memory.dao.FactDao
 import com.jarvis.assistant.agent.memory.dao.MemoryDao
 import com.jarvis.assistant.agent.memory.dao.PreferenceDao
-import com.jarvis.assistant.agent.memory.dao.ProcedureDao
 import com.jarvis.assistant.agent.memory.entity.*
 import com.jarvis.assistant.agent.memory.extractor.AutonomousMemoryExtractor
 import com.jarvis.assistant.agent.memory.model.ForgetResult
@@ -29,7 +28,6 @@ class JarvisMemoryManager @Inject constructor(
     private val memoryDao: MemoryDao,
     private val factDao: FactDao,
     private val preferenceDao: PreferenceDao,
-    private val procedureDao: ProcedureDao,
     private val featureEngine: SemanticTextMatcher,
     private val memoryExtractor: AutonomousMemoryExtractor
 ) {
