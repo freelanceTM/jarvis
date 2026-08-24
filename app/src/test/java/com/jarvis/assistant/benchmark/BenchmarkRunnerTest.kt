@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.util.Locale
 
 /**
  * Запуск JARVIS Benchmark v1 и генерация отчётов (Этап 4).
@@ -134,7 +135,7 @@ class BenchmarkRunnerTest {
         appendLine()
         appendLine("  ТОЧНОСТЬ ПО КАТЕГОРИЯМ")
         report.categoryAccuracy.forEach {
-            appendLine(String.format(
+            appendLine(String.format(Locale.ROOT,
                 "    %-12s %6s   (%d/%d)",
                 it.category.name, pct(it.accuracyPercent), it.correct, it.total
             ))
@@ -147,7 +148,7 @@ class BenchmarkRunnerTest {
         appendLine()
         appendLine("  РАСПРЕДЕЛЕНИЕ ФАКТИЧЕСКИХ МАРШРУТОВ")
         report.routeDistribution.entries.sortedByDescending { it.value }.forEach {
-            appendLine(String.format("    %-14s %3d", it.key, it.value))
+            appendLine(String.format(Locale.ROOT, "    %-14s %3d", it.key, it.value))
         }
         appendLine()
         appendLine("  CONFUSION MATRIX")
@@ -180,7 +181,7 @@ class BenchmarkRunnerTest {
             appendLine("  TTFT p50:                ${BenchmarkMetrics.percentile(rt.timeToFirstToken, 50)} ms")
         }
         if (rt.tokensPerSecond.isNotEmpty()) {
-            appendLine(String.format("  Tokens/sec (avg):        %.1f", rt.tokensPerSecond.average()))
+            appendLine(String.format(Locale.ROOT, "  Tokens/sec (avg):        %.1f", rt.tokensPerSecond.average()))
         }
         appendLine("  Отказов локальной модели: ${rig.localExecutor.declines.get()}")
         appendLine("  Обработано локально:      ${rig.localExecutor.handled.get()}")
@@ -208,7 +209,7 @@ class BenchmarkRunnerTest {
         appendLine("  Планов построено:        ${rig.agent.plansBuilt.get()}")
         appendLine("  Запусков цикла:          ${rig.agent.runs.get()}")
         if (rig.agent.stepCounts.isNotEmpty()) {
-            appendLine(String.format("  Шагов в плане (avg):     %.1f", rig.agent.stepCounts.average()))
+            appendLine(String.format(Locale.ROOT, "  Шагов в плане (avg):     %.1f", rig.agent.stepCounts.average()))
             appendLine("  Шагов в плане (max):     ${rig.agent.stepCounts.max()}")
         }
         appendLine()
@@ -217,7 +218,7 @@ class BenchmarkRunnerTest {
         appendLine("-".repeat(78))
         if (report.errorsByCode.isEmpty()) appendLine("  нет")
         report.errorsByCode.entries.sortedByDescending { it.value }.forEach {
-            appendLine(String.format("  %-28s %d", it.key, it.value))
+            appendLine(String.format(Locale.ROOT, "  %-28s %d", it.key, it.value))
         }
         appendLine()
         appendLine("-".repeat(78))
@@ -241,5 +242,5 @@ class BenchmarkRunnerTest {
             "p95=${s.p95}  p99=${s.p99}  max=${s.max}  avg=${s.average} (ms)"
     }
 
-    private fun pct(value: Double) = String.format("%.1f%%", value)
+    private fun pct(value: Double) = String.format(Locale.ROOT, "%.1f%%", value)
 }
