@@ -1,51 +1,33 @@
-# OkHttp
--dontwarn okhttp3.**
+# App-owned R8 rules. Dependencies are expected to ship consumer rules; add any
+# further keep/dontwarn rule only in response to a reproduced release failure.
 
-# Kotlinx Serialization
--keepattributes *Annotation*, InnerClasses
--dontnote kotlinx.serialization.SerializationKt
--keepclassmembers class * {
-    *** Companion;
+# Preserve runtime-visible annotations used by generated serializers and DI.
+-keepattributes RuntimeVisibleAnnotations,RuntimeInvisibleAnnotations,AnnotationDefault,InnerClasses,EnclosingMethod
+
+# MediaPipe LLM's public Java wrappers are reached from its native/JNI layer.
+# Keep only that API package, not all MediaPipe/protobuf/Guava classes.
+-keep class com.google.mediapipe.tasks.genai.llminference.LlmInference { *; }
+-keep class com.google.mediapipe.tasks.genai.llminference.LlmInference$* { *; }
+-keep class com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession { *; }
+-keep class com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession$* { *; }
+
+# Generic JNI entry points may be invoked by symbol/name from native code.
+-keepclasseswithmembernames,includedescriptorclasses class * {
+    native <methods>;
 }
--keepclasseswithmembers class * {
-    kotlinx.serialization.KSerializer serializer(...);
-}
 
-# Room
--keep class * extends androidx.room.RoomDatabase
--dontwarn androidx.room.paging.**
+# tasks-genai references compile-only AutoValue annotations and its optional
+# multimodal MPImage API. This app uses text-only inference and never calls
+# addImage/createImage, so these exact absent types are safe to ignore. Keep the
+# suppression narrow: a new missing class must still fail the release build.
+-dontwarn com.google.auto.value.AutoValue
+-dontwarn com.google.auto.value.AutoValue$Builder
+-dontwarn com.google.mediapipe.framework.image.BitmapExtractor
+-dontwarn com.google.mediapipe.framework.image.ByteBufferExtractor
+-dontwarn com.google.mediapipe.framework.image.MPImage
+-dontwarn com.google.mediapipe.framework.image.MPImageProperties
+-dontwarn com.google.mediapipe.framework.image.MediaImageExtractor
 
-# AndroidX Crypto
--keep class androidx.security.crypto.** { *; }
-
-# Models & DTOs
--keep class com.jarvis.assistant.data.remote.dto.** { *; }
--keep class com.jarvis.assistant.data.local.entity.** { *; }
--keep class com.jarvis.assistant.domain.models.** { *; }
-
-# ============================================================================
-# Этап 2 — Local AI: MediaPipe LLM Inference (com.google.mediapipe:tasks-genai)
-# ============================================================================
-# Нативный слой вызывает Java-классы через JNI, поэтому имена и члены
-# MediaPipe-классов удалять/переименовывать нельзя.
--keep class com.google.mediapipe.** { *; }
--keep interface com.google.mediapipe.** { *; }
--dontwarn com.google.mediapipe.**
-
-# protobuf-javalite: рефлексия по generated-классам.
--keep class com.google.protobuf.** { *; }
--keepclassmembers class * extends com.google.protobuf.GeneratedMessageLite {
-    <fields>;
-}
--dontwarn com.google.protobuf.**
-
-# Guava (транзитивная зависимость tasks-genai) тянет @GwtCompatible и
-# аннотации, которых нет в Android-classpath.
--dontwarn com.google.common.**
--dontwarn javax.annotation.**
--dontwarn javax.lang.model.element.**
--dontwarn afu.org.checkerframework.**
--dontwarn org.checkerframework.**
-
-# Наш локальный слой: LocalModelSpec конфигурирует модель по имени файла.
--keep class com.jarvis.assistant.agent.localai.LocalModelSpec { *; }
+# No blanket DTO/entity/domain keeps and no broad warning suppression:
+# kotlinx.serialization, Room, OkHttp and AndroidX publish generated references or
+# consumer rules. A release build must expose any genuinely missing rule.
