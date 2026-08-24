@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7.1@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
-FROM eclipse-temurin:17.0.20_8-jdk-jammy@sha256:400014962ad7224461f945bb1cc3d7d5a1927ce15b8245b72d9cedcda554cd2a AS build
+FROM eclipse-temurin:22.0.2_9-jdk-jammy@sha256:d8e6ba486df17bf758888d2b1b608133d1eedca8daf69d3fc6bf78d8be81e07e AS build
 WORKDIR /workspace
 COPY . .
 RUN --mount=type=cache,target=/root/.gradle \
@@ -7,7 +7,7 @@ RUN --mount=type=cache,target=/root/.gradle \
     -Pkotlin.compiler.execution.strategy=in-process \
     -Dorg.gradle.jvmargs="-Xmx700m -XX:MaxMetaspaceSize=320m -Dfile.encoding=UTF-8"
 
-FROM eclipse-temurin:17.0.20_8-jre-jammy@sha256:e17d77fb030dd4b642dc078d048a5fb9efcb3676ee20305d905949105a6ccd5a
+FROM eclipse-temurin:22.0.2_9-jre-jammy@sha256:dbcae8b5dd4d63f81739a538ec2c09797735f04a21d814f9071b62f018326043
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
