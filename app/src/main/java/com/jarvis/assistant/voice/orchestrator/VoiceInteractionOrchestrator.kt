@@ -5,15 +5,19 @@ import android.content.Context
 import android.media.ToneGenerator
 import android.media.AudioManager
 import android.util.Log
+import com.jarvis.assistant.agent.decision.PrivacyClassification
+import com.jarvis.assistant.agent.decision.PrivacyClassifier
+import com.jarvis.assistant.agent.decision.PrivacyContent
+import com.jarvis.assistant.agent.decision.PrivacyReason
 import com.jarvis.assistant.agent.decision.RequestSource
 import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.model.ToolCall
 import com.jarvis.assistant.agent.translator.LiveTranslatorEngine
 import com.jarvis.assistant.core.confirmation.ConfirmationIntent
 import com.jarvis.assistant.core.result.Resource
-import com.jarvis.assistant.core.security.SecurityManager
 import com.jarvis.assistant.domain.models.PromptExecutionResult
 import com.jarvis.assistant.domain.models.VoiceAssistantState
+import com.jarvis.assistant.domain.repository.MessageRepository
 import com.jarvis.assistant.domain.usecases.GetSettingsUseCase
 import com.jarvis.assistant.domain.usecases.SendPromptUseCase
 import com.jarvis.assistant.voice.audio.BluetoothAudioRouter
@@ -51,9 +55,9 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private val bluetoothAudioRouter: BluetoothAudioRouter,
     private val sendPromptUseCase: SendPromptUseCase,
     private val getSettingsUseCase: GetSettingsUseCase,
-    private val securityManager: SecurityManager,
     private val toolExecutor: ToolExecutor,
-    private val translatorEngine: LiveTranslatorEngine
+    private val translatorEngine: LiveTranslatorEngine,
+    private val messageRepository: MessageRepository
 ) {
     companion object {
         private const val TAG = "VoiceOrchestrator"
@@ -79,6 +83,12 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private val _lastAnswer = MutableStateFlow("")
     val lastAnswer: StateFlow<String> = _lastAnswer.asStateFlow()
 
+    private val _privacyClassification = MutableStateFlow(
+        PrivacyClassification.unknown(PrivacyReason.NOT_CLASSIFIED)
+    )
+    val privacyClassification: StateFlow<PrivacyClassification> =
+        _privacyClassification.asStateFlow()
+
     private var toneGenerator: ToneGenerator? = null
     private var aiJob: Job? = null
     private var silenceJob: Job? = null
@@ -96,6 +106,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
     private var speechRate = 1.05f
     private var speechPitch = 0.90f
+    private var systemPrompt = ""
     private var isHeadsetOnlyMode = false
 
     private val wakeKeywords = listOf("джарвис", "jarvis", "жарвис", "дарвис", "джей", "диджей", "джар")
@@ -180,6 +191,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
             getSettingsUseCase().collectLatest { settings ->
                 speechRate = settings.speechRate
                 speechPitch = settings.speechPitch
+                systemPrompt = settings.systemPrompt
                 isHeadsetOnlyMode = settings.isHeadsetOnlyMode
             }
         }
@@ -314,6 +326,8 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
                         // 🎧 НЕПРЕРЫВНЫЙ СИНХРОННЫЙ ПЕРЕВОДЧИК В УХО (Full-Duplex Continuous Stream)
                         if (_currentMode.value == OrchestratorMode.LIVE_EAR_INTERPRETER) {
+                            _privacyClassification.value =
+                                PrivacyClassifier.classifySafely(PrivacyContent(text))
                             scope.launch(Dispatchers.IO) {
                                 // Если перевод не выполнен, озвучиваем причину,
                                 // а НЕ исходную фразу под видом перевода.
@@ -394,9 +408,12 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private fun processUserQuery(query: String) {
         val clean = query.trim()
         if (clean.isBlank()) {
+            _privacyClassification.value =
+                PrivacyClassification.unknown(PrivacyReason.EMPTY_INPUT)
             startStandbyMode()
             return
         }
+        _privacyClassification.value = PrivacyClassifier.classifySafely(PrivacyContent(clean))
 
         // Команда активации режима синхронного переводчика
         if (clean.lowercase().contains("переводчик") || clean.lowercase().contains("синхронный перевод") || clean.lowercase().contains("переводи собеседника")) {
@@ -405,7 +422,11 @@ class VoiceInteractionOrchestrator @Inject constructor(
         }
 
         if (!isProcessingQuery.compareAndSet(false, true)) {
-            Log.d(TAG, "Query '$clean' already processing, skipping duplicate dispatch.")
+            Log.d(
+                TAG,
+                "Query already processing; duplicate skipped | chars=${clean.length} | " +
+                    "privacy=${_privacyClassification.value.level}"
+            )
             return
         }
 
@@ -420,8 +441,20 @@ class VoiceInteractionOrchestrator @Inject constructor(
         aiJob?.cancel()
         aiJob = scope.launch {
             try {
-                // Этап 1: источник запроса передаётся в ExecutionDecisionEngine.
-                val result = sendPromptUseCase(clean, source = RequestSource.VOICE)
+                val history = messageRepository.getRecentMessages(limit = 10)
+                val contextualClassification = PrivacyClassifier.classifySafely(
+                    PrivacyContent(
+                        text = clean,
+                        relatedContent = listOf(systemPrompt) + history.map { it.text }
+                    )
+                )
+                _privacyClassification.value = contextualClassification
+                // Этап 1: источник и effective privacy передаются в decision engine.
+                val result = sendPromptUseCase(
+                    clean,
+                    source = RequestSource.VOICE,
+                    privacyLevel = contextualClassification.level
+                )
                 when (result) {
                     is Resource.Success -> {
                         when (val execution = result.data) {
