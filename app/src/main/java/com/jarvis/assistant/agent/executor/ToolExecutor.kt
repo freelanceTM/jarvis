@@ -2,6 +2,9 @@ package com.jarvis.assistant.agent.executor
 
 import android.util.Log
 import com.jarvis.assistant.agent.core.JarvisTool
+import com.jarvis.assistant.agent.decision.PrivacyClassifier
+import com.jarvis.assistant.agent.decision.PrivacyContent
+import com.jarvis.assistant.agent.decision.PrivacyLevel
 import com.jarvis.assistant.agent.model.ToolCall
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.registry.ToolRegistry
@@ -59,6 +62,37 @@ class ToolExecutor @Inject constructor(
      * ConcurrentLinkedQueue этого не гарантирует.
      */
     private val confirmationLock = Any()
+
+    /** Used by routing before any tool that may disclose arguments externally. */
+    fun mayDiscloseExternally(toolId: String): Boolean? =
+        registry.getTool(toolId)?.mayDiscloseUserContentExternally
+
+    private fun privacyBlockForExternalTool(
+        tool: JarvisTool,
+        call: ToolCall
+    ): ToolExecutionResult? {
+        if (!tool.mayDiscloseUserContentExternally) return null
+        val classification = PrivacyClassifier.classifySafely(
+            PrivacyContent(
+                text = call.arguments.toString(),
+                relatedContent = tool.externalPrivacyContext(call.arguments)
+            )
+        )
+        return if (classification.level == PrivacyLevel.NORMAL) {
+            null
+        } else {
+            Log.i(
+                TAG,
+                "external tool blocked by privacy | tool=${tool.toolId} | " +
+                    "privacy=${classification.level} | reasons=" +
+                    classification.reasons.joinToString("|") { it.name }
+            )
+            ToolExecutionResult.failure(
+                summary = "Внешний инструмент заблокирован политикой приватности",
+                error = "PRIVACY_POLICY_BLOCKED"
+            )
+        }
+    }
 
     /** @return первый ожидающий подтверждения вызов (голова очереди) или null. */
     fun peekPendingConfirmation(): PendingConfirmationRequest? =
@@ -181,6 +215,7 @@ class ToolExecutor @Inject constructor(
                 summary = "Инструмент '${call.toolId}' не зарегистрирован в системе",
                 error = "TOOL_NOT_FOUND"
             )
+        privacyBlockForExternalTool(tool, call)?.let { return@withContext it }
 
         when (val preflight = permissionManager.preflight(tool, call)) {
             PreflightVerdict.Allowed -> Unit
@@ -269,6 +304,7 @@ class ToolExecutor @Inject constructor(
                 summary = "Инструмент '${call.toolId}' не найден",
                 error = "TOOL_NOT_FOUND"
             )
+        privacyBlockForExternalTool(tool, call)?.let { return@withContext it }
 
         // Между показом prompt и ответом пользователя состояние устройства
         // могло измениться. Повторяем capability-часть preflight; валидный
@@ -350,7 +386,10 @@ class ToolExecutor @Inject constructor(
                 try {
                     tool.rollback(result.data ?: kotlinx.serialization.json.JsonObject(emptyMap()), result.rollbackData)
                 } catch (e: Exception) {
-                    Log.w(TAG, "performRollback: сбой отката для ${tool.toolId}", e)
+                    Log.w(
+                        TAG,
+                        "performRollback failed | tool=${tool.toolId} | type=${e.javaClass.simpleName}"
+                    )
                 }
             }
         }
