@@ -40,7 +40,7 @@ class CapabilityContractTest {
         )
         val manager = ToolPermissionManager(FakeCapabilityRegistry.create())
 
-        assertTrue(manager.isExecutionAllowed(tool, emptyCall))
+        assertTrue(manager.isExecutionAllowed(tool))
         assertEquals(PreflightVerdict.Allowed, manager.preflight(tool, emptyCall))
     }
 
@@ -59,7 +59,7 @@ class CapabilityContractTest {
         val registry = FakeCapabilityRegistry.create().grant("android.permission.SEND_SMS")
         val manager = ToolPermissionManager(registry)
 
-        assertFalse(manager.isExecutionAllowed(tool, emptyCall))
+        assertFalse(manager.isExecutionAllowed(tool))
         assertTrue(manager.preflight(tool, emptyCall) is PreflightVerdict.ConfirmationRequired)
     }
 
@@ -102,7 +102,7 @@ class CapabilityContractTest {
         val manager = ToolPermissionManager(registry)
 
         // Даже с выданным разрешением звонок не выполняется без подтверждения.
-        assertFalse(manager.isExecutionAllowed(tool, emptyCall))
+        assertFalse(manager.isExecutionAllowed(tool))
         assertTrue(manager.preflight(tool, emptyCall) is PreflightVerdict.ConfirmationRequired)
     }
 
@@ -121,7 +121,7 @@ class CapabilityContractTest {
         // Разрешение НЕ выдано
         val manager = ToolPermissionManager(FakeCapabilityRegistry.create())
 
-        assertFalse(manager.isExecutionAllowed(tool, emptyCall))
+        assertFalse(manager.isExecutionAllowed(tool))
         // Гейт подтверждения срабатывает первым — звонок не выполняется молча.
         assertTrue(manager.preflight(tool, emptyCall) is PreflightVerdict.ConfirmationRequired)
     }
