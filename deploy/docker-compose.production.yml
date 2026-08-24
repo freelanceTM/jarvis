@@ -1,0 +1,140 @@
+name: jarvis-production
+
+services:
+  caddy:
+    # Caddy 2.11.4 Alpine — immutable multi-arch manifest digest.
+    image: caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+    restart: unless-stopped
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?Set PUBLIC_DOMAIN to the API DNS name}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL for certificate expiry notices}
+    ports:
+      - "80:80/tcp"
+      - "443:443/tcp"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      edge:
+      proxy_backend:
+        ipv4_address: 172.30.0.2
+    depends_on:
+      jarvis-server:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+
+  jarvis-server:
+    build:
+      context: ..
+      dockerfile: deploy/server.Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      BIND_HOST: 0.0.0.0
+      PORT: 8080
+      # ADR-0001: process-local circuit/metrics state requires exactly one app instance.
+      APPLICATION_REPLICA_COUNT: "1"
+      PRODUCTION_TLS_TERMINATED: "true"
+      TRUST_PROXY_HEADERS: "true"
+      TRUSTED_PROXY_CIDRS: 172.30.0.2/32
+      PUBLIC_BASE_URL: https://${PUBLIC_DOMAIN:?Set PUBLIC_DOMAIN}
+
+      JARVIS_CLIENT_TOKENS: ${JARVIS_CLIENT_TOKENS:?Load static tokens from a secret manager}
+      JARVIS_ADMIN_CLIENTS: ${JARVIS_ADMIN_CLIENTS:?Set explicit admin client IDs}
+
+      DATABASE_URL: jdbc:postgresql://postgres:5432/jarvis
+      DATABASE_USER: ${DATABASE_USER:?Set DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?Load DATABASE_PASSWORD from a secret manager}
+      DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-8}
+      DATABASE_CONNECTION_TIMEOUT_MS: ${DATABASE_CONNECTION_TIMEOUT_MS:-5000}
+      LICENSE_CODE_PEPPER: ${LICENSE_CODE_PEPPER:?Load LICENSE_CODE_PEPPER from a secret manager}
+      BILLING_PLANS: ${BILLING_PLANS:?Set the server-authoritative billing catalog}
+
+      LICENSE_REDEEM_PER_MINUTE: ${LICENSE_REDEEM_PER_MINUTE:-5}
+      LICENSE_REDEEM_PER_DAY: ${LICENSE_REDEEM_PER_DAY:-30}
+      LICENSE_AUTH_PER_MINUTE: ${LICENSE_AUTH_PER_MINUTE:-30}
+      LICENSE_AUTH_PER_DAY: ${LICENSE_AUTH_PER_DAY:-1000}
+      BILLING_WEBHOOK_PER_MINUTE: ${BILLING_WEBHOOK_PER_MINUTE:-120}
+      BILLING_WEBHOOK_PER_DAY: ${BILLING_WEBHOOK_PER_DAY:-20000}
+
+      PADDLE_ENVIRONMENT: ${PADDLE_ENVIRONMENT:-sandbox}
+      PADDLE_API_KEY: ${PADDLE_API_KEY:-}
+      PADDLE_WEBHOOK_SECRET: ${PADDLE_WEBHOOK_SECRET:-}
+      PADDLE_REQUEST_TIMEOUT_MS: ${PADDLE_REQUEST_TIMEOUT_MS:-15000}
+      PADDLE_WEBHOOK_TOLERANCE_SECONDS: ${PADDLE_WEBHOOK_TOLERANCE_SECONDS:-300}
+      PADDLE_CHECKOUT_HOSTS: ${PADDLE_CHECKOUT_HOSTS:-}
+
+      HELEKET_MERCHANT_ID: ${HELEKET_MERCHANT_ID:-}
+      HELEKET_API_KEY: ${HELEKET_API_KEY:-}
+      HELEKET_REQUEST_TIMEOUT_MS: ${HELEKET_REQUEST_TIMEOUT_MS:-15000}
+      HELEKET_INVOICE_LIFETIME_SECONDS: ${HELEKET_INVOICE_LIFETIME_SECONDS:-3600}
+      HELEKET_WEBHOOK_IPS: ${HELEKET_WEBHOOK_IPS:-31.133.220.8}
+      HELEKET_ENFORCE_WEBHOOK_IP: ${HELEKET_ENFORCE_WEBHOOK_IP:-true}
+      GROQ_ENABLED: ${GROQ_ENABLED:-true}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GEMINI_ENABLED: ${GEMINI_ENABLED:-true}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENROUTER_ENABLED: ${OPENROUTER_ENABLED:-true}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    expose:
+      - "8080"
+    networks:
+      proxy_backend:
+        ipv4_address: 172.30.0.3
+      database:
+        ipv4_address: 172.31.0.2
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+  postgres:
+    # PostgreSQL 17.10 Bookworm — immutable multi-arch manifest digest.
+    image: postgres:17.10-bookworm@sha256:9b18b78397054fce88a9552e9d5a3ad5bb7fd258c5b3cc1c5028e46373d6ea8f
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: jarvis
+      POSTGRES_USER: ${DATABASE_USER:?Set DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?Load DATABASE_PASSWORD from a secret manager}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      database:
+        ipv4_address: 172.31.0.3
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  edge:
+    driver: bridge
+  proxy_backend:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+  database:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.31.0.0/24
+
+volumes:
+  caddy_data:
+  caddy_config:
+  postgres_data:
