@@ -34,6 +34,7 @@ class TelegramTool @Inject constructor(
     override val category: ToolCategory = ToolCategory.COMMUNICATION
     override val riskLevel: ToolRisk = ToolRisk.CONFIRMATION_REQUIRED
     override val isOffline: Boolean = true
+    override val mayDiscloseUserContentExternally: Boolean = true
     override val requiresForeground: Boolean = true
 
     override val capabilityContract = ToolCapabilityContract(
