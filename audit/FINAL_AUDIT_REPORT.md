@@ -1,7 +1,8 @@
 # Финальный QA / code / security audit — JARVIS
 
-Дата: 2026-08-20
-Исходный revision: `9196b97` (`main`, shallow checkout)
+Дата: 2026-08-21
+Исходный опубликованный revision: `55da095` (`main`); текущий workspace содержит
+проверенные Phase 0 изменения без пригодных Git metadata.
 Объём: Android-приложение + JVM API server, около 25.5k строк production-кода.
 
 ## 1. Repository overview
@@ -11,7 +12,8 @@
 - `:app`: Android 10+ (`minSdk 29`, `targetSdk 34`), Compose, Hilt, Room,
   DataStore, OkHttp, kotlinx.serialization/coroutines, MediaPipe LLM.
 - `:server`: JVM 17, встроенный `HttpServer`, OkHttp, kotlinx.serialization,
-  in-memory auth/rate/health/usage state.
+  PostgreSQL-backed license/auth/billing/rate state; AI health/usage/general
+  rate state остаётся in-memory.
 - Android flow:
   `UI/Voice -> SendPromptUseCase -> AgentPipeline -> ExecutionDecisionEngine`
   -> device tools / on-device Gemma / workflow memory / cloud / cognitive agent.
@@ -25,8 +27,29 @@
   accessibility, telephony/SMS, Bluetooth, microphone, TTS/STT.
 - Entry points: `MainActivity`, `JarvisVoiceService`, `SystemEventReceiver`,
   `JarvisAccessibilityService`, server `MainKt`.
-- Server endpoints: `GET /v1/health`, `POST /v1/ai/execute`,
-  `GET /v1/admin/metrics`.
+- Server endpoints: health/AI/metrics плюс license issue/revoke/redeem/validate,
+  billing checkout и signed Paddle/HELEKET webhooks.
+
+### Privacy-classification blocker update
+
+Automatic privacy classification is now closed locally as a Critical/High
+production blocker for every implemented outbound prompt/tool path. Android and
+server classification fail closed on `UNKNOWN`/failure, inspect prompt plus
+system/history context, guard provider retry/fallback and external tool/app
+hand-offs, propagate explicit per-request AI-cloud consent, redact plaintext
+logs, and mark AI responses `no-store`. Final evidence is in
+`audit/PRIVACY_CLASSIFICATION_AUDIT.md`.
+
+### Phase 1 infrastructure/supply-chain update
+
+AI rate limits and usage are now PostgreSQL-backed; ADR-0001 formally enforces
+single-instance operation for remaining process-local circuit/metrics state.
+Actions/images are immutable, Gradle dependencies are locked/checksummed,
+Dependabot/Trivy/Gitleaks/CycloneDX CI is configured, and final source/image
+High/Critical scans are clean. Phase 1 is **not fully closed** because this
+workspace lacks `.git`/the exact remote URL for a full history scan and the
+chat-exposed PAT still needs confirmed revocation. Evidence:
+`audit/PHASE1_INFRA_SUPPLY_CHAIN_REPORT.md`.
 
 Полный source inventory и статический package graph находятся в:
 
@@ -64,10 +87,11 @@ benchmark, `.env.example`, GitHub Actions и lint baseline.
 
 ## 3. Tests added / strengthened
 
-Итоговый net test count: **+67 JVM tests**:
+Итоговый net test count: **+164 JVM tests**:
 
-- Android/JVM: 384 -> **420** (+36 net).
-- Server: 34 -> **65** (+31).
+- Android/JVM: 384 -> **439** (+55 net; license, HTTPS transport and privacy tests).
+- Server: 34 -> **143** (+109), включая PostgreSQL reconciliation, shared-state,
+  supply-chain, provider classification, admin rate-limit и TLS/proxy regressions.
 
 Новые test-файлы:
 
@@ -103,9 +127,11 @@ Instrumented test methods переименованы, чтобы D8 мог со�
 - **Fix:** удалены checksum, client-side master-code list, local subscription
   extension и reset API. Все коды валидирует сервер; outage — `ServiceUnavailable`
   и fail-closed. Продление UI отключено до server-side billing.
-- **Regression:** rewritten `LicenseCodeValidatorTest`.
-- **Remaining:** `/v1/license/validate` ещё не реализован, поэтому активация
-  сейчас честно недоступна, а не обходится локально.
+- **Regression:** rewritten `LicenseCodeValidatorTest` и PostgreSQL/API suites.
+- **Follow-up:** реализованы issuance, atomic redeem, `/v1/license/validate`,
+  DB-backed tokens, server entitlement gate, Paddle/HELEKET billing и migrations.
+  См. `audit/PHASE0_LICENSE_BILLING_REPORT.md`. UI продления остаётся выключен
+  до live provider/deployment E2E.
 
 ### B02 — High — confirmation token не был привязан к операции
 
@@ -318,6 +344,33 @@ Instrumented test methods переименованы, чтобы D8 мог со�
   validation feedback, local request rejection, server max/character bounds.
 - **Regression:** 31/32/256/257 and whitespace/control tests on both sides.
 
+### B28 — Critical — ambiguous checkout could create a duplicate charge
+
+- **Reproduction:** provider creates a checkout but its response times out;
+  server marked the order failed, and a retry using another idempotency key could
+  call the provider again.
+- **Fix:** V004 reconciliation state and open-order unique guard, PostgreSQL
+  advisory serialization, reuse across different client keys, explicit
+  ambiguous/terminal provider failures, stable HTTP 202 response, and trusted
+  local-order delayed-webhook recovery. Conflicting provider/local references
+  now fail closed.
+- **Regression:** real PostgreSQL timeout → different key → one provider call →
+  signed delayed paid event → one renewal; API 202 contract, provider response
+  classification, reference mismatch and admin revoke rate-limit tests.
+
+### B29 — Critical — production server had a public plaintext HTTP path
+
+- **Reproduction:** `Main.kt` bound JDK `HttpServer` to `0.0.0.0:$PORT`; repository
+  had no Docker/Ingress/reverse-proxy manifest and production mode could start
+  without any TLS/trusted-proxy declaration.
+- **Fix:** Caddy TLS 1.2/1.3 + ACME/redirect-only 80, private Compose networks,
+  no published app/database ports, fail-fast production deployment config,
+  exact trusted proxy CIDRs, replaced forwarded headers, direct-request denial,
+  canonical Android HTTPS origin and no-redirect Bearer policy.
+- **Regression:** 8 server deployment/proxy tests, 2 Android transport tests,
+  Compose/Caddy validation and real local Caddy → application TLS smoke. See
+  `audit/TLS_DEPLOYMENT_REPORT.md`.
+
 ## 5. Security findings
 
 ### Fixed
@@ -333,25 +386,37 @@ Instrumented test methods переименованы, чтобы D8 мог со�
 - Automatic Android + server credential/payment/medical privacy gates.
 - Client/server access-token length and character-policy mismatch.
 - Bounded Android response reads and deterministic network call deadlines.
+- Production TLS termination/private ports/trusted proxy fail-closed configuration;
+  Android Bearer traffic restricted to exact HTTPS origin without redirects.
 - No hardcoded real secret found; matches are fake redaction-test values only.
 
 ### Remaining
 
-1. **High functional/security dependency:** real license endpoint and server-side
-   issuance/one-time/billing persistence do not exist. Client is fail-closed.
+1. **High deployment dependency:** license/billing code and PostgreSQL storage
+   реализованы, но реальные Paddle/HELEKET credentials, dashboard webhook E2E,
+   provider query/runbook для случая потерянного reconciliation webhook,
+   production DB/TLS и Turkmenistan mobile merchant contract отсутствуют. Renewal
+   UI намеренно выключен до этих проверок.
 2. **Medium detection limit:** automatic privacy classification is deliberately
    conservative and pattern-based; novel/obfuscated secrets may still require an
    explicit PRIVATE/SENSITIVE label from the caller.
-3. **Medium:** server is plain HTTP and requires correctly configured TLS reverse
-   proxy; Bearer tokens are unsafe without it.
-4. **Medium:** server auth/rate/circuit/usage are in-memory and per-instance;
-   horizontal deployment needs shared state.
+3. **High deployment verification:** repository now has mandatory Caddy/Compose
+   TLS and application trusted-proxy enforcement, but canonical `api.jarvis.ai`
+   currently does not resolve; public ACME certificate/firewall/external-auth
+   smoke therefore cannot run.
+4. **Documented single-instance limit:** all rate limits and AI usage are now
+   PostgreSQL-backed; provider circuit state and process metrics remain local under
+   enforced ADR-0001 and therefore horizontal scaling is intentionally prohibited.
 5. **Medium:** accessibility screen reader remains intrinsically powerful; it
    needs device-level/manual privacy testing across banking/password screens.
-6. **Medium supply chain:** CI actions use version tags rather than immutable
-   commit SHAs; dependency/SBOM/CVE scanning is absent.
-7. Only the shallow checked-out revision was scanned; full Git history was not
-   available for historical secret scanning.
+6. **Supply-chain evidence added:** immutable action/image pins, lockfiles,
+   artifact checksums, Dependabot, Trivy and CycloneDX pass locally; hosted CI run
+   evidence still requires the real Git repository.
+7. Full Git-history scanning remains blocked because this workspace has no `.git`
+   metadata/exact remote URL. Current-tree Gitleaks is clean; the chat-exposed PAT
+   still requires confirmed revocation.
+8. The release APK assembled successfully but is unsigned; production signing
+   keys/pipeline were deliberately not present in the workspace.
 
 ## 6. Performance findings
 
@@ -361,8 +426,9 @@ Instrumented test methods переименованы, чтобы D8 мог со�
 - Parser fuzz: 1000 random inputs up to 2000 chars; hard max 1M chars.
 - Routing benchmark, 300 samples (simulated model/network):
   p50 476 ms, p90 607 ms, p95 610 ms, max 2277 ms.
-- Latest debug APK: **140,940,756 bytes** (~134.4 MiB); test APK 870,595 bytes.
-  MediaPipe native libs dominate; model (~529 MB) is external.
+- Latest debug APK: **141,252,700 bytes** (~134.7 MiB); test APK 870,595 bytes;
+  unsigned release APK **125,385,381 bytes**. MediaPipe native libs dominate;
+  model (~529 MB) is external.
 - WebSearch/Weather still use blocking synchronous OkHttp internally, but every
   call now has a deadline and every response has a decompressed-byte limit.
   Physical battery/RAM/CPU/thermal and actual provider latency were not measured.
@@ -371,24 +437,28 @@ Instrumented test methods переименованы, чтобы D8 мог со�
 
 | Check | Result |
 |---|---|
-| Android JVM tests | **420 passed, 0 failed, 0 skipped** |
-| Server JVM unit/integration | **65 passed, 0 failed, 0 skipped** |
-| Total executed JVM | **485 passed** |
+| Android JVM tests | **439 passed, 0 failed/errors/skipped**, 49 suites |
+| Server JVM/PostgreSQL tests | **143 passed, 0 failed/errors/skipped**, 22 suites |
+| Total executed JVM | **530 passed** |
 | Instrumented sources | 13 tests compiled into APK; not executed |
 | Benchmark | **99/100**, 0 device FP, 0 false-local |
 | Android Lint debug | passed; 0 new findings, 82 baseline findings filtered |
 | Debug APK | passed |
 | androidTest APK | passed |
 | Server build/distributions | passed |
-| Real local HTTP smoke | 200/401/503/**403 auto-privacy**/400/405/413 as expected |
+| Real local HTTP smoke | AI matrix plus PostgreSQL issue 201, redeem/validate 200, replay 404, wrong-device 403, unauth 401 |
 | Secret scan | no real key/private key found |
 | Release compile + lintVital | passed |
-| Full release APK packaging | not completed: `mergeExtDexRelease` exceeded the 2 GB sandbox memory limit |
-| connectedDebugAndroidTest | not run: no emulator/device (`adb devices` empty) |
+| Full release APK packaging | **passed**, unsigned artifact 125,385,381 bytes |
+| TLS Compose/Caddy validation | passed |
+| Full local production Compose TLS smoke | passed: image build/start, private ports/networks, TLS 1.2/1.3, HTTPS auth, redirect, exact proxy `/32`, header-free logs |
+| Public production TLS smoke | not run: no deployed DNS/public certificate/firewall |
+| Release signing/install | not run: no release keystore or Android target |
+| connectedDebugAndroidTest | not run: no emulator/device (`adb devices -l` empty) |
 
-The first release packaging failure and several earlier Gradle daemon deaths were
-resource failures in this 2 GB/no-swap sandbox, not test assertion failures.
-Debug and test APK dex/package steps succeeded after isolated low-worker runs.
+Earlier Gradle daemon deaths were resource failures in this 2 GB/no-swap
+sandbox, not test assertion failures. Isolated one-worker/in-process compilation
+completed debug, test and full release APK dex/package steps.
 
 ## 8. Test quality assessment
 
@@ -412,39 +482,46 @@ Weaknesses:
 
 ## 9. Remaining functional risks
 
-1. `onTimeSchedule()` has no actual scheduler/alarm caller; scheduled automation
+1. Paddle/HELEKET live credentials and dashboard webhooks не проверены; для
+   permanently ambiguous checkout нет provider-query worker/operator runbook;
+   V004 требует preflight существующих duplicate open orders; для Turkmenistan
+   phone/mobile billing нет merchant API/contract. Renewal UI disabled.
+2. `onTimeSchedule()` has no actual scheduler/alarm caller; scheduled automation
    rules are not end-to-end operational.
-2. Room schema history 1-4 is missing; upgrades from those versions cannot be
+3. Room schema history 1-4 is missing; upgrades from those versions cannot be
    validated and may fail to open.
-3. Real device flows unverified: permissions, call/SMS, accessibility, Bluetooth
+4. Real device flows unverified: permissions, call/SMS, accessibility, Bluetooth
    SCO, microphone foreground service, wake locks, STT/TTS, OEM background rules.
-4. Real MediaPipe model installation/inference and cancellation not run.
-5. Real Groq/Gemini/OpenRouter formats were tested through fake transport, not
+5. Real MediaPipe model installation/inference and cancellation not run.
+6. Real Groq/Gemini/OpenRouter formats were tested through fake transport, not
    live credentials/endpoints.
-6. Arbitrary LLM multi-step planning remains incomplete: benchmark AGENT-010
+7. Arbitrary LLM multi-step planning remains incomplete: benchmark AGENT-010
    goes to cloud, yielding the single remaining routing miss.
-7. The production API/license host is hardcoded; there is no environment-specific
+8. The production API/license host is hardcoded; there is no environment-specific
    Android base URL or local integration flavor.
-8. Release minification is disabled despite ProGuard rules; release artifact is
-   large and easier to reverse engineer.
-9. 82 lint baseline entries remain (mostly dependency updates, obsolete checks,
+9. Release minification is disabled despite ProGuard rules; release artifact is
+   large and easier to reverse engineer. The verified release APK is unsigned
+   because no production keystore/signing pipeline was supplied.
+10. 82 lint baseline entries remain (mostly dependency updates, obsolete checks,
    unused resources); dependencies are materially behind 2026 versions.
-10. No LICENSE, CHANGELOG, SECURITY.md or contribution/security disclosure policy.
+11. No LICENSE, CHANGELOG, SECURITY.md or contribution/security disclosure policy.
 
 ## 10. Final assessment
 
-**Server core:** good after fixes for a single-instance prototype; robust unit/
-integration coverage of auth, validation, rate, provider failures, timeout,
-fallback, health and logging. Not production-ready for multi-instance operation
-without shared persistence/TLS deployment controls.
+**Server core:** AI orchestration остаётся prototype-level в части process-local
+usage/circuit state, но license/billing subsystem теперь использует PostgreSQL,
+transactions, shared rate limits и DB-backed auth. TLS/Caddy/private-port config
+теперь fail-closed и прошла local smoke, но production readiness всё ещё зависит
+от public DNS/certificate/firewall verification, live provider credentials,
+PostgreSQL deployment и webhook E2E.
 
 **Android core logic:** substantially improved. Routing safety moved from 73% to
 99%, dangerous device false positives are zero in the benchmark, confirmation
-and licensing fail closed, and debug/test packaging is healthy.
+and licensing fail closed, and debug/test/unsigned-release packaging is healthy.
 
-**Android product readiness:** still beta/prototype. Hardware/UI/network edges
-are under-tested, the license backend and scheduled job are missing, and real
-physical-device performance/reliability remains unknown.
+**Android product readiness:** still beta/prototype. Server activation is now
+integrated and local state no longer unlocks the app without refresh, but live
+billing credentials, renewal UI, scheduled job and physical-device E2E remain.
 
 Overall: **core logic B / security posture B- / Android E2E confidence C-**.
 The repository is much safer and more testable, but green JVM tests must not be
