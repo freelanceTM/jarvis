@@ -75,11 +75,11 @@ class JarvisAccessibilityService : AccessibilityService() {
             val nodeToClick = findClickableNodeByText(rootNode, cleanTarget)
             if (nodeToClick != null) {
                 val success = nodeToClick.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                Log.d(TAG, "clickByText '$targetText' result: $success")
+                Log.d(TAG, "clickByText result=$success targetChars=${targetText.length}")
                 return success
             }
 
-            Log.w(TAG, "clickByText '$targetText': element not found")
+            Log.w(TAG, "clickByText element not found targetChars=${targetText.length}")
             return false
         }
 
