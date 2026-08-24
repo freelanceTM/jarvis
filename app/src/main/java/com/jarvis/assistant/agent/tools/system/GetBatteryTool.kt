@@ -36,11 +36,13 @@ class GetBatteryTool @Inject constructor(
         val scale = batteryIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
         val status = batteryIntent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
 
-        val batteryPercent = if (level != -1 && scale != -1) {
-            (level * 100 / scale.toFloat()).toInt()
-        } else {
-            100
+        if (level < 0 || scale <= 0) {
+            return ToolExecutionResult.failure(
+                "Не удалось получить состояние аккумулятора",
+                "BATTERY_STATUS_UNAVAILABLE"
+            )
         }
+        val batteryPercent = (level * 100 / scale.toFloat()).toInt().coerceIn(0, 100)
 
         val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
         val chargingText = if (isCharging) "подключено к зарядке" else "работает от аккумулятора"
