@@ -134,7 +134,9 @@ PROVIDER_ERROR · ALL_PROVIDERS_UNAVAILABLE · PAYLOAD_TOO_LARGE · INTERNAL_ERR
 запросе — провайдер отключается до переконфигурации (п. 12 и 23 ТЗ).
 
 Circuit breaker: `CLOSED → (N сбоев) → OPEN → (cooldown) → HALF_OPEN → CLOSED`.
-In-memory, поскольку сервер пока single-instance (п. 24 ТЗ прямо это разрешает).
+Breaker остаётся process-local under ADR-0001. Production single-instance активно
+enforced config check + PostgreSQL session advisory lock; all rate limits and
+usage accounting при этом уже shared/restart-safe в PostgreSQL.
 
 Fallback ограничен `MAX_PROVIDER_ATTEMPTS`, retry — `MAX_RETRIES_PER_PROVIDER`.
 Бесконечных повторов нет.
@@ -143,10 +145,11 @@ Fallback ограничен `MAX_PROVIDER_ATTEMPTS`, retry — `MAX_RETRIES_PER_
 
 ## 7. Privacy
 
-Сервер — **вторая линия защиты**. По умолчанию в облако выпускается только
-`NORMAL`; `PRIVATE` и `SENSITIVE` отклоняются с `PRIVACY_POLICY_VIOLATION`
-ещё до обращения к провайдеру. Поведение управляется
-`ALLOW_PRIVATE_CLOUD` / `ALLOW_SENSITIVE_CLOUD`.
+Сервер — **вторая независимая линия защиты**. `UNKNOWN` и classifier failure
+всегда блокируются до ProviderManager. `PRIVATE`/`SENSITIVE` требуют explicit
+per-request `cloudExplicitlyAllowed`; consent не преодолевает `UNKNOWN`.
+Production запрещает глобальные `ALLOW_PRIVATE_CLOUD` /
+`ALLOW_SENSITIVE_CLOUD` overrides.
 
 Это согласовано с Android: там PRIVATE идёт в локальную модель (Этап 2),
 а в облако не уходит вовсе.
@@ -206,11 +209,18 @@ curl -X POST http://localhost:8080/v1/ai/execute \
 
 ### Production
 
-- **HTTPS обязателен.** Встроенный сервер слушает HTTP — TLS терминируется
-  реверс-прокси (nginx/Caddy) или облачным балансировщиком. Без этого
-  Bearer-токен уйдёт открытым текстом.
+> **Production deployment без TLS/reverse proxy запрещён, поскольку authentication Bearer tokens передаются по сети.**
+
+- Repository production topology использует Caddy на public 80/443 и private
+  application listener `jarvis-server:8080`; port 80 выполняет только redirect.
+- Production startup fail-closed требует HTTPS public origin, TLS termination
+  acknowledgement и exact trusted proxy CIDR.
+- Client-supplied forwarded headers очищаются proxy и принимаются application
+  только от allow-listed proxy network.
 - Ключи — в Secret Manager, не в `.env`.
 - CORS не настраивается: клиент нативный, браузерных запросов нет.
+- DNS/certificate/firewall/Compose/smoke инструкция:
+  [`PRODUCTION_DEPLOYMENT.md`](PRODUCTION_DEPLOYMENT.md).
 
 ---
 
@@ -259,12 +269,13 @@ Agent тоже ходит в облако через `CloudAi` → JARVIS API �
 
 ## 13. Известные ограничения
 
-1. **Rate limiter и circuit breaker — in-memory.** При нескольких инстансах
-   лимиты станут per-instance. Нужен Redis — но это преждевременно для
-   single-instance (п. 24 ТЗ).
-2. **Usage — in-memory**, теряется при рестарте, ограничен 10 000 записей.
-   Контракт готов к замене на БД.
-3. **Токены статические** (из env). Ротация/отзыв без рестарта требуют БД.
+1. **Circuit breaker и metrics — process-local.** ADR-0001 поэтому запрещает
+   несколько application instances; config и PostgreSQL session lock enforce
+   этот предел. Все HTTP rate limits shared в PostgreSQL.
+2. **Usage — PostgreSQL-backed**, idempotent по `(client_id, request_id)`,
+   сохраняется при restart и очищается по 30-day retention.
+3. **Bootstrap admin tokens статические** (из secret-manager/env); issued user
+   API tokens и entitlement хранятся как hashes/state в PostgreSQL.
 4. **Нет streaming.** Архитектура его допускает (`/v1/ai/stream` добавляется
    рядом), но текущий Android-флоу его не требует (п. 28 ТЗ).
 5. **`supportsWeb = false` у всех провайдеров.** Значит `requiresWeb=true`
