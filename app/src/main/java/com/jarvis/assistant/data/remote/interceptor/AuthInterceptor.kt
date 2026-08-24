@@ -1,9 +1,13 @@
 package com.jarvis.assistant.data.remote.interceptor
 
+import com.jarvis.assistant.BuildConfig
 import com.jarvis.assistant.core.security.SecurityManager
 import com.jarvis.assistant.data.remote.JarvisApiClient
+import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.Response
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import java.io.IOException
 import javax.inject.Inject
 
 /**
@@ -27,9 +31,10 @@ class AuthInterceptor @Inject constructor(
             .header("Content-Type", "application/json")
             .header("User-Agent", "JARVIS-Android/0.3")
 
-        val isJarvisBackend = originalRequest.url.host ==
-            JarvisApiClient.BASE_URL.toHttpHostOrNull()
-
+        val isJarvisBackend = BackendRequestPolicy.isTrusted(originalRequest.url)
+        if (originalRequest.header("Authorization") != null && !isJarvisBackend) {
+            throw IOException("Refusing to send Authorization outside the configured JARVIS origin")
+        }
         if (isJarvisBackend && originalRequest.header("Authorization") == null) {
             val token = securityManager.getAccessToken().trim()
             if (token.isNotEmpty()) {
@@ -39,7 +44,15 @@ class AuthInterceptor @Inject constructor(
 
         return chain.proceed(requestBuilder.build())
     }
+}
 
-    private fun String.toHttpHostOrNull(): String? =
-        substringAfter("://", "").substringBefore("/").takeIf { it.isNotEmpty() }
+internal object BackendRequestPolicy {
+    private val backend: HttpUrl = JarvisApiClient.BASE_URL.toHttpUrl()
+
+    fun isTrusted(url: HttpUrl): Boolean {
+        val secureScheme = backend.scheme == "https" ||
+            (BuildConfig.ALLOW_CLEARTEXT_BACKEND && backend.scheme == "http")
+        return secureScheme && url.scheme == backend.scheme &&
+            url.host == backend.host && url.port == backend.port
+    }
 }
