@@ -41,6 +41,7 @@ class TextToSpeechManager @Inject constructor(
 
     private var tts: TextToSpeech? = null
     private var utteranceCounter = 0L
+    private var initializationGeneration = 0L
     
     private val _ttsState = MutableStateFlow<TtsState>(TtsState.Idle)
     val ttsState: StateFlow<TtsState> = _ttsState.asStateFlow()
@@ -53,19 +54,28 @@ class TextToSpeechManager @Inject constructor(
     }
 
     private fun initializeTts() {
+        if (_ttsState.value == TtsState.Initializing) return
         _ttsState.value = TtsState.Initializing
-        
-        tts = TextToSpeech(context) { status ->
+        val generation = ++initializationGeneration
+        var candidate: TextToSpeech? = null
+        candidate = TextToSpeech(context) { status ->
+            if (generation != initializationGeneration) {
+                // shutdown/restart happened before the platform callback arrived.
+                runCatching { candidate?.shutdown() }
+                return@TextToSpeech
+            }
             if (status == TextToSpeech.SUCCESS) {
                 configureTts()
                 _isInitialized.value = true
                 _ttsState.value = TtsState.Ready
                 Log.d(TAG, "TTS initialized successfully")
             } else {
+                _isInitialized.value = false
                 _ttsState.value = TtsState.Error
                 Log.e(TAG, "TTS initialization failed with status: $status")
             }
         }
+        tts = candidate
     }
 
     private fun configureTts() {
@@ -180,6 +190,7 @@ class TextToSpeechManager @Inject constructor(
      */
     fun shutdown() {
         Log.d(TAG, "Shutting down TTS")
+        initializationGeneration++
         try {
             tts?.stop()
             tts?.shutdown()
