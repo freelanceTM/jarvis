@@ -32,6 +32,17 @@ interface JarvisTool {
     val isOffline: Boolean
         get() = true
 
+    /**
+     * True when arguments can leave the JARVIS process/device boundary, even if
+     * the tool itself does not require network access (share intents, dialer,
+     * accessibility text entry, synced calendar, and similar hand-offs).
+     */
+    val mayDiscloseUserContentExternally: Boolean
+        get() = !isOffline
+
+    /** Local-only context the privacy gate must classify before executing. */
+    fun externalPrivacyContext(arguments: JsonObject): List<String> = emptyList()
+
     val executionTimeoutMs: Long
         get() = 4000L
 
