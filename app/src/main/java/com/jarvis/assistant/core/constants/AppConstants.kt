@@ -1,8 +1,11 @@
 package com.jarvis.assistant.core.constants
 
+import com.jarvis.assistant.BuildConfig
+
 object AppConstants {
-    // JARVIS API (Этап 3). Ключи AI-провайдеров живут только на сервере.
-    const val JARVIS_API_BASE_URL = "https://api.jarvis.ai"
+    // Flavor-owned origin. AI provider keys still live only on the server.
+    val JARVIS_API_BASE_URL: String = BuildConfig.JARVIS_API_BASE_URL
+    val JARVIS_LICENSE_BASE_URL: String = BuildConfig.JARVIS_LICENSE_BASE_URL
 
     /**
      * Модель выбирается сервером (AI Router), а не клиентом. Константа
