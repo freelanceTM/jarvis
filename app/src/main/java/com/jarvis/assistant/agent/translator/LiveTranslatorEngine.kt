@@ -134,7 +134,10 @@ class LiveTranslatorEngine @Inject constructor(
             when (val result = provider.translate(clean, sourceLang, targetLang)) {
                 is TranslationResult.Success -> return result
                 else -> {
-                    Log.w(TAG, "Provider ${provider.providerId} failed: $result")
+                    Log.w(
+                        TAG,
+                        "Provider ${provider.providerId} failed | type=${result.javaClass.simpleName}"
+                    )
                     lastFailure = result
                 }
             }
