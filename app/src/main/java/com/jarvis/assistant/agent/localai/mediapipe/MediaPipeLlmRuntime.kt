@@ -13,7 +13,10 @@ import com.jarvis.assistant.agent.localai.LocalModelRuntime
 import com.jarvis.assistant.agent.localai.LocalModelSpec
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
@@ -95,7 +98,20 @@ class MediaPipeLlmRuntime(
 
     override val runtimeId: String = "mediapipe-llm"
 
+    private val generationMutex = Mutex()
+    private val activeSession = AtomicReference<LlmInferenceSession?>(null)
+    private val closed = AtomicBoolean(false)
+
     override suspend fun generate(
+        prompt: String,
+        config: GenerationConfig,
+        onToken: ((String) -> Unit)?
+    ): LocalGeneration = generationMutex.withLock {
+        check(!closed.get()) { "MediaPipe runtime is closed" }
+        generateLocked(prompt, config, onToken)
+    }
+
+    private suspend fun generateLocked(
         prompt: String,
         config: GenerationConfig,
         onToken: ((String) -> Unit)?
@@ -111,6 +127,7 @@ class MediaPipeLlmRuntime(
             .build()
 
         val session = LlmInferenceSession.createFromOptions(engine, sessionOptions)
+        activeSession.set(session)
 
         try {
             session.addQueryChunk(prompt)
@@ -126,7 +143,7 @@ class MediaPipeLlmRuntime(
                             session.cancelGenerateResponseAsync()
                             Log.d(TAG, "inference cancelled by caller")
                         } catch (e: Exception) {
-                            Log.w(TAG, "cancelGenerateResponseAsync failed", e)
+                            Log.w(TAG, "cancelGenerateResponseAsync failed | type=${e.javaClass.simpleName}")
                         }
                     }
                 }
@@ -169,6 +186,7 @@ class MediaPipeLlmRuntime(
                 )
             )
         } finally {
+            activeSession.compareAndSet(session, null)
             try {
                 session.close()
             } catch (e: Exception) {
@@ -178,6 +196,8 @@ class MediaPipeLlmRuntime(
     }
 
     override fun close() {
+        if (!closed.compareAndSet(false, true)) return
+        runCatching { activeSession.get()?.cancelGenerateResponseAsync() }
         try {
             engine.close()
         } catch (e: Exception) {
