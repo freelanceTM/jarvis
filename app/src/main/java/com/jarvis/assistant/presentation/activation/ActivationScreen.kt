@@ -136,12 +136,12 @@ fun ActivationScreen(
                     OutlinedTextField(
                         value = uiState.inputCode,
                         onValueChange = { viewModel.onCodeChanged(it) },
-                        placeholder = { 
+                        placeholder = {
                             Text(
-                                text = "JARVIS-XXXX-YYYY",
+                                text = "JRV-ABCDE-FGHJK-LMNPQ-RSTUV",
                                 color = TextTertiary,
                                 fontFamily = FontFamily.Monospace
-                            ) 
+                            )
                         },
                         singleLine = true,
                         textStyle = MaterialTheme.typography.titleMedium.copy(
