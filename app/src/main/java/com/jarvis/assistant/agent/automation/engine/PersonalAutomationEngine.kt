@@ -5,6 +5,7 @@ import com.jarvis.assistant.agent.automation.dao.AutomationDao
 import com.jarvis.assistant.agent.automation.entity.AutomationEntity
 import com.jarvis.assistant.agent.automation.model.AutomationTriggerType
 import com.jarvis.assistant.agent.automation.model.TimeRangeCondition
+import com.jarvis.assistant.agent.automation.scheduler.AutomationScheduleManager
 import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.model.ToolCall
 import com.jarvis.assistant.voice.tts.TextToSpeechManager
@@ -35,12 +36,11 @@ class PersonalAutomationEngine @Inject constructor(
     private val toolExecutor: ToolExecutor,
     private val textToSpeechManager: TextToSpeechManager,
     private val ruleMatcher: AutomationRuleMatcher,
+    private val scheduleManager: AutomationScheduleManager,
     private val json: Json
 ) {
     companion object {
         private const val TAG = "AutomationEngine"
-        private const val PREFS_NAME = "jarvis_automation_prefs"
-        private const val KEY_DEFAULTS_INITIALIZED = "defaults_initialized"
 
         /** Защита от повторных срабатываний при «дребезге» системных событий. */
         private const val DEFAULT_COOLDOWN_MS = 60_000L
@@ -56,8 +56,7 @@ class PersonalAutomationEngine @Inject constructor(
      * Обработка системного события (например: подключение наушников, смена Wi-Fi, падение батареи)
      */
     suspend fun onSystemEvent(
-        triggerType: AutomationTriggerType,
-        extraData: Map<String, Any> = emptyMap()
+        triggerType: AutomationTriggerType
     ) = withContext(Dispatchers.IO) {
         // Матчинг по lastTriggeredAt и запись recordTrigger должны быть одной
         // критической секцией. Иначе два одинаковых broadcast одновременно
@@ -122,11 +121,11 @@ class PersonalAutomationEngine @Inject constructor(
         for (rule in rules) {
             val calls = parseActionCalls(rule.actionsJson)
             if (calls.isEmpty()) {
-                Log.w(TAG, "Rule '${rule.name}' has no parsable actions")
+                Log.w(TAG, "Rule id=${rule.id} has no parsable actions")
                 continue
             }
 
-            Log.d(TAG, "Executing ${calls.size} actions for rule '${rule.name}'")
+            Log.d(TAG, "Executing ${calls.size} actions for rule id=${rule.id}")
             try {
                 val results = toolExecutor.executeAll(calls)
                 val completedSuccessfully =
@@ -150,14 +149,17 @@ class PersonalAutomationEngine @Inject constructor(
                     val failed = results.lastOrNull()
                     Log.w(
                         TAG,
-                        "Rule '${rule.name}' not completed: ${failed?.status} ${failed?.error.orEmpty()}"
+                        "Rule id=${rule.id} not completed: status=${failed?.status}"
                     )
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 // Сбой одного правила не должен останавливать остальные правила события.
-                Log.e(TAG, "Error executing rule '${rule.name}', continuing with other rules", e)
+                Log.e(
+                    TAG,
+                    "Error executing rule id=${rule.id}, type=${e.javaClass.simpleName}; continuing"
+                )
             }
         }
 
@@ -180,6 +182,7 @@ class PersonalAutomationEngine @Inject constructor(
             try {
                 initDefaultAutomations()
                 defaultsInitialized = true
+                scheduleManager.reconcile()
             } catch (e: Exception) {
                 Log.e(TAG, "Error initializing default automations", e)
             }
@@ -415,7 +418,9 @@ class PersonalAutomationEngine @Inject constructor(
             cooldownMs = cooldownMs
         )
 
-        automationDao.insertAutomation(entity)
+        val id = automationDao.insertAutomation(entity)
+        if (triggerType == AutomationTriggerType.TIME_SCHEDULE) scheduleManager.reconcile()
+        id
     }
 
     /**
@@ -431,6 +436,7 @@ class PersonalAutomationEngine @Inject constructor(
      */
     suspend fun setRuleEnabled(ruleId: String, enabled: Boolean) = withContext(Dispatchers.IO) {
         automationDao.setAutomationEnabled(ruleId, enabled)
+        scheduleManager.reconcile()
     }
 
     /**
@@ -438,5 +444,6 @@ class PersonalAutomationEngine @Inject constructor(
      */
     suspend fun deleteRule(ruleId: String) = withContext(Dispatchers.IO) {
         automationDao.deleteAutomationByRuleId(ruleId)
+        scheduleManager.reconcile()
     }
 }
