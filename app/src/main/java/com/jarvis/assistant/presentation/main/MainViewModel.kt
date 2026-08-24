@@ -101,6 +101,12 @@ class MainViewModel @Inject constructor(
                 _uiState.update { it.copy(lastAssistantResponse = answer) }
             }
         }
+
+        viewModelScope.launch {
+            orchestrator.privacyClassification.collectLatest { classification ->
+                _uiState.update { it.copy(privacyLevel = classification.level) }
+            }
+        }
     }
 
     fun onEvent(event: MainUiEvent) {
@@ -128,8 +134,13 @@ class MainViewModel @Inject constructor(
                 viewModelScope.launch { _effectChannel.send(MainUiEffect.NavigateToSettings) }
                 return
             }
-            JarvisVoiceService.start(context)
-            _uiState.update { it.copy(isBackgroundServiceActive = true) }
+            if (JarvisVoiceService.start(context)) {
+                _uiState.update { it.copy(isBackgroundServiceActive = true) }
+            } else {
+                viewModelScope.launch {
+                    _effectChannel.send(MainUiEffect.ShowToast("Не удалось запустить микрофонный сервис"))
+                }
+            }
         } else {
             JarvisVoiceService.stop(context)
             _uiState.update { it.copy(isBackgroundServiceActive = false) }
