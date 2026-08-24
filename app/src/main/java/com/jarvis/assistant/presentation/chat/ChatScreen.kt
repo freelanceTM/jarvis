@@ -28,6 +28,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jarvis.assistant.R
+import com.jarvis.assistant.agent.decision.PrivacyLevel
 import com.jarvis.assistant.presentation.components.ConfirmationCard
 import com.jarvis.assistant.presentation.components.MessageItem
 import com.jarvis.assistant.presentation.theme.*
@@ -101,6 +102,23 @@ fun ChatScreen(
                         onCancel = { viewModel.cancelPendingAction() }
                     )
                 }
+
+                val privacyLevel = uiState.privacyClassification.level
+                val privacyText = when (privacyLevel) {
+                    PrivacyLevel.UNKNOWN -> stringResource(R.string.privacy_unknown_local_only)
+                    PrivacyLevel.NORMAL -> stringResource(R.string.privacy_normal_cloud_possible)
+                    PrivacyLevel.PRIVATE -> stringResource(R.string.privacy_private_local_only)
+                    PrivacyLevel.SENSITIVE -> stringResource(R.string.privacy_sensitive_local_only)
+                }
+                Text(
+                    text = privacyText,
+                    color = if (privacyLevel == PrivacyLevel.NORMAL) JarvisGreen else JarvisRed,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(JarvisSurface)
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                )
 
                 // Нижняя панель ввода текста и микрофона
                 Surface(
