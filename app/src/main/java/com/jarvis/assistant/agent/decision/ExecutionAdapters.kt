@@ -74,7 +74,8 @@ class RepositoryCloudAiExecutor @Inject constructor(
             systemPrompt = fullSystemPrompt,
             source = request.source.name,
             privacyLevel = request.effectivePrivacyLevel.name,
-            requiresWeb = request.requiresWeb
+            requiresWeb = request.requiresWeb,
+            cloudExplicitlyAllowed = request.cloudExplicitlyAllowed
         )
     }
 }
