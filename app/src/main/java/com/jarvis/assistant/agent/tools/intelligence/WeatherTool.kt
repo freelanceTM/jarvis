@@ -65,6 +65,16 @@ class WeatherTool @Inject constructor(
         }
     }
 
+    override fun externalPrivacyContext(arguments: JsonObject): List<String> {
+        val requestedLocation = arguments["location"]?.jsonPrimitive?.contentOrNull?.trim()
+            ?: arguments["city"]?.jsonPrimitive?.contentOrNull?.trim()
+        return if (requestedLocation.isNullOrEmpty() || isCurrentLocationKeyword(requestedLocation)) {
+            listOf("my current device location")
+        } else {
+            emptyList()
+        }
+    }
+
     override suspend fun execute(arguments: JsonObject): ToolExecutionResult {
         if (!networkMonitor.isCurrentlyOnline()) {
             return ToolExecutionResult.failure(
