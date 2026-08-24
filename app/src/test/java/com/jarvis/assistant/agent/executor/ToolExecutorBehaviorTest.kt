@@ -30,6 +30,9 @@ class ToolExecutorBehaviorTest {
     private class ScriptedTool(
         override val toolId: String,
         override val executionTimeoutMs: Long = 4_000,
+        override val isOffline: Boolean = true,
+        override val mayDiscloseUserContentExternally: Boolean = !isOffline,
+        private val implicitPrivacyContext: List<String> = emptyList(),
         private val run: suspend () -> ToolExecutionResult
     ) : JarvisTool {
         override val description = toolId
@@ -37,6 +40,7 @@ class ToolExecutorBehaviorTest {
         override val parametersSchema: JsonObject = buildJsonObject { }
         override val riskLevel = ToolRisk.SAFE
         val rollbacks = AtomicInteger(0)
+        override fun externalPrivacyContext(arguments: JsonObject): List<String> = implicitPrivacyContext
         override suspend fun execute(arguments: JsonObject) = run()
         override suspend fun rollback(arguments: JsonObject, rollbackData: JsonObject?): Boolean {
             rollbacks.incrementAndGet()
@@ -65,6 +69,93 @@ class ToolExecutorBehaviorTest {
 
         assertEquals(ToolExecutionStatus.TIMEOUT, result.status)
         assertEquals("ExecutionTimeoutException", result.error)
+    }
+
+    @Test
+    fun `background or direct external tool cannot bypass privacy classification`() = runBlocking {
+        val calls = AtomicInteger(0)
+        val external = ScriptedTool("intelligence.web_search", isOffline = false) {
+            calls.incrementAndGet()
+            ToolExecutionResult.success("must not execute")
+        }
+        val result = executor(external).execute(
+            ToolCall(
+                external.toolId,
+                buildJsonObject { put("query", "password=background-secret") }
+            )
+        )
+
+        assertEquals(ToolExecutionStatus.FAILURE, result.status)
+        assertEquals("PRIVACY_POLICY_BLOCKED", result.error)
+        assertEquals(0, calls.get())
+    }
+
+    @Test
+    fun `offline handoff and implicit device data are still externally guarded`() = runBlocking {
+        val calls = AtomicInteger(0)
+        val share = ScriptedTool(
+            toolId = "communication.share",
+            isOffline = true,
+            mayDiscloseUserContentExternally = true
+        ) {
+            calls.incrementAndGet()
+            ToolExecutionResult.success("must not execute")
+        }
+        val location = ScriptedTool(
+            toolId = "intelligence.weather",
+            isOffline = false,
+            implicitPrivacyContext = listOf("my current device location")
+        ) {
+            calls.incrementAndGet()
+            ToolExecutionResult.success("must not execute")
+        }
+        val executor = executor(share, location)
+
+        val shareResult = executor.execute(
+            ToolCall(share.toolId, buildJsonObject { put("text", "password=handoff-secret") })
+        )
+        val locationResult = executor.execute(ToolCall(location.toolId, buildJsonObject { }))
+
+        assertEquals("PRIVACY_POLICY_BLOCKED", shareResult.error)
+        assertEquals("PRIVACY_POLICY_BLOCKED", locationResult.error)
+        assertEquals(0, calls.get())
+    }
+
+    @Test
+    fun `batch execution cannot bypass external tool privacy classification`() = runBlocking {
+        val calls = AtomicInteger(0)
+        val external = ScriptedTool("intelligence.web_search", isOffline = false) {
+            calls.incrementAndGet()
+            ToolExecutionResult.success("must not execute")
+        }
+
+        val results = executor(external).executeAll(
+            listOf(
+                ToolCall(
+                    external.toolId,
+                    buildJsonObject { put("query", "Bearer batch-sensitive-token") }
+                )
+            )
+        )
+
+        assertEquals(ToolExecutionStatus.FAILURE, results.single().status)
+        assertEquals("PRIVACY_POLICY_BLOCKED", results.single().error)
+        assertEquals(0, calls.get())
+    }
+
+    @Test
+    fun `normal external tool arguments remain allowed`() = runBlocking {
+        val calls = AtomicInteger(0)
+        val external = ScriptedTool("intelligence.web_search", isOffline = false) {
+            calls.incrementAndGet()
+            ToolExecutionResult.success("ok")
+        }
+        val result = executor(external).execute(
+            ToolCall(external.toolId, buildJsonObject { put("query", "weather tomorrow") })
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals(1, calls.get())
     }
 
     @Test
