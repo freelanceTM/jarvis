@@ -45,7 +45,7 @@ def count_tests(root: Path) -> int:
 inventory = [
     "# Repository inventory",
     "",
-    "Generated from the audited source tree on 2026-08-20.",
+    "Generated from the audited source tree on 2026-08-21.",
     "",
 ]
 for root, label in [(PROD_ROOTS[0], "app/src/main/java"), (PROD_ROOTS[1], "server/src/main/kotlin")]:
@@ -74,10 +74,10 @@ inventory += [
     "## Runtime entry points and transports",
     "",
     "- Android: `JarvisApplication`, launcher `MainActivity`, foreground `JarvisVoiceService`, `SystemEventReceiver`, `JarvisAccessibilityService`.",
-    "- Server: `MainKt` / `ServerBootstrap`.",
-    "- HTTP: `GET /v1/health`, `POST /v1/ai/execute`, `GET /v1/admin/metrics`.",
-    "- External boundaries: JARVIS API, Groq/Gemini/OpenRouter, Open-Meteo, DuckDuckGo/Wikipedia, Android ContentResolver/Room/DataStore/filesystem/MediaPipe.",
-    "- No WebView, JavaScript bridge, command-shell execution, queue consumer, or server database was found.",
+    "- Server: `MainKt` / `ServerBootstrap`; internal JDK HTTP listener behind production Caddy TLS termination.",
+    "- HTTP: `GET /v1/health`, `POST /v1/ai/execute`, `GET /v1/admin/metrics`, license issuance/revocation/redemption/validation, billing checkout, and Paddle/HELEKET webhooks.",
+    "- External boundaries: Caddy/ACME, JARVIS API, PostgreSQL, Paddle, HELEKET, Groq/Gemini/OpenRouter, Open-Meteo, DuckDuckGo/Wikipedia, Android ContentResolver/Room/DataStore/filesystem/MediaPipe.",
+    "- No WebView, JavaScript bridge, command-shell execution, or queue consumer was found.",
     "",
 ]
 (ROOT / "audit/REPOSITORY_INVENTORY.md").write_text("\n".join(inventory))
@@ -135,9 +135,13 @@ graph += [
     "  -> CompositeLocalAiExecutor -> MediaPipe Gemma / WorkflowExecutor",
     "  -> AIRepository -> JarvisApiClient -> JARVIS server",
     "",
-    "HTTP -> authn -> authz -> SlidingWindowRateLimiter -> AiRouter",
+    "Internet HTTPS -> Caddy TLS/replaced proxy headers -> private JDK HTTP listener",
+    "HTTP -> trusted-origin resolution -> authn -> authz -> SlidingWindowRateLimiter -> AiRouter",
     "  -> server PromptPrivacyClassifier -> ProviderManager",
     "  -> Groq/Gemini/OpenRouter -> Usage + Metrics",
+    "",
+    "License/billing HTTP -> DB-backed auth + PostgreSQL rate limits",
+    "  -> PostgreSQL licenses/orders/events -> Paddle/HELEKET + signed webhooks",
     "",
     "Room -> Message/Memory/Fact/Preference/Procedure/Automation DAOs",
     "System broadcasts -> SystemEventReceiver -> PersonalAutomationEngine -> ToolExecutor",
