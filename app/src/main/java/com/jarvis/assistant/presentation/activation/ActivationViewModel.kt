@@ -41,7 +41,7 @@ class ActivationViewModel @Inject constructor(
     private fun observeLicense() {
         viewModelScope.launch {
             licenseManager.licenseFlow.collectLatest { info ->
-                _uiState.update { 
+                _uiState.update {
                     it.copy(
                         licenseInfo = info,
                         isActivated = info.isActivated && !info.isExpired
@@ -52,7 +52,9 @@ class ActivationViewModel @Inject constructor(
     }
 
     fun onCodeChanged(newCode: String) {
-        val clean = newCode.uppercase().filter { it.isLetterOrDigit() || it == '-' }
+        val clean = newCode.uppercase()
+            .filter { it.isLetterOrDigit() || it == '-' }
+            .take(27)
         _uiState.update { it.copy(inputCode = clean, errorMessage = null) }
     }
 
@@ -68,7 +70,7 @@ class ActivationViewModel @Inject constructor(
         viewModelScope.launch {
             when (val result = licenseManager.activateWithCode(code)) {
                 is ActivationResult.Success -> {
-                    _uiState.update { 
+                    _uiState.update {
                         it.copy(
                             isLoading = false,
                             successMessage = result.message,
@@ -94,7 +96,7 @@ class ActivationViewModel @Inject constructor(
                     }
                 }
                 is ActivationResult.AlreadyExpired -> {
-                    _uiState.update { 
+                    _uiState.update {
                         it.copy(
                             isLoading = false,
                             errorMessage = result.message
