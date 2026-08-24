@@ -11,7 +11,7 @@ import com.jarvis.server.config.ValidationConfig
 import com.jarvis.server.observability.Metrics
 import com.jarvis.server.observability.StructuredLogger
 import com.jarvis.server.ratelimit.RateLimitDecision
-import com.jarvis.server.ratelimit.SlidingWindowRateLimiter
+import com.jarvis.server.ratelimit.RateLimiter
 import com.jarvis.server.router.AiRouter
 import com.jarvis.server.router.RouterResult
 import kotlinx.serialization.json.Json
@@ -24,14 +24,23 @@ data class HttpRequestContext(
     val path: String,
     val authorizationHeader: String?,
     val body: String,
-    val contentLength: Long
-)
+    val contentLength: Long,
+    val headers: Map<String, String> = emptyMap(),
+    val remoteAddress: String? = null,
+    val scheme: String = "http",
+    val host: String? = null,
+    val viaTrustedProxy: Boolean = false
+) {
+    fun header(name: String): String? = headers.entries
+        .firstOrNull { it.key.equals(name, ignoreCase = true) }
+        ?.value
+}
 
 /** Ответ, готовый к сериализации. */
 data class HttpResponseContext(
     val status: Int,
     val body: String,
-    val headers: Map<String, String> = emptyMap()
+    val headers: Map<String, String> = mapOf("Cache-Control" to "no-store")
 )
 
 /**
@@ -54,14 +63,16 @@ data class HttpResponseContext(
 class JarvisApiHandler(
     private val authenticator: Authenticator,
     private val authorizer: Authorizer,
-    private val rateLimiter: SlidingWindowRateLimiter,
+    private val rateLimiter: RateLimiter,
     private val router: AiRouter,
     private val validation: ValidationConfig,
     private val logger: StructuredLogger,
     private val metrics: Metrics,
     private val json: Json,
     private val healthProvider: () -> String = { "{}" },
-    private val metricsProvider: () -> String = { "{}" }
+    private val metricsProvider: () -> String = { "{}" },
+    private val entitlementChecker: (com.jarvis.server.auth.AuthenticatedClient) -> Boolean = { true },
+    private val extensionHandler: suspend (HttpRequestContext) -> HttpResponseContext? = { null }
 ) {
     companion object {
         const val PATH_EXECUTE = "/v1/ai/execute"
@@ -88,7 +99,8 @@ class JarvisApiHandler(
                 request.path == PATH_HEALTH ->
                 error(ApiErrorCode.INVALID_REQUEST, requestId, 405)
 
-            else -> error(ApiErrorCode.INVALID_REQUEST, requestId, 404)
+            else -> extensionHandler(request)
+                ?: error(ApiErrorCode.INVALID_REQUEST, requestId, 404)
         }
     }
 
@@ -122,6 +134,15 @@ class JarvisApiHandler(
                 "tier" to client.tier.name
             )
             return error(ApiErrorCode.FORBIDDEN, requestId)
+        }
+
+        // Entitlement is server-side. Authentication alone never proves payment.
+        if (client.tier !in setOf(
+                com.jarvis.server.auth.ClientTier.ADMIN,
+                com.jarvis.server.auth.ClientTier.INTERNAL
+            ) && !entitlementChecker(client)
+        ) {
+            return error(ApiErrorCode.PAYMENT_REQUIRED, requestId)
         }
 
         // ------------------------------------------------- 3. Rate limit
@@ -213,6 +234,6 @@ class JarvisApiHandler(
             com.jarvis.server.api.ApiErrorResponse.serializer(),
             code.toResponse(requestId)
         ),
-        headers = headers
+        headers = mapOf("Cache-Control" to "no-store") + headers
     )
 }

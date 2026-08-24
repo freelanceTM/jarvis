@@ -128,6 +128,9 @@ data class ServerConfig(
     val validation: ValidationConfig,
     val privacy: PrivacyPolicyConfig,
     val generation: AiGenerationConfig,
+    val deployment: DeploymentSecurityConfig = DeploymentSecurityConfig(),
+    /** Persistent licensing/billing; null is accepted only by isolated legacy tests. */
+    val licenseSubsystem: LicenseSubsystemConfig? = null,
     /**
      * Токены клиентов: token → clientId.
      * В проде заменяется на БД/Secret Manager (см. AuthService).
@@ -147,6 +150,19 @@ data class ServerConfig(
         require(staticClientTokens.values.all { it.isNotBlank() && it.length <= 128 }) {
             "clientId must contain 1..128 characters"
         }
+        if (deployment.isProduction) {
+            require(providers.filter { it.enabled && it.hasKey }.all { it.baseUrl.startsWith("https://") }) {
+                "Enabled production providers with credentials must use HTTPS"
+            }
+            require(!privacy.allowPrivate && !privacy.allowSensitive) {
+                "Production cannot globally allow PRIVATE/SENSITIVE cloud routing without per-request consent"
+            }
+            licenseSubsystem?.let {
+                require(it.database.maxPoolSize >= 2) {
+                    "Production database pool must reserve one connection for the single-instance guard"
+                }
+            }
+        }
     }
 
     companion object {
@@ -158,6 +174,33 @@ data class ServerConfig(
             fun bool(key: String, def: Boolean) = str(key)?.lowercase()?.let {
                 it == "true" || it == "1" || it == "yes"
             } ?: def
+            fun strictBool(key: String, def: Boolean): Boolean = str(key)?.lowercase()?.let {
+                when (it) {
+                    "true", "1", "yes" -> true
+                    "false", "0", "no" -> false
+                    else -> throw IllegalArgumentException("$key must be true or false")
+                }
+            } ?: def
+
+            val environment = DeploymentEnvironment.parse(str("APP_ENV") ?: "development")
+            if (environment == DeploymentEnvironment.PRODUCTION) {
+                require(str("BIND_HOST") != null) { "Production requires an explicit BIND_HOST" }
+                require(str("APPLICATION_REPLICA_COUNT") != null) {
+                    "Production requires explicit APPLICATION_REPLICA_COUNT=1"
+                }
+            }
+            val publicBaseUrl = str("PUBLIC_BASE_URL")?.trimEnd('/')
+            val deployment = DeploymentSecurityConfig(
+                environment = environment,
+                bindHost = str("BIND_HOST") ?: "127.0.0.1",
+                publicBaseUrl = publicBaseUrl,
+                tlsTerminatedByProxy = strictBool("PRODUCTION_TLS_TERMINATED", false),
+                trustProxyHeaders = strictBool("TRUST_PROXY_HEADERS", false),
+                trustedProxyCidrs = str("TRUSTED_PROXY_CIDRS")
+                    ?.split(',')?.map(String::trim)?.filter(String::isNotEmpty)
+                    ?.map(IpCidr::parse) ?: emptyList(),
+                applicationReplicaCount = int("APPLICATION_REPLICA_COUNT", 1)
+            )
 
             val providers = listOf(
                 ProviderConfig(
@@ -210,6 +253,93 @@ data class ServerConfig(
             }
             val tokens = tokenPairs.toMap()
 
+            val licenseSignals = listOf(
+                str("DATABASE_URL"), str("LICENSE_CODE_PEPPER"), str("BILLING_PLANS")
+            )
+            val licenseSubsystem = if (licenseSignals.all { it == null }) {
+                null
+            } else {
+                val databaseUrl = requireNotNull(str("DATABASE_URL")) { "DATABASE_URL is required" }
+                val databaseUser = requireNotNull(str("DATABASE_USER")) { "DATABASE_USER is required" }
+                val databasePassword = requireNotNull(str("DATABASE_PASSWORD")) { "DATABASE_PASSWORD is required" }
+                val pepper = requireNotNull(str("LICENSE_CODE_PEPPER")) { "LICENSE_CODE_PEPPER is required" }
+                val plansRaw = requireNotNull(str("BILLING_PLANS")) { "BILLING_PLANS is required" }
+                val plans = plansRaw.split(';').filter { it.isNotBlank() }.map { entry ->
+                    val fields = entry.split('|')
+                    require(fields.size == 8) {
+                        "Each BILLING_PLANS entry requires id|product|name|days|amountMinor|currency|paddlePriceId|heleketCurrency; use - for an unavailable provider"
+                    }
+                    com.jarvis.server.license.BillingPlan(
+                        id = fields[0].trim(),
+                        productId = fields[1].trim(),
+                        displayName = fields[2].trim(),
+                        durationDays = fields[3].trim().toInt(),
+                        amountMinor = fields[4].trim().toLong(),
+                        currency = fields[5].trim().uppercase(),
+                        paddlePriceId = fields[6].trim().takeUnless { it == "-" || it.isEmpty() },
+                        heleketCurrency = fields[7].trim().takeUnless { it == "-" || it.isEmpty() }
+                    )
+                }
+                val paddleEnvironment = (str("PADDLE_ENVIRONMENT") ?: "sandbox").lowercase()
+                require(paddleEnvironment in setOf("sandbox", "production")) {
+                    "PADDLE_ENVIRONMENT must be sandbox or production"
+                }
+                val heleketConfigured = str("HELEKET_MERCHANT_ID") != null || str("HELEKET_API_KEY") != null
+                if (heleketConfigured) require(!publicBaseUrl.isNullOrBlank()) {
+                    "PUBLIC_BASE_URL is required when HELEKET is configured"
+                }
+                val callbackBase = publicBaseUrl ?: "https://disabled.invalid"
+                LicenseSubsystemConfig(
+                    database = com.jarvis.server.persistence.DatabaseConfig(
+                        jdbcUrl = databaseUrl,
+                        user = databaseUser,
+                        password = databasePassword,
+                        maxPoolSize = int("DATABASE_POOL_SIZE", 8),
+                        connectionTimeoutMs = long("DATABASE_CONNECTION_TIMEOUT_MS", 5_000)
+                    ),
+                    codePepper = pepper,
+                    plans = plans,
+                    redeemRateLimit = RateLimitConfig(
+                        int("LICENSE_REDEEM_PER_MINUTE", 5),
+                        int("LICENSE_REDEEM_PER_DAY", 30)
+                    ),
+                    authenticatedRateLimit = RateLimitConfig(
+                        int("LICENSE_AUTH_PER_MINUTE", 30),
+                        int("LICENSE_AUTH_PER_DAY", 1_000)
+                    ),
+                    webhookRateLimit = RateLimitConfig(
+                        int("BILLING_WEBHOOK_PER_MINUTE", 120),
+                        int("BILLING_WEBHOOK_PER_DAY", 20_000)
+                    ),
+                    paddle = com.jarvis.server.billing.PaddleBillingConfig(
+                        apiKey = str("PADDLE_API_KEY"),
+                        webhookSecret = str("PADDLE_WEBHOOK_SECRET"),
+                        apiBaseUrl = if (paddleEnvironment == "production") {
+                            "https://api.paddle.com"
+                        } else {
+                            "https://sandbox-api.paddle.com"
+                        },
+                        requestTimeoutMs = long("PADDLE_REQUEST_TIMEOUT_MS", 15_000),
+                        webhookToleranceSeconds = long("PADDLE_WEBHOOK_TOLERANCE_SECONDS", 300),
+                        allowedCheckoutHosts = str("PADDLE_CHECKOUT_HOSTS")
+                            ?.split(',')?.map(String::trim)?.filter(String::isNotEmpty)?.toSet()
+                            ?: emptySet()
+                    ),
+                    heleket = com.jarvis.server.billing.HeleketBillingConfig(
+                        merchantId = str("HELEKET_MERCHANT_ID"),
+                        apiKey = str("HELEKET_API_KEY"),
+                        callbackUrl = "$callbackBase/v1/billing/webhooks/heleket",
+                        returnUrl = str("BILLING_RETURN_URL") ?: "$callbackBase/billing/return",
+                        successUrl = str("BILLING_SUCCESS_URL") ?: "$callbackBase/billing/success",
+                        requestTimeoutMs = long("HELEKET_REQUEST_TIMEOUT_MS", 15_000),
+                        invoiceLifetimeSeconds = int("HELEKET_INVOICE_LIFETIME_SECONDS", 3_600),
+                        allowedWebhookIps = (str("HELEKET_WEBHOOK_IPS") ?: "31.133.220.8")
+                            .split(',').map(String::trim).filter(String::isNotEmpty).toSet(),
+                        enforceWebhookIp = bool("HELEKET_ENFORCE_WEBHOOK_IP", true)
+                    )
+                )
+            }
+
             return ServerConfig(
                 port = int("PORT", 8080),
                 providers = providers,
@@ -239,6 +369,8 @@ data class ServerConfig(
                     maxTokens = int("AI_MAX_TOKENS", 512),
                     temperature = str("AI_TEMPERATURE")?.toDoubleOrNull() ?: 0.6
                 ),
+                deployment = deployment,
+                licenseSubsystem = licenseSubsystem,
                 staticClientTokens = tokens
             )
         }

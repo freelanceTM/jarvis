@@ -15,7 +15,9 @@ import com.jarvis.server.provider.ProviderFailureKind
 import com.jarvis.server.provider.ProviderManager
 import com.jarvis.server.provider.ProviderRequest
 import com.jarvis.server.provider.ProviderRequirements
+import com.jarvis.server.privacy.PrivacyContent
 import com.jarvis.server.privacy.PromptPrivacyClassifier
+import com.jarvis.server.privacy.ServerPrivacyClassifier
 import com.jarvis.server.usage.AiUsageRecord
 import com.jarvis.server.usage.UsageRepository
 import java.time.Instant
@@ -49,6 +51,7 @@ class AiRouter(
     private val generation: AiGenerationConfig,
     private val logger: StructuredLogger,
     private val metrics: Metrics,
+    private val privacyClassifier: ServerPrivacyClassifier = PromptPrivacyClassifier,
     private val clock: () -> Long = System::currentTimeMillis
 ) {
 
@@ -78,19 +81,25 @@ class AiRouter(
         // Вторая линия защиты: сервер не доверяет клиентской метке NORMAL.
         // Явный уровень усиливается локальной классификацией текста и никогда
         // не понижается автоматически.
-        val detectedPrivacy = PromptPrivacyClassifier.classify(request.text)
-        val effectivePrivacy = PromptPrivacyClassifier.strongest(
-            explicit = request.privacyLevel,
-            detected = detectedPrivacy
+        val automaticPrivacy = PromptPrivacyClassifier.classifySafely(
+            content = PrivacyContent(
+                text = request.text,
+                relatedContent = listOfNotNull(request.systemContext)
+            ),
+            classifier = privacyClassifier
         )
-        if (!isPrivacyAllowed(effectivePrivacy)) {
+        val effectivePrivacy = PromptPrivacyClassifier.effective(
+            declared = request.privacyLevel,
+            automatic = automaticPrivacy
+        )
+        if (!isPrivacyAllowed(effectivePrivacy, request.cloudExplicitlyAllowed)) {
             logger.warn(
                 "privacy policy blocked cloud execution",
                 "requestId" to requestId,
                 "clientId" to client.clientId,
                 "privacyLevel" to effectivePrivacy.name,
                 "declaredPrivacyLevel" to request.privacyLevel.name,
-                "automaticallyDetected" to (detectedPrivacy != ApiPrivacyLevel.NORMAL).toString()
+                "privacyReasons" to automaticPrivacy.reasons.joinToString("|") { it.name }
             )
             metrics.recordFailure()
             metrics.recordPrivacyBlocked()
@@ -205,10 +214,14 @@ class AiRouter(
         }
     }
 
-    private fun isPrivacyAllowed(level: ApiPrivacyLevel): Boolean = when (level) {
+    private fun isPrivacyAllowed(
+        level: ApiPrivacyLevel,
+        cloudExplicitlyAllowed: Boolean
+    ): Boolean = when (level) {
+        ApiPrivacyLevel.UNKNOWN -> false
         ApiPrivacyLevel.NORMAL -> true
-        ApiPrivacyLevel.PRIVATE -> privacyPolicy.allowPrivate
-        ApiPrivacyLevel.SENSITIVE -> privacyPolicy.allowSensitive
+        ApiPrivacyLevel.PRIVATE -> cloudExplicitlyAllowed || privacyPolicy.allowPrivate
+        ApiPrivacyLevel.SENSITIVE -> cloudExplicitlyAllowed || privacyPolicy.allowSensitive
     }
 
     /**

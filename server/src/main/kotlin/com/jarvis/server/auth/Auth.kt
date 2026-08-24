@@ -1,6 +1,8 @@
 package com.jarvis.server.auth
 
+import com.jarvis.server.license.LicenseService
 import java.security.MessageDigest
+import java.util.UUID
 
 /**
  * Роли клиента (пункт 7 ТЗ).
@@ -15,6 +17,12 @@ enum class Permission {
     /** Выполнять облачные AI-запросы. */
     EXECUTE_AI,
 
+    /** Создавать checkout для собственного account. */
+    CREATE_BILLING_CHECKOUT,
+
+    /** Выпускать и отзывать лицензии. */
+    MANAGE_LICENSES,
+
     /** Смотреть метрики и здоровье провайдеров. */
     VIEW_ADMIN
 }
@@ -25,9 +33,13 @@ enum class Permission {
  * Это результат AUTHENTICATION («кто это»). Ответ на вопрос «что ему можно»
  * даёт [Authorizer] — это отдельная ответственность (пункт 7 ТЗ).
  */
+enum class AuthSource { STATIC, LICENSE_TOKEN }
+
 data class AuthenticatedClient(
     val clientId: String,
-    val tier: ClientTier
+    val tier: ClientTier,
+    val accountId: UUID? = null,
+    val authSource: AuthSource = AuthSource.STATIC
 )
 
 /** Ошибки аутентификации. Различаем «нет токена» и «токен неизвестен». */
@@ -98,6 +110,48 @@ class TokenAuthenticator(
     }
 }
 
+class LicenseTokenAuthenticator(
+    private val licenseService: LicenseService
+) : Authenticator {
+    override fun authenticate(authorizationHeader: String?): AuthResult {
+        if (authorizationHeader.isNullOrBlank()) return AuthResult.MissingCredentials
+        val prefix = "Bearer "
+        if (!authorizationHeader.startsWith(prefix, ignoreCase = true)) {
+            return AuthResult.MissingCredentials
+        }
+        val token = authorizationHeader.substring(prefix.length).trim()
+        if (!token.startsWith("jrv_") || token.length !in 32..256) {
+            return AuthResult.InvalidCredentials
+        }
+        val account = licenseService.authenticateAccessToken(token)
+            ?: return AuthResult.InvalidCredentials
+        return AuthResult.Success(
+            AuthenticatedClient(
+                clientId = account.accountId.toString(),
+                tier = ClientTier.PRO,
+                accountId = account.accountId,
+                authSource = AuthSource.LICENSE_TOKEN
+            )
+        )
+    }
+}
+
+/** Static admin/bootstrap tokens first, then database-backed license tokens. */
+class CompositeAuthenticator(private vararg val delegates: Authenticator) : Authenticator {
+    override fun authenticate(authorizationHeader: String?): AuthResult {
+        if (authorizationHeader.isNullOrBlank()) return AuthResult.MissingCredentials
+        var sawInvalid = false
+        delegates.forEach { delegate ->
+            when (val result = delegate.authenticate(authorizationHeader)) {
+                is AuthResult.Success -> return result
+                AuthResult.InvalidCredentials -> sawInvalid = true
+                AuthResult.MissingCredentials -> Unit
+            }
+        }
+        return if (sawInvalid) AuthResult.InvalidCredentials else AuthResult.MissingCredentials
+    }
+}
+
 /**
  * AUTHORIZATION: что этому клиенту разрешено.
  *
@@ -112,9 +166,9 @@ class TierAuthorizer : Authorizer {
 
     private val permissionsByTier: Map<ClientTier, Set<Permission>> = mapOf(
         ClientTier.FREE to setOf(Permission.EXECUTE_AI),
-        ClientTier.PRO to setOf(Permission.EXECUTE_AI),
-        ClientTier.INTERNAL to setOf(Permission.EXECUTE_AI),
-        ClientTier.ADMIN to setOf(Permission.EXECUTE_AI, Permission.VIEW_ADMIN)
+        ClientTier.PRO to setOf(Permission.EXECUTE_AI, Permission.CREATE_BILLING_CHECKOUT),
+        ClientTier.INTERNAL to setOf(Permission.EXECUTE_AI, Permission.CREATE_BILLING_CHECKOUT),
+        ClientTier.ADMIN to Permission.entries.toSet()
     )
 
     override fun isAllowed(client: AuthenticatedClient, permission: Permission): Boolean =

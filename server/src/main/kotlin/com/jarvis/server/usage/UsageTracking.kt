@@ -40,15 +40,10 @@ interface UsageRepository {
 }
 
 /**
- * In-memory реализация.
- *
- * В проекте нет серверной БД, и ТЗ (пункт 31) запрещает разворачивать большую
- * persistence-архитектуру ради этого этапа. Контракт [UsageRepository]
- * специально сделан минимальным, чтобы замена на Postgres/SQLite свелась
- * к одному новому классу.
- *
- * Ограничение: при перезапуске данные теряются, размер ограничен
- * [maxRecords] (защита от роста памяти).
+ * Bounded in-memory implementation for isolated unit/API harnesses only.
+ * Production composition uses JdbcUsageRepository so records are shared and
+ * restart-safe. This implementation deliberately remains useful for tests that
+ * must not require infrastructure.
  */
 class InMemoryUsageRepository(
     private val maxRecords: Int = 10_000

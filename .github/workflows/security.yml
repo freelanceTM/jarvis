@@ -1,0 +1,150 @@
+name: Supply Chain Security
+
+permissions:
+  contents: read
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 3 * * 1'
+
+jobs:
+  source-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout complete history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Verify repository history is complete
+        shell: bash
+        run: |
+          test "$(git rev-parse --is-shallow-repository)" = "false"
+          git show-ref --heads --tags >/dev/null || true
+
+      - name: Scan complete Git history for secrets
+        shell: bash
+        run: bash ./scripts/run-gitleaks-history.sh . artifacts/gitleaks-history.json
+
+      - name: Dependency review for pull requests
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          vulnerability-check: true
+          comment-summary-in-pr: never
+
+      - name: Scan source dependencies and configuration (blocking)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.74.0
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: '1'
+          format: table
+          cache: false
+
+      - name: Source vulnerability report (non-blocking Medium/Low)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.74.0
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig
+          severity: UNKNOWN,LOW,MEDIUM
+          ignore-unfixed: false
+          exit-code: '0'
+          format: json
+          output: artifacts/trivy-source-report.json
+          cache: false
+
+      - name: Generate repository dependency SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: artifacts/jarvis-repository.cdx.json
+          syft-version: v1.51.0
+          dependency-snapshot: false
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Upload source security evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: source-security-evidence
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 30
+
+  production-image-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Build final production image
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          docker build --file deploy/server.Dockerfile --tag jarvis-server:security .
+
+      - name: Scan final image (blocking)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.74.0
+          scan-type: image
+          image-ref: jarvis-server:security
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: '1'
+          format: table
+          cache: false
+
+      - name: Final image vulnerability report (non-blocking Medium/Low)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.74.0
+          scan-type: image
+          image-ref: jarvis-server:security
+          vuln-type: os,library
+          severity: UNKNOWN,LOW,MEDIUM
+          ignore-unfixed: false
+          exit-code: '0'
+          format: json
+          output: artifacts/trivy-image-report.json
+          cache: false
+
+      - name: Generate final image SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: jarvis-server:security
+          format: cyclonedx-json
+          output-file: artifacts/jarvis-server-image.cdx.json
+          syft-version: v1.51.0
+          dependency-snapshot: false
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Upload final image security evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: production-image-security-evidence
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 30

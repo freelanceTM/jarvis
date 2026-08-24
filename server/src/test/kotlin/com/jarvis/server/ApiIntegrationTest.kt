@@ -23,6 +23,9 @@ import com.jarvis.server.provider.ProviderHealthTracker
 import com.jarvis.server.provider.ProviderId
 import com.jarvis.server.provider.ProviderManager
 import com.jarvis.server.provider.ProviderSelectionPolicy
+import com.jarvis.server.privacy.PrivacyClassification
+import com.jarvis.server.privacy.PrivacyReason
+import com.jarvis.server.privacy.ServerPrivacyClassifier
 import com.jarvis.server.ratelimit.SlidingWindowRateLimiter
 import com.jarvis.server.router.AiRouter
 import com.jarvis.server.usage.InMemoryUsageRepository
@@ -67,7 +70,10 @@ class ApiIntegrationTest {
         providers: List<FakeAiProvider> = listOf(FakeAiProvider.ok(ProviderId.GROQ, "Квантовая запутанность — это...")),
         rateLimit: RateLimitConfig = RateLimitConfig(perMinute = 100, perDay = 1000),
         privacy: PrivacyPolicyConfig = PrivacyPolicyConfig(),
-        validation: ValidationConfig = ValidationConfig()
+        validation: ValidationConfig = ValidationConfig(),
+        entitlementAllowed: Boolean = true,
+        privacyClassifier: ServerPrivacyClassifier =
+            com.jarvis.server.privacy.PromptPrivacyClassifier
     ): Harness {
         val configs = providers.associate { it.id to cfg(it.id, it.id.ordinal + 1) }
         val health = ProviderHealthTracker(CircuitBreakerConfig())
@@ -93,7 +99,8 @@ class ApiIntegrationTest {
             privacyPolicy = privacy,
             generation = AiGenerationConfig(),
             logger = logger,
-            metrics = metrics
+            metrics = metrics,
+            privacyClassifier = privacyClassifier
         )
 
         val handler = JarvisApiHandler(
@@ -106,7 +113,8 @@ class ApiIntegrationTest {
             validation = validation,
             logger = logger,
             metrics = metrics,
-            json = json
+            json = json,
+            entitlementChecker = { entitlementAllowed }
         )
 
         return Harness(handler, usage, metrics, providers)
@@ -173,6 +181,17 @@ class ApiIntegrationTest {
         assertEquals(401, response.status)
     }
 
+    @Test
+    fun `authenticated client without server entitlement cannot execute AI`() = runBlocking {
+        val h = harness(entitlementAllowed = false)
+
+        val response = h.handler.handle(post(requestBody()))
+
+        assertEquals(402, response.status)
+        assertEquals(ApiErrorCode.PAYMENT_REQUIRED.name, errorOf(response.body).error.code)
+        assertEquals(0, h.providers[0].calls.get())
+    }
+
     /** Нет прав на админ-эндпоинт → 403. */
     @Test
     fun `forbidden client cannot access admin metrics`() = runBlocking {
@@ -213,6 +232,17 @@ class ApiIntegrationTest {
         assertEquals(2, h.providers[0].calls.get())
     }
 
+    @Test
+    fun `AI responses are never cacheable`() = runBlocking {
+        val h = harness()
+
+        val success = h.handler.handle(post(requestBody()))
+        val blocked = h.handler.handle(post(requestBody(privacy = "SENSITIVE")))
+
+        assertEquals("no-store", success.headers["Cache-Control"])
+        assertEquals("no-store", blocked.headers["Cache-Control"])
+    }
+
     /** SENSITIVE не уходит провайдеру. */
     @Test
     fun `sensitive request is blocked by privacy policy`() = runBlocking {
@@ -242,6 +272,64 @@ class ApiIntegrationTest {
     }
 
     @Test
+    fun `sensitive system context is blocked before provider`() = runBlocking {
+        val h = harness()
+        val body = """{"text":"ordinary request","source":"CHAT","privacyLevel":"NORMAL","systemContext":"password=context-secret"}"""
+
+        val response = h.handler.handle(post(body))
+
+        assertEquals(403, response.status)
+        assertEquals(ApiErrorCode.PRIVACY_POLICY_VIOLATION.name, errorOf(response.body).error.code)
+        assertEquals(0, h.providers[0].calls.get())
+    }
+
+    @Test
+    fun `classifier exception is unknown and fails closed before all fallback providers`() = runBlocking {
+        val providers = listOf(
+            FakeAiProvider.ok(ProviderId.GROQ, "must not run"),
+            FakeAiProvider.ok(ProviderId.GEMINI, "must not run")
+        )
+        val h = harness(
+            providers = providers,
+            privacyClassifier = ServerPrivacyClassifier { throw IllegalStateException("classifier down") }
+        )
+
+        val response = h.handler.handle(post(requestBody(privacy = "NORMAL")))
+
+        assertEquals(403, response.status)
+        assertEquals(ApiErrorCode.PRIVACY_POLICY_VIOLATION.name, errorOf(response.body).error.code)
+        assertTrue(h.providers.all { it.calls.get() == 0 })
+    }
+
+    @Test
+    fun `classifier unknown result is not treated as normal`() = runBlocking {
+        val h = harness(
+            privacyClassifier = ServerPrivacyClassifier {
+                PrivacyClassification.unknown(PrivacyReason.NOT_CLASSIFIED)
+            }
+        )
+
+        val response = h.handler.handle(post(requestBody(privacy = "NORMAL")))
+
+        assertEquals(403, response.status)
+        assertEquals(0, h.providers[0].calls.get())
+    }
+
+    @Test
+    fun `missing client privacy metadata requires successful server classification`() = runBlocking {
+        val normal = harness()
+        val normalBody = """{"text":"ordinary astronomy question","source":"CHAT"}"""
+        assertEquals(200, normal.handler.handle(post(normalBody)).status)
+        assertEquals(1, normal.providers[0].calls.get())
+
+        val failed = harness(
+            privacyClassifier = ServerPrivacyClassifier { throw IllegalStateException("down") }
+        )
+        assertEquals(403, failed.handler.handle(post(normalBody)).status)
+        assertEquals(0, failed.providers[0].calls.get())
+    }
+
+    @Test
     fun `educational password question is not a privacy false positive`() = runBlocking {
         val h = harness()
 
@@ -251,6 +339,35 @@ class ApiIntegrationTest {
 
         assertEquals(200, response.status)
         assertEquals(1, h.providers[0].calls.get())
+    }
+
+    @Test
+    fun `restricted cloud requires explicit per-request consent`() = runBlocking {
+        val h = harness()
+        val body = """{"text":"password=actual-secret","source":"CHAT","privacyLevel":"NORMAL","cloudExplicitlyAllowed":true}"""
+
+        val response = h.handler.handle(post(body))
+
+        assertEquals(200, response.status)
+        assertEquals(1, h.providers[0].calls.get())
+    }
+
+    @Test
+    fun `explicit consent never overrides unknown classifier failure`() = runBlocking {
+        val providers = listOf(
+            FakeAiProvider.ok(ProviderId.GROQ, "must not run"),
+            FakeAiProvider.ok(ProviderId.GEMINI, "must not run")
+        )
+        val h = harness(
+            providers = providers,
+            privacyClassifier = ServerPrivacyClassifier { throw IllegalStateException("down") }
+        )
+        val body = """{"text":"ordinary request","privacyLevel":"SENSITIVE","cloudExplicitlyAllowed":true}"""
+
+        val response = h.handler.handle(post(body))
+
+        assertEquals(403, response.status)
+        assertTrue(h.providers.all { it.calls.get() == 0 })
     }
 
     /** PRIVATE тоже блокируется политикой по умолчанию. */
@@ -308,10 +425,11 @@ class ApiIntegrationTest {
         assertEquals(503, response.status)
         val error = errorOf(response.body).error
         assertEquals(ApiErrorCode.ALL_PROVIDERS_UNAVAILABLE.name, error.code)
-        // Никаких внутренних деталей наружу.
-        assertFalse(response.body.contains("500"))
-        assertFalse(response.body.contains("TIMEOUT"))
-        assertFalse(response.body.lowercase().contains("exception"))
+        // Никаких внутренних деталей наружу. Проверяем user-facing message,
+        // а не случайный UUID requestId, который законно может содержать "500".
+        assertFalse(error.message.contains("500"))
+        assertFalse(error.message.contains("TIMEOUT"))
+        assertFalse(error.message.lowercase().contains("exception"))
     }
 
     /** Единственный упавший провайдер маппится в конкретный код. */

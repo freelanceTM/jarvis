@@ -1,12 +1,29 @@
 package com.jarvis.server
 
 import com.jarvis.server.auth.ClientTier
+import com.jarvis.server.auth.CompositeAuthenticator
+import com.jarvis.server.auth.LicenseTokenAuthenticator
 import com.jarvis.server.auth.TierAuthorizer
 import com.jarvis.server.auth.TokenAuthenticator
+import com.jarvis.server.billing.BillingService
+import com.jarvis.server.billing.HeleketBillingProvider
+import com.jarvis.server.billing.HeleketWebhookVerifier
+import com.jarvis.server.billing.JdbcBillingRepository
+import com.jarvis.server.billing.PaddleBillingProvider
+import com.jarvis.server.billing.PaddleWebhookVerifier
 import com.jarvis.server.config.ServerConfig
 import com.jarvis.server.http.HttpRequestContext
 import com.jarvis.server.http.JarvisApiHandler
+import com.jarvis.server.http.LicenseBillingHttpHandler
+import com.jarvis.server.http.ProxyRequestSecurity
+import com.jarvis.server.http.RequestOriginResult
+import com.jarvis.server.license.JdbcLicenseRepository
+import com.jarvis.server.license.LicenseCrypto
+import com.jarvis.server.license.LicenseService
 import com.jarvis.server.observability.ConsoleStructuredLogger
+import com.jarvis.server.persistence.DatabaseFactory
+import com.jarvis.server.persistence.DatabaseMigrator
+import com.jarvis.server.persistence.PostgresSingleInstanceGuard
 import com.jarvis.server.observability.Metrics
 import com.jarvis.server.provider.GeminiProvider
 import com.jarvis.server.provider.GroqProvider
@@ -15,9 +32,9 @@ import com.jarvis.server.provider.OpenRouterProvider
 import com.jarvis.server.provider.ProviderHealthTracker
 import com.jarvis.server.provider.ProviderManager
 import com.jarvis.server.provider.ProviderSelectionPolicy
-import com.jarvis.server.ratelimit.SlidingWindowRateLimiter
+import com.jarvis.server.ratelimit.PostgresRateLimiter
 import com.jarvis.server.router.AiRouter
-import com.jarvis.server.usage.InMemoryUsageRepository
+import com.jarvis.server.usage.JdbcUsageRepository
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.runBlocking
@@ -74,7 +91,27 @@ object ServerBootstrap {
             metrics = metrics
         )
 
-        val usageRepository = InMemoryUsageRepository()
+        val licenseConfig = requireNotNull(config.licenseSubsystem) {
+            "Persistent license subsystem is required; configure DATABASE_URL, LICENSE_CODE_PEPPER and BILLING_PLANS"
+        }
+        val dataSource = DatabaseFactory.create(licenseConfig.database)
+        val instanceGuard = try {
+            DatabaseMigrator(dataSource).migrate()
+            if (config.deployment.isProduction) {
+                PostgresSingleInstanceGuard.acquire(dataSource)
+            } else {
+                null
+            }
+        } catch (failure: Throwable) {
+            dataSource.close()
+            throw failure
+        }
+        Runtime.getRuntime().addShutdownHook(Thread {
+            instanceGuard?.close()
+            dataSource.close()
+        })
+
+        val usageRepository = JdbcUsageRepository(dataSource)
 
         val router = AiRouter(
             providerManager = providerManager,
@@ -86,18 +123,58 @@ object ServerBootstrap {
             metrics = metrics
         )
 
-        // ADMIN-права выдаются только явно перечисленным клиентам.
+        val licenseCrypto = LicenseCrypto(licenseConfig.codePepper)
+        val licenseRepository = JdbcLicenseRepository(dataSource, licenseCrypto)
+        val licenseService = LicenseService(licenseRepository, licenseCrypto)
+        licenseConfig.plans.forEach(licenseService::upsertPlan)
+
+        val billingRepository = JdbcBillingRepository(dataSource)
+        val billingProviders = listOf(
+            PaddleBillingProvider(licenseConfig.paddle, transport, json),
+            HeleketBillingProvider(licenseConfig.heleket, transport, json)
+        )
+        val billingService = BillingService(
+            billingRepository = billingRepository,
+            licenseRepository = licenseRepository,
+            providers = billingProviders
+        )
+
+        // ADMIN-права выдаются только явно перечисленным статическим клиентам.
         val adminClients = (System.getenv("JARVIS_ADMIN_CLIENTS") ?: "")
             .split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
-
-        val authenticator = TokenAuthenticator(config.staticClientTokens) { clientId ->
+        val staticAuthenticator = TokenAuthenticator(config.staticClientTokens) { clientId ->
             if (clientId in adminClients) ClientTier.ADMIN else ClientTier.FREE
         }
+        val authenticator = CompositeAuthenticator(
+            staticAuthenticator,
+            LicenseTokenAuthenticator(licenseService)
+        )
+        val authorizer = TierAuthorizer()
+        val licenseHttpHandler = LicenseBillingHttpHandler(
+            authenticator = authenticator,
+            authorizer = authorizer,
+            licenseService = licenseService,
+            billingService = billingService,
+            paddleWebhookVerifier = PaddleWebhookVerifier(licenseConfig.paddle, json),
+            heleketWebhookVerifier = HeleketWebhookVerifier(licenseConfig.heleket, json),
+            redeemRateLimiter = PostgresRateLimiter(
+                dataSource, "license_redeem", licenseConfig.redeemRateLimit
+            ),
+            authenticatedRateLimiter = PostgresRateLimiter(
+                dataSource, "license_auth", licenseConfig.authenticatedRateLimit
+            ),
+            webhookRateLimiter = PostgresRateLimiter(
+                dataSource, "billing_webhook", licenseConfig.webhookRateLimit
+            ),
+            validation = config.validation,
+            logger = logger,
+            json = json
+        )
 
         return JarvisApiHandler(
             authenticator = authenticator,
-            authorizer = TierAuthorizer(),
-            rateLimiter = SlidingWindowRateLimiter(config.rateLimit),
+            authorizer = authorizer,
+            rateLimiter = PostgresRateLimiter(dataSource, "ai_execute", config.rateLimit),
             router = router,
             validation = config.validation,
             logger = logger,
@@ -106,7 +183,7 @@ object ServerBootstrap {
             healthProvider = {
                 val snapshot = providerManager.healthSnapshot()
                 buildString {
-                    append("""{"status":"ok","providers":{""")
+                    append("""{"status":"ok","database":"ok","providers":{""")
                     append(
                         snapshot.entries.joinToString(",") { (id, s) ->
                             """"${id.name}":{"status":"${s.status}","circuit":"${s.circuitState}"}"""
@@ -115,7 +192,11 @@ object ServerBootstrap {
                     append("}}")
                 }
             },
-            metricsProvider = { renderMetrics(metrics) }
+            metricsProvider = { renderMetrics(metrics) },
+            entitlementChecker = { client ->
+                client.accountId?.let(licenseService::hasActiveEntitlement) == true
+            },
+            extensionHandler = licenseHttpHandler::handle
         )
     }
 
@@ -156,49 +237,84 @@ fun main() {
     }
 
     val handler = ServerBootstrap.buildHandler(config)
-    val server = HttpServer.create(InetSocketAddress("0.0.0.0", config.port), 0)
+    val proxySecurity = ProxyRequestSecurity(config.deployment)
+    val server = HttpServer.create(
+        InetSocketAddress(config.deployment.bindHost, config.port), 0
+    )
     server.executor = Executors.newFixedThreadPool(8)
 
     server.createContext("/") { exchange: HttpExchange ->
-        try {
-            val maxBody = config.validation.maxBodyBytes
-            val rawBody = exchange.requestBody.readNBytes((maxBody + 1).toInt())
-            val declaredLength = exchange.requestHeaders.getFirst("Content-Length")
-                ?.toLongOrNull() ?: rawBody.size.toLong()
-
-            val response = runBlocking {
-                handler.handle(
-                    HttpRequestContext(
-                        method = exchange.requestMethod,
-                        path = exchange.requestURI.path,
-                        authorizationHeader = exchange.requestHeaders.getFirst("Authorization"),
-                        body = String(rawBody, StandardCharsets.UTF_8),
-                        contentLength = maxOf(declaredLength, rawBody.size.toLong())
-                    )
-                )
-            }
-
-            val bytes = response.body.toByteArray(StandardCharsets.UTF_8)
-            exchange.responseHeaders.add("Content-Type", "application/json; charset=utf-8")
-            response.headers.forEach { (k, v) -> exchange.responseHeaders.add(k, v) }
-            exchange.sendResponseHeaders(response.status, bytes.size.toLong())
-            exchange.responseBody.use { it.write(bytes) }
-        } catch (e: Throwable) {
-            // Наружу — никаких деталей исключения.
-            logger.error("unhandled request failure", "error" to e.javaClass.simpleName)
-            val body = """{"success":false,"error":{"code":"INTERNAL_ERROR",""" +
-                """"message":"Internal server error","requestId":"-"}}"""
+        fun respond(status: Int, body: String, headers: Map<String, String> = emptyMap()) {
             val bytes = body.toByteArray(StandardCharsets.UTF_8)
-            runCatching {
-                exchange.responseHeaders.add("Content-Type", "application/json; charset=utf-8")
-                exchange.sendResponseHeaders(500, bytes.size.toLong())
+            exchange.responseHeaders.set("Content-Type", "application/json; charset=utf-8")
+            headers.forEach { (key, value) -> exchange.responseHeaders.set(key, value) }
+            if (exchange.requestMethod == "HEAD") {
+                exchange.sendResponseHeaders(status, -1)
+            } else {
+                exchange.sendResponseHeaders(status, bytes.size.toLong())
                 exchange.responseBody.use { it.write(bytes) }
+            }
+        }
+
+        try {
+            val requestHeaders = exchange.requestHeaders.entries.associate { (name, values) ->
+                name to values.joinToString(",")
+            }
+            when (val origin = proxySecurity.resolve(
+                peerAddress = exchange.remoteAddress.address.hostAddress,
+                path = exchange.requestURI.path,
+                headers = requestHeaders
+            )) {
+                is RequestOriginResult.Rejected -> respond(
+                    origin.status,
+                    """{"success":false,"error":{"code":"${origin.code}",""" +
+                        """"message":"Secure transport required","requestId":"-"}}""",
+                    mapOf("Cache-Control" to "no-store")
+                )
+                is RequestOriginResult.Accepted -> {
+                    val maxBody = config.validation.maxBodyBytes
+                    val rawBody = exchange.requestBody.readNBytes((maxBody + 1).toInt())
+                    val declaredLength = exchange.requestHeaders.getFirst("Content-Length")
+                        ?.toLongOrNull() ?: rawBody.size.toLong()
+                    val response = runBlocking {
+                        handler.handle(
+                            HttpRequestContext(
+                                method = exchange.requestMethod,
+                                path = exchange.requestURI.path,
+                                authorizationHeader = exchange.requestHeaders.getFirst("Authorization"),
+                                body = String(rawBody, StandardCharsets.UTF_8),
+                                contentLength = maxOf(declaredLength, rawBody.size.toLong()),
+                                headers = requestHeaders,
+                                remoteAddress = origin.origin.clientAddress,
+                                scheme = origin.origin.scheme,
+                                host = origin.origin.host,
+                                viaTrustedProxy = origin.origin.viaTrustedProxy
+                            )
+                        )
+                    }
+                    respond(response.status, response.body, response.headers)
+                }
+            }
+        } catch (e: Throwable) {
+            // Наружу — никаких деталей исключения или заголовков запроса.
+            logger.error("unhandled request failure", "error" to e.javaClass.simpleName)
+            runCatching {
+                respond(
+                    500,
+                    """{"success":false,"error":{"code":"INTERNAL_ERROR",""" +
+                        """"message":"Internal server error","requestId":"-"}}"""
+                )
             }
         } finally {
             exchange.close()
         }
     }
 
-    logger.info("JARVIS API started", "port" to config.port.toString())
+    logger.info(
+        "JARVIS API started",
+        "environment" to config.deployment.environment.name,
+        "bindHost" to config.deployment.bindHost,
+        "port" to config.port.toString()
+    )
     server.start()
 }

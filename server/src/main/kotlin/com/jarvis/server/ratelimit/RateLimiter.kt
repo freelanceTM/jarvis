@@ -12,20 +12,25 @@ sealed class RateLimitDecision {
     data class Limited(val retryAfterSeconds: Long, val scope: String) : RateLimitDecision()
 }
 
+interface RateLimiter {
+    fun check(clientId: String): RateLimitDecision
+    fun reset(clientId: String)
+}
+
 /**
  * Rate limiting на СЕРВЕРЕ (пункт 8 ТЗ), с привязкой к identity клиента.
  *
  * Скользящее окно на две шкалы: запросов в минуту и в сутки. Значения —
  * из конфигурации, а не выдуманные продуктовые лимиты.
  *
- * Реализация in-memory и потокобезопасная (синхронизация по записи клиента).
- * Для одного инстанса этого достаточно; при горизонтальном масштабировании
- * понадобится общий Redis — отмечено в известных ограничениях.
+ * In-memory потокобезопасная реализация для изолированных unit tests.
+ * Production composition использует PostgresRateLimiter для всех scopes;
+ * этот класс не является production security boundary.
  */
 class SlidingWindowRateLimiter(
     private val config: RateLimitConfig,
     private val clock: () -> Long = System::currentTimeMillis
-) {
+) : RateLimiter {
     private companion object {
         const val MINUTE_MS = 60_000L
         const val DAY_MS = 24 * 60 * 60 * 1000L
@@ -43,7 +48,7 @@ class SlidingWindowRateLimiter(
      *
      * Вызывается ОДИН раз на запрос, до обращения к AI Router.
      */
-    fun check(clientId: String): RateLimitDecision {
+    override fun check(clientId: String): RateLimitDecision {
         val window = windows.computeIfAbsent(clientId) { ClientWindow() }
         val now = clock()
 
@@ -79,7 +84,7 @@ class SlidingWindowRateLimiter(
     private fun retryAfterSeconds(remainingMs: Long): Long =
         ((remainingMs.coerceAtLeast(1L) + 999L) / 1000L).coerceAtLeast(1L)
 
-    fun reset(clientId: String) {
+    override fun reset(clientId: String) {
         windows.remove(clientId)
     }
 }

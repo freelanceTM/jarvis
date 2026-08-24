@@ -14,7 +14,7 @@ import kotlinx.serialization.Serializable
 enum class ApiRequestSource { VOICE, CHAT }
 
 /** Уровень приватности (зеркалит Android `PrivacyLevel`). */
-enum class ApiPrivacyLevel { NORMAL, PRIVATE, SENSITIVE }
+enum class ApiPrivacyLevel { UNKNOWN, NORMAL, PRIVATE, SENSITIVE }
 
 /** Как был выполнен запрос (зеркалит Android `ExecutionType`). */
 enum class ApiExecutionType { CLOUD_AI }
@@ -31,9 +31,12 @@ data class AiExecutionRequest(
 
     @SerialName("source") val source: ApiRequestSource = ApiRequestSource.CHAT,
 
-    @SerialName("privacyLevel") val privacyLevel: ApiPrivacyLevel = ApiPrivacyLevel.NORMAL,
+    @SerialName("privacyLevel") val privacyLevel: ApiPrivacyLevel = ApiPrivacyLevel.UNKNOWN,
 
     @SerialName("requiresWeb") val requiresWeb: Boolean = false,
+
+    /** Per-request user consent. It never overrides UNKNOWN or classifier failure. */
+    @SerialName("cloudExplicitlyAllowed") val cloudExplicitlyAllowed: Boolean = false,
 
     /**
      * Клиентский correlation id. Если не передан — сервер сгенерирует свой.
@@ -99,6 +102,14 @@ enum class ApiErrorCode(val httpStatus: Int, val safeMessage: String) {
     FORBIDDEN(403, "Client is not allowed to perform this operation"),
     RATE_LIMITED(429, "Rate limit exceeded"),
     PRIVACY_POLICY_VIOLATION(403, "Request privacy level forbids cloud execution"),
+    LICENSE_NOT_REDEEMABLE(404, "License cannot be redeemed"),
+    LICENSE_EXPIRED(410, "License expired"),
+    LICENSE_REVOKED(403, "License revoked or disabled"),
+    LICENSE_INVALID_STATE(409, "License state does not allow this operation"),
+    LICENSE_WRONG_DEVICE(403, "License is bound to another device"),
+    PAYMENT_REQUIRED(402, "Active billing entitlement required"),
+    BILLING_PROVIDER_UNAVAILABLE(503, "Billing provider unavailable"),
+    BILLING_EVENT_INVALID(401, "Billing event verification failed"),
     PROVIDER_UNAVAILABLE(503, "AI provider unavailable"),
     PROVIDER_TIMEOUT(504, "AI provider timeout"),
     PROVIDER_ERROR(502, "AI provider error"),
