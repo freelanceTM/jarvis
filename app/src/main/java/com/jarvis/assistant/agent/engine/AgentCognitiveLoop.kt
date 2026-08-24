@@ -126,12 +126,16 @@ class AgentCognitiveLoop @Inject constructor(
                     error = "VERIFY_FAILED",
                     nextActionHint = NextActionHint.REPLAN
                 )
-                Log.w(TAG, "VERIFY failed for step '${step.description}': expected '$expected' not on screen")
+                Log.w(
+                    TAG,
+                    "VERIFY failed | stepId=${step.stepId} | tool=${step.toolCall.toolId} | " +
+                        "expectedChars=${expected.orEmpty().length}"
+                )
 
                 val replanned = tryReplan(currentPlan, step, verifyObservation, replanAttempts)
                 if (replanned != null) {
                     replanAttempts++
-                    Log.d(TAG, "Re-plan $replanAttempts/$MAX_REPLANS after verify failure: ${replanned.explanation}")
+                    Log.d(TAG, "Re-plan $replanAttempts/$MAX_REPLANS after verify failure")
                     currentPlan = replanned
                     currentStepIdx = 0
                     continue
@@ -147,7 +151,11 @@ class AgentCognitiveLoop @Inject constructor(
             }
 
             isAllSuccessful = false
-            Log.w(TAG, "Step '${step.description}' not completed: ${observation.summary} (${observation.nextActionHint})")
+            Log.w(
+                TAG,
+                "Step not completed | stepId=${step.stepId} | tool=${step.toolCall.toolId} | " +
+                    "hint=${observation.nextActionHint}"
+            )
 
             when (observation.nextActionHint) {
                 // Android требует пользователя / возможность недоступна:
@@ -169,7 +177,7 @@ class AgentCognitiveLoop @Inject constructor(
                     val replanned = tryReplan(currentPlan, step, observation, replanAttempts)
                     if (replanned != null) {
                         replanAttempts++
-                        Log.d(TAG, "Re-plan $replanAttempts/$MAX_REPLANS: ${replanned.explanation}")
+                        Log.d(TAG, "Re-plan $replanAttempts/$MAX_REPLANS")
                         currentPlan = replanned
                         currentStepIdx = 0
                         continue
@@ -235,11 +243,14 @@ class AgentCognitiveLoop @Inject constructor(
         val screenContent = readResult.summary
 
         return if (readResult.isSuccess && screenContent.contains(expectedText, ignoreCase = true)) {
-            Log.d(TAG, "VERIFY OK: '$expectedText' found on screen")
+            Log.d(TAG, "VERIFY OK | expectedChars=${expectedText.length}")
             true
         } else {
-            Log.w(TAG, "VERIFY failed: '$expectedText' not found. Screen: ${screenContent.take(120)}")
-            stepObservations.add(StepObservation.StepFailed(step, "VERIFY_FAILED: '$expectedText' не найден на экране"))
+            Log.w(
+                TAG,
+                "VERIFY failed | expectedChars=${expectedText.length} | screenChars=${screenContent.length}"
+            )
+            stepObservations.add(StepObservation.StepFailed(step, "VERIFY_FAILED"))
             false
         }
     }
