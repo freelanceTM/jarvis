@@ -3,40 +3,25 @@ package com.jarvis.assistant.data.local
 import androidx.room.migration.Migration
 
 /**
- * Все миграции Room-базы JARVIS (пункт аудита #7 — HIGH).
+ * Supported Room migrations from the first release-candidate schema onward.
  *
- * ─── ПРОЦЕСС (обязателен для любого изменения схемы) ─────────────────────
- * 1. Измени сущность(и) в `entities/`.
- * 2. Подними `version` в [JarvisDatabase] (5 → 6).
- * 3. Добавь миграцию `MIGRATION_5_6` в массив [ALL] ниже.
- * 4. Пересобери проект: Room экспортирует новую схему в `app/schemas/`
- *    (ksp arg `room.schemaLocation`), файл 6.json появится рядом с 5.json.
- * 5. Добавь кейс в androidTest `JarvisDatabaseMigrationTest`
- *    (MigrationTestHelper: createDatabase(5) → runMigrationsAndValidate(6)).
- * 6. Закоммить и 5.json, и 6.json — схемы — часть репозитория.
+ * Only v5 has an authentic exported schema in this repository. Schemas v1-v4
+ * cannot be reconstructed safely without Git history/released artifacts, so
+ * guessed migrations are forbidden. [LegacyDatabasePolicy] implements the
+ * declared breaking-change strategy: archive an unsupported legacy DB inside
+ * app-private storage, record the event, then create a clean v5 database.
  *
- * БЕЗ миграции Room бросит IllegalStateException при открытии базы
- * (fallbackToDestructiveMigration удалён): данные НЕ стираются молча.
- *
- * Примечание: схемы версий 1–4 не сохранялись (exportSchema был выключен),
- * поэтому переходы с них недоступны; для устройств с такими базами
- * потребуется восстановить историю схем из git или одноразовый перенос.
+ * For every future schema change:
+ * 1. update entities and increment [JarvisDatabase] version;
+ * 2. add `MIGRATION_X_Y` below;
+ * 3. export and commit both schema JSON files;
+ * 4. add a MigrationTestHelper step and full-chain test;
+ * 5. never add a broad destructive fallback.
  */
 object JarvisMigrations {
+    /** Earliest schema from which in-place upgrades are supported. */
+    const val MIN_SUPPORTED_VERSION = 5
 
-    /**
-     * Все миграции в порядке возрастания версий.
-     *
-     * Пример будущей миграции 5 → 6:
-     * ```
-     * private val MIGRATION_5_6 = object : Migration(5, 6) {
-     *     override fun migrate(db: SupportSQLiteDatabase) {
-     *         db.execSQL("ALTER TABLE messages ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0")
-     *     }
-     * }
-     * ```
-     */
-    val ALL: Array<Migration> = arrayOf(
-        // MIGRATION_5_6 — добавить сюда при первом изменении схемы после v5.
-    )
+    /** Future supported migrations in ascending order. */
+    val ALL: Array<Migration> = emptyArray()
 }
