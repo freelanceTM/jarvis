@@ -1,6 +1,7 @@
 package com.jarvis.assistant.voice.service
 
 import com.jarvis.assistant.R
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
@@ -11,6 +12,7 @@ import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.net.wifi.WifiManager
 import android.os.BatteryManager
@@ -53,6 +55,7 @@ class JarvisVoiceService : Service() {
     private var telephonyManager: TelephonyManager? = null
     private var telephonyCallback: TelephonyCallback? = null
     private val telephonyExecutor = Executors.newSingleThreadExecutor()
+    private var startupReady = false
 
     companion object {
         const val CHANNEL_ID = "jarvis_voice"
@@ -60,22 +63,36 @@ class JarvisVoiceService : Service() {
         const val NOTIFICATION_ID = 1001
         
         // WakeLock timeout: 8 часов (для длительной фоновой работы)
-                private const val TAG = "JarvisVoiceService"
-private const val WAKELOCK_TIMEOUT_MS = 8 * 60 * 60 * 1000L
+        private const val TAG = "JarvisVoiceService"
+        private const val WAKELOCK_TIMEOUT_MS = 8 * 60 * 60 * 1000L
 
         const val ACTION_START = "com.jarvis.action.START_SERVICE"
         const val ACTION_STOP = "com.jarvis.action.STOP_SERVICE"
         const val ACTION_PAUSE = "com.jarvis.action.PAUSE_SERVICE"
         const val ACTION_RESUME = "com.jarvis.action.RESUME_SERVICE"
 
-        fun start(context: Context) {
+        /** Returns false instead of attempting an illegal microphone FGS start. */
+        fun start(context: Context): Boolean {
+            if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                Log.w(TAG, "microphone foreground service start denied: permission missing")
+                return false
+            }
             val intent = Intent(context, JarvisVoiceService::class.java).apply {
                 action = ACTION_START
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            return try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+                true
+            } catch (failure: RuntimeException) {
+                // Includes platform background/while-in-use FGS start restrictions.
+                Log.e(TAG, "microphone foreground service start rejected | type=${failure.javaClass.simpleName}")
+                false
             }
         }
 
@@ -105,19 +122,46 @@ private const val WAKELOCK_TIMEOUT_MS = 8 * 60 * 60 * 1000L
 
     override fun onCreate() {
         super.onCreate()
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "service creation aborted: microphone permission missing")
+            stopSelf()
+            return
+        }
         createNotificationChannel()
-        startServiceForeground(buildNotification(getString(R.string.jarvis_slushaet)))
+        try {
+            startServiceForeground(buildNotification(getString(R.string.jarvis_slushaet)))
+        } catch (failure: RuntimeException) {
+            Log.e(TAG, "service creation aborted: foreground promotion rejected | type=${failure.javaClass.simpleName}")
+            stopSelf()
+            return
+        }
         acquireWakeLock()
         registerTelephonyListener()
         registerSystemReceivers()
         initWorkingMemoryDefaults()
         observeOrchestrator()
+        startupReady = true
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (!startupReady) {
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
         when (intent?.action) {
             ACTION_START, ACTION_RESUME -> {
-                startServiceForeground(buildNotification(getString(R.string.jarvis_slushaet)))
+                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    Log.w(TAG, "service resume denied: microphone permission missing")
+                    stopSelf(startId)
+                    return START_NOT_STICKY
+                }
+                try {
+                    startServiceForeground(buildNotification(getString(R.string.jarvis_slushaet)))
+                } catch (failure: RuntimeException) {
+                    Log.e(TAG, "service resume rejected | type=${failure.javaClass.simpleName}")
+                    stopSelf(startId)
+                    return START_NOT_STICKY
+                }
                 orchestrator.startServicePipeline()
             }
             ACTION_PAUSE -> {
@@ -170,6 +214,10 @@ private const val WAKELOCK_TIMEOUT_MS = 8 * 60 * 60 * 1000L
      */
     @SuppressLint("MissingPermission")
     private fun registerTelephonyListener() {
+        if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+            Log.i(TAG, "call-state pause disabled: phone-state permission missing")
+            return
+        }
         try {
             telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
             
