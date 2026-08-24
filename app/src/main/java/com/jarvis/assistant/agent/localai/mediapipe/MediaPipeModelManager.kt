@@ -12,11 +12,16 @@ import com.jarvis.assistant.agent.localai.LocalModelState
 import com.jarvis.assistant.core.dispatcher.CoroutineDispatchers
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
+import kotlin.coroutines.coroutineContext
 import javax.inject.Singleton
 
 /**
@@ -52,6 +57,7 @@ class MediaPipeModelManager @Inject constructor(
 
     /** Защищает загрузку/выгрузку: параллельные запросы не грузят модель дважды. */
     private val lifecycleMutex = Mutex()
+    private val lifecycleScope = CoroutineScope(SupervisorJob() + dispatchers.default)
 
     @Volatile
     private var currentState: LocalModelState = LocalModelState.NotInitialized
@@ -72,13 +78,13 @@ class MediaPipeModelManager @Inject constructor(
             override fun onTrimMemory(level: Int) {
                 if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
                     Log.i(TAG, "onTrimMemory(level=$level) — выгружаю локальную модель")
-                    unloadBlocking()
+                    lifecycleScope.launch { unload() }
                 }
             }
 
             override fun onLowMemory() {
                 Log.i(TAG, "onLowMemory — выгружаю локальную модель")
-                unloadBlocking()
+                lifecycleScope.launch { unload() }
             }
 
             override fun onConfigurationChanged(newConfig: Configuration) = Unit
@@ -113,14 +119,31 @@ class MediaPipeModelManager @Inject constructor(
         currentState = LocalModelState.Loading
         Log.i(TAG, "model loading | id=${spec.modelId} | sizeMb=${spec.approxSizeMb}")
 
+        var createdDuringAttempt: LocalModelRuntime? = null
         return@withLock try {
             val startedAt = System.currentTimeMillis()
             val created = withContext(dispatchers.default) {
-                runtimeFactory.create(modelPath = file.absolutePath, spec = spec)
+                val candidate = runtimeFactory.create(modelPath = file.absolutePath, spec = spec)
+                createdDuringAttempt = candidate
+                try {
+                    // Native creation itself is blocking, but cancellation while
+                    // it runs must close the freshly created engine immediately
+                    // rather than publishing/leaking it after the caller left.
+                    coroutineContext.ensureActive()
+                    candidate
+                } catch (cancelled: CancellationException) {
+                    (candidate as? AutoCloseable)?.close()
+                    createdDuringAttempt = null
+                    throw cancelled
+                }
             }
+            // Also cover cancellation after the worker block completes but before
+            // withContext dispatches its value back to this coroutine.
+            coroutineContext.ensureActive()
             val loadTimeMs = System.currentTimeMillis() - startedAt
 
             runtime = created
+            createdDuringAttempt = null // ownership transferred to the manager
             currentState = LocalModelState.Ready(modelId = spec.modelId, loadTimeMs = loadTimeMs)
             Log.i(
                 TAG,
@@ -129,6 +152,9 @@ class MediaPipeModelManager @Inject constructor(
             )
             currentState
         } catch (e: CancellationException) {
+            (createdDuringAttempt as? AutoCloseable)?.close()
+            createdDuringAttempt = null
+            runtime = null
             currentState = LocalModelState.NotInitialized
             throw e
         } catch (e: Throwable) {
@@ -143,12 +169,6 @@ class MediaPipeModelManager @Inject constructor(
     }
 
     override suspend fun unload() = lifecycleMutex.withLock {
-        closeRuntime()
-    }
-
-    /** Синхронная выгрузка для колбэков системы (они не suspend). */
-    private fun unloadBlocking() {
-        if (runtime == null) return
         closeRuntime()
     }
 
