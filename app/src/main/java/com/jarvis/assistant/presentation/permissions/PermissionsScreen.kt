@@ -3,10 +3,7 @@ package com.jarvis.assistant.presentation.permissions
 import com.jarvis.assistant.R
 import android.Manifest
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.os.Build
-import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -64,6 +61,13 @@ fun PermissionsScreen(
                 isRequired = false
             ),
             PermissionItem(
+                permission = Manifest.permission.READ_PHONE_STATE,
+                title = "Состояние звонка",
+                description = "Для автоматической паузы распознавания во время звонка",
+                icon = Icons.Default.Phone,
+                isRequired = false
+            ),
+            PermissionItem(
                 permission = Manifest.permission.READ_CONTACTS,
                 title = context.getString(R.string.kontakty),
                 description = context.getString(R.string.dlya_poiska_kontaktov_po_imeni),
@@ -85,8 +89,8 @@ fun PermissionsScreen(
                 isRequired = false
             ),
             PermissionItem(
-                permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) 
-                    Manifest.permission.BLUETOOTH_CONNECT 
+                permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                    Manifest.permission.BLUETOOTH_CONNECT
                 else Manifest.permission.BLUETOOTH,
                 title = "Bluetooth",
                 description = context.getString(R.string.dlya_raboty_s_besprovodnymi_naushnikami),
@@ -102,15 +106,15 @@ fun PermissionsScreen(
             )
         )
     }
-    
+
     var permissionStates by remember {
         mutableStateOf(
-            permissionItems.associate { 
-                it.permission to isPermissionGranted(context, it.permission) 
+            permissionItems.associate {
+                it.permission to isPermissionGranted(context, it.permission)
             }
         )
     }
-    
+
     val multiplePermissionsLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -119,24 +123,24 @@ fun PermissionsScreen(
                 this[permission] = granted
             }
         }
-        
+
         // Проверяем, все ли обязательные разрешения получены
         val allRequiredGranted = permissionItems
             .filter { it.isRequired }
             .all { permissionStates[it.permission] == true }
-        
+
         if (allRequiredGranted) {
             onAllPermissionsGranted()
         }
     }
-    
+
     val allRequiredGranted = permissionItems
         .filter { it.isRequired }
         .all { permissionStates[it.permission] == true }
-    
+
     val grantedCount = permissionStates.values.count { it }
     val totalCount = permissionItems.size
-    
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -145,7 +149,7 @@ fun PermissionsScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(32.dp))
-        
+
         // Header
         Box(
             modifier = Modifier
@@ -161,27 +165,27 @@ fun PermissionsScreen(
                 tint = MaterialTheme.colorScheme.primary
             )
         }
-        
+
         Spacer(modifier = Modifier.height(24.dp))
-        
+
         Text(
             text = stringResource(R.string.razresheniya_jarvis),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground
         )
-        
+
         Spacer(modifier = Modifier.height(8.dp))
-        
+
         Text(
             text = stringResource(R.string.dlya_polnocennoy_raboty_golosovogo_assistenta_neobhodimy_sle),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
-        
+
         Spacer(modifier = Modifier.height(8.dp))
-        
+
         // Progress indicator
         LinearProgressIndicator(
             progress = { grantedCount.toFloat() / totalCount.toFloat() },
@@ -192,16 +196,16 @@ fun PermissionsScreen(
             color = MaterialTheme.colorScheme.primary,
             trackColor = MaterialTheme.colorScheme.surfaceVariant
         )
-        
+
         Text(
             text = stringResource(R.string.iz_razresheniy, grantedCount, totalCount),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp)
         )
-        
+
         Spacer(modifier = Modifier.height(24.dp))
-        
+
         // Permission list
         LazyColumn(
             modifier = Modifier.weight(1f),
@@ -213,16 +217,13 @@ fun PermissionsScreen(
                     isGranted = permissionStates[item.permission] == true,
                     onRequestPermission = {
                         multiplePermissionsLauncher.launch(arrayOf(item.permission))
-                    },
-                    onOpenSettings = {
-                        openAppSettings(context)
                     }
                 )
             }
         }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         // Buttons
         Button(
             onClick = {
@@ -230,7 +231,7 @@ fun PermissionsScreen(
                     .filter { permissionStates[it.permission] != true }
                     .map { it.permission }
                     .toTypedArray()
-                
+
                 if (notGranted.isNotEmpty()) {
                     multiplePermissionsLauncher.launch(notGranted)
                 } else {
@@ -254,7 +255,7 @@ fun PermissionsScreen(
                 fontWeight = FontWeight.Medium
             )
         }
-        
+
         if (!allRequiredGranted) {
             TextButton(
                 onClick = onSkip,
@@ -273,16 +274,15 @@ fun PermissionsScreen(
 private fun PermissionCard(
     item: PermissionItem,
     isGranted: Boolean,
-    onRequestPermission: () -> Unit,
-    onOpenSettings: () -> Unit
+    onRequestPermission: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isGranted) 
+            containerColor = if (isGranted)
                 MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-            else 
+            else
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         )
     ) {
@@ -297,9 +297,9 @@ private fun PermissionCard(
                     .size(48.dp)
                     .clip(CircleShape)
                     .background(
-                        if (isGranted) 
-                            MaterialTheme.colorScheme.primary 
-                        else 
+                        if (isGranted)
+                            MaterialTheme.colorScheme.primary
+                        else
                             MaterialTheme.colorScheme.surfaceVariant
                     ),
                 contentAlignment = Alignment.Center
@@ -307,16 +307,16 @@ private fun PermissionCard(
                 Icon(
                     imageVector = if (isGranted) Icons.Default.Check else item.icon,
                     contentDescription = null,
-                    tint = if (isGranted) 
-                        MaterialTheme.colorScheme.onPrimary 
-                    else 
+                    tint = if (isGranted)
+                        MaterialTheme.colorScheme.onPrimary
+                    else
                         MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(24.dp)
                 )
             }
-            
+
             Spacer(modifier = Modifier.width(16.dp))
-            
+
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -340,7 +340,7 @@ private fun PermissionCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            
+
             if (!isGranted) {
                 IconButton(onClick = onRequestPermission) {
                     Icon(
@@ -355,14 +355,6 @@ private fun PermissionCard(
 }
 
 private fun isPermissionGranted(context: Context, permission: String): Boolean {
-    return ContextCompat.checkSelfPermission(context, permission) == 
+    return ContextCompat.checkSelfPermission(context, permission) ==
         PackageManager.PERMISSION_GRANTED
-}
-
-private fun openAppSettings(context: Context) {
-    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-        data = Uri.fromParts("package", context.packageName, null)
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
-    context.startActivity(intent)
 }
