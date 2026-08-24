@@ -1,7 +1,11 @@
 package com.jarvis.assistant.data.repository
 
 import com.jarvis.assistant.ai.AIClient
-import com.jarvis.assistant.ai.JarvisApiAiClient
+import com.jarvis.assistant.ai.ContextualCloudAIClient
+import com.jarvis.assistant.ai.PrivacyCloudBlockedException
+import com.jarvis.assistant.agent.decision.PrivacyClassifier
+import com.jarvis.assistant.agent.decision.PrivacyContent
+import com.jarvis.assistant.agent.decision.PrivacyLevel
 import com.jarvis.assistant.core.dispatcher.CoroutineDispatchers
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.domain.models.Message
@@ -36,6 +40,15 @@ class AIRepositoryImpl @Inject constructor(
         systemPrompt: String,
         history: List<Message>
     ): Resource<String> = withContext(dispatchers.io) {
+        val effective = classifyOutbound(
+            prompt = prompt,
+            systemPrompt = systemPrompt,
+            relatedContent = history.map(Message::text),
+            declared = PrivacyLevel.UNKNOWN
+        )
+        if (effective != PrivacyLevel.NORMAL) {
+            return@withContext privacyBlocked(effective)
+        }
         aiClient.complete(
             prompt = prompt,
             systemPrompt = systemPrompt,
@@ -54,19 +67,47 @@ class AIRepositoryImpl @Inject constructor(
         systemPrompt: String,
         source: String,
         privacyLevel: String,
-        requiresWeb: Boolean
+        requiresWeb: Boolean,
+        cloudExplicitlyAllowed: Boolean
     ): Resource<String> = withContext(dispatchers.io) {
+        val declared = PrivacyLevel.entries.firstOrNull { it.name == privacyLevel.uppercase() }
+            ?: return@withContext privacyBlocked(PrivacyLevel.UNKNOWN)
+        val effective = classifyOutbound(prompt, systemPrompt, emptyList(), declared)
+        val permitted = effective == PrivacyLevel.NORMAL ||
+            (effective in setOf(PrivacyLevel.PRIVATE, PrivacyLevel.SENSITIVE) && cloudExplicitlyAllowed)
+        if (!permitted) {
+            return@withContext privacyBlocked(effective)
+        }
         when (val client = aiClient) {
-            is JarvisApiAiClient -> client.completeWithContext(
+            is ContextualCloudAIClient -> client.completeWithContext(
                 prompt = prompt,
                 systemPrompt = systemPrompt,
                 source = source,
-                privacyLevel = privacyLevel,
-                requiresWeb = requiresWeb
+                privacyLevel = effective.name,
+                requiresWeb = requiresWeb,
+                cloudExplicitlyAllowed = cloudExplicitlyAllowed
             )
-            else -> client.complete(prompt, systemPrompt, emptyList(), null)
+            // An unknown implementation cannot silently discard privacy metadata.
+            else -> privacyBlocked(PrivacyLevel.UNKNOWN)
         }
     }
+
+    private fun classifyOutbound(
+        prompt: String,
+        systemPrompt: String,
+        relatedContent: List<String>,
+        declared: PrivacyLevel
+    ): PrivacyLevel {
+        val automatic = PrivacyClassifier.classifySafely(
+            PrivacyContent(prompt, listOf(systemPrompt) + relatedContent)
+        )
+        return PrivacyClassifier.effective(declared, automatic)
+    }
+
+    private fun privacyBlocked(level: PrivacyLevel): Resource.Error = Resource.Error(
+        PrivacyCloudBlockedException(level),
+        "Облачная обработка запрещена политикой приватности"
+    )
 }
 
 @Singleton
