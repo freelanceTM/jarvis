@@ -61,7 +61,7 @@ class ExecutionDecisionEngine @Inject constructor(
             "Нет подключения к интернету. Локальные команды (фонарик, звук, батарея, приложения, память) работают офлайн."
 
         private const val PRIVACY_BLOCKED_MESSAGE =
-            "Запрос помечен как приватный, сэр. Локально выполнить его не удалось, а в облако я его без вашего явного разрешения не отправлю."
+            "Запрос содержит приватные данные или не прошёл проверку приватности. Во внешний сервис он не отправлен."
 
         private const val GENERIC_ERROR_MESSAGE = "Не удалось выполнить запрос, сэр."
         private const val EMPTY_REQUEST_MESSAGE = "Запрос не может быть пустым."
@@ -89,7 +89,10 @@ class ExecutionDecisionEngine @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Unexpected failure while executing request (source=${request.source})", e)
+            Log.e(
+                TAG,
+                "Unexpected failure while executing request | source=${request.source} | type=${e.javaClass.simpleName}"
+            )
             ExecutionResult.Error(
                 message = GENERIC_ERROR_MESSAGE,
                 reason = DecisionReason.UNEXPECTED_ERROR
@@ -119,6 +122,12 @@ class ExecutionDecisionEngine @Inject constructor(
         // быть «съеден» одиночным офлайн-сценарием (поведение AgentPipeline).
         val plan = agentExecutor.planFor(request)
         if (plan != null) {
+            if (request.effectivePrivacyLevel != PrivacyLevel.NORMAL && plan.steps.any {
+                    toolExecutor.mayDiscloseExternally(it.toolCall.toolId) != false
+                }
+            ) {
+                return privacyBlocked(DecisionReason.EXTERNAL_TOOL_BLOCKED_BY_PRIVACY)
+            }
             logRoute(ExecutionType.AGENT, DecisionReason.COMPLEX_MULTI_STEP, routing.confidence)
             return agentExecutor.run(plan)
         }
@@ -169,7 +178,7 @@ class ExecutionDecisionEngine @Inject constructor(
         return when (routing) {
             is CommandRoutingResult.DeviceCommand -> {
                 logRoute(ExecutionType.DEVICE_TOOL, DecisionReason.FAST_ROUTER_CONFIDENT, routing.confidence)
-                executeDeviceTool(routing)
+                executeDeviceTool(request, routing)
             }
 
             // Готовая локальная реплика («привет») — тоже устройство-локальный
@@ -188,9 +197,15 @@ class ExecutionDecisionEngine @Inject constructor(
     }
 
     private suspend fun executeDeviceTool(
+        request: ExecutionRequest,
         routing: CommandRoutingResult.DeviceCommand
     ): ExecutionResult {
         val call = routing.toolCall
+        if (request.effectivePrivacyLevel != PrivacyLevel.NORMAL &&
+            toolExecutor.mayDiscloseExternally(call.toolId) != false
+        ) {
+            return privacyBlocked(DecisionReason.EXTERNAL_TOOL_BLOCKED_BY_PRIVACY)
+        }
 
         val result = try {
             toolExecutor.execute(call)
@@ -199,7 +214,7 @@ class ExecutionDecisionEngine @Inject constructor(
         } catch (e: Exception) {
             // ToolExecutor уже конвертирует исключения инструментов в failure,
             // но контракт защищаем и здесь: наружу исключение не уходит.
-            Log.e(TAG, "ToolExecutor threw for tool=${call.toolId}", e)
+            Log.e(TAG, "ToolExecutor threw | tool=${call.toolId} | type=${e.javaClass.simpleName}")
             return ExecutionResult.Error(
                 message = "Не удалось выполнить команду устройства, сэр.",
                 reason = DecisionReason.DEVICE_TOOL_FAILED
@@ -285,10 +300,7 @@ class ExecutionDecisionEngine @Inject constructor(
                 "route=BLOCKED reason=${DecisionReason.CLOUD_BLOCKED_BY_PRIVACY} " +
                     "privacy=${request.effectivePrivacyLevel}"
             )
-            return ExecutionResult.Error(
-                message = PRIVACY_BLOCKED_MESSAGE,
-                reason = DecisionReason.CLOUD_BLOCKED_BY_PRIVACY
-            )
+            return privacyBlocked(DecisionReason.CLOUD_BLOCKED_BY_PRIVACY)
         }
 
         if (!cloudAi.isAvailable()) {
@@ -341,8 +353,11 @@ class ExecutionDecisionEngine @Inject constructor(
         }
     }
 
+    private fun privacyBlocked(reason: DecisionReason): ExecutionResult.Error =
+        ExecutionResult.Error(message = PRIVACY_BLOCKED_MESSAGE, reason = reason)
+
     // =====================================================================
-    // Structured logging (текст приватного запроса не логируется)
+    // Structured logging (prompt plaintext не логируется ни для одной категории)
     // =====================================================================
     private fun logRequest(request: ExecutionRequest) {
         Log.d(
