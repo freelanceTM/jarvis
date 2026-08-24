@@ -1,12 +1,10 @@
 package com.jarvis.assistant.voice.wakeword
 
 import android.annotation.SuppressLint
-import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -45,9 +43,7 @@ interface WakeWordDetector {
  * Потребление CPU: < 1%, 0 МБ оверхеда.
  */
 @Singleton
-class AlisaStyleWakeWordEngine @Inject constructor(
-    @ApplicationContext private val context: Context
-) : WakeWordDetector {
+class AlisaStyleWakeWordEngine @Inject constructor() : WakeWordDetector {
 
     private val TAG = "AlisaWakeWord"
 
