@@ -1,6 +1,7 @@
 package com.jarvis.assistant.benchmark
 
 import com.jarvis.assistant.agent.decision.ExecutionType
+import java.util.Locale
 
 /**
  * Агрегация метрик benchmark (пункты 17-33 ТЗ).
@@ -64,18 +65,18 @@ object BenchmarkMetrics {
         fun render(): String {
             val columns = listOf("DEVICE_TOOL", "LOCAL_AI", "CLOUD_AI", "AGENT", "REFUSAL", "NONE")
             val sb = StringBuilder()
-            sb.append(String.format("%-18s", "expected\\actual"))
+            sb.append(String.format(Locale.ROOT, "%-18s", "expected\\actual"))
             columns.forEachIndexed { index, column ->
                 if (index == columns.lastIndex) sb.append(column)
-                else sb.append(String.format("%-13s", column))
+                else sb.append(String.format(Locale.ROOT, "%-13s", column))
             }
             sb.append('\n')
             for ((expected, actuals) in rows.entries.sortedBy { it.key.name }) {
-                sb.append(String.format("%-18s", expected.name))
+                sb.append(String.format(Locale.ROOT, "%-18s", expected.name))
                 columns.forEachIndexed { index, column ->
                     val value = actuals[column] ?: 0
                     if (index == columns.lastIndex) sb.append(value)
-                    else sb.append(String.format("%-13s", value))
+                    else sb.append(String.format(Locale.ROOT, "%-13s", value))
                 }
                 sb.append('\n')
             }
@@ -328,7 +329,7 @@ object BenchmarkMetrics {
         """{"count":${s.count},"min":${s.min},"max":${s.max},"avg":${s.average},""" +
             """"p50":${s.p50},"p90":${s.p90},"p95":${s.p95},"p99":${s.p99}}"""
 
-    private fun fmt(value: Double) = String.format("%.2f", value)
+    private fun fmt(value: Double) = String.format(Locale.ROOT, "%.2f", value)
 
     private fun jsonEscape(value: String) = value
         .replace("\\", "\\\\")
