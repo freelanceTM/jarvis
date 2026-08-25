@@ -10,6 +10,7 @@ import com.jarvis.assistant.agent.decision.PrivacyClassifier
 import com.jarvis.assistant.agent.decision.PrivacyContent
 import com.jarvis.assistant.agent.decision.PrivacyReason
 import com.jarvis.assistant.agent.decision.RequestSource
+import com.jarvis.assistant.agent.executor.ConfirmationOwner
 import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.model.ToolCall
 import com.jarvis.assistant.agent.translator.LiveTranslatorEngine
@@ -27,10 +28,12 @@ import com.jarvis.assistant.voice.tts.TextToSpeechManager
 import com.jarvis.assistant.voice.tts.TtsState
 import com.jarvis.assistant.voice.wakeword.WakeWordDetector
 import com.jarvis.assistant.voice.wakeword.WakeWordEvent
+import com.jarvis.assistant.voice.wakeword.WakeWordExtractor
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -66,6 +69,21 @@ class VoiceInteractionOrchestrator @Inject constructor(
         private const val SILENCE_AFTER_PARTIAL_MS = 1200L
         private const val FOLLOW_UP_WINDOW_MS = 8000L
         private const val CONFIRMATION_TIMEOUT_MS = 10000L
+
+        /**
+         * CR-01: режимы, в которых FinalResult speech-распознавателя ДОЛЖЕН
+         * обрабатываться. В STANDBY/AI_THINKING/TTS_SPEAKING/PAUSED финальный
+         * результат игнорируется — он обычно является эхом/остаточным callback
+         * от ПРЕДЫДУЩЕГО распознавания и приводит к двойной обработке команд,
+         * «оживающим» ответам и несанкционированным AI/TTS вызовам.
+         */
+        private val ALLOWED_FINAL_RESULT_MODES = setOf(
+            OrchestratorMode.VERIFYING_KEYWORD,
+            OrchestratorMode.LISTENING_USER_QUERY,
+            OrchestratorMode.CONTINUOUS_CONVERSATION,
+            OrchestratorMode.AWAITING_CONFIRMATION,
+            OrchestratorMode.LIVE_EAR_INTERPRETER
+        )
     }
 
     private var orchestratorJob = SupervisorJob()
@@ -98,6 +116,14 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
     private val isProcessingQuery = AtomicBoolean(false)
 
+    /**
+     * CR-07: поколение (эпоха) голосового сеанса. Стартует в 0, инкрементируется
+     * при каждом входе в STANDBY. processUserQuery запоминает эпоху на старте и
+     * отбрасывает любые поздние результаты, если эпоха успела смениться
+     * (т.е. пользователь нажал «стоп» / перешёл в standby).
+     */
+    private val sessionEpoch = AtomicInteger(0)
+
     private var pendingToolCall: ToolCall? = null
     private var pendingConfirmationPrompt: String = ""
 
@@ -109,7 +135,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private var systemPrompt = ""
     private var isHeadsetOnlyMode = false
 
-    private val wakeKeywords = listOf("джарвис", "jarvis", "жарвис", "дарвис", "джей", "диджей", "джар")
+    private val wakeKeywords = WakeWordExtractor.DEFAULT_WAKE_WORDS
 
     init {
         initToneGenerator()
@@ -223,8 +249,16 @@ class VoiceInteractionOrchestrator @Inject constructor(
         confirmationTimeoutJob = null
         silenceJob?.cancel()
         silenceJob = null
+
+        // CR-07: отмена активного AI-запроса при уходе в STANDBY. Инкрементируем
+        // эпоху — старый aiJob, даже если он вернётся после IO, не сможет
+        // мутировать UI/TTS состояние (см. проверку captureEpoch ниже).
+        sessionEpoch.incrementAndGet()
+        aiJob?.cancel()
+        aiJob = null
         pendingToolCall = null
-                                        pendingConfirmationToken = null
+        pendingConfirmationToken = null
+        pendingConfirmationPrompt = ""
         toolExecutor.clearPendingConfirmation()
         isProcessingQuery.set(false)
 
@@ -277,44 +311,56 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         val partial = event.partialText.lowercase().trim()
 
                         if (_currentMode.value == OrchestratorMode.VERIFYING_KEYWORD) {
-                            if (containsWakeWord(partial)) {
+                            if (WakeWordExtractor.containsWakeWord(partial, wakeKeywords)) {
                                 silenceJob?.cancel()
                                 playWakeChime()
-                                val clean = cleanWakeWord(event.partialText)
-                                if (clean.isNotBlank()) {
+                                val query = WakeWordExtractor.extractQuery(event.partialText, wakeKeywords)
+                                if (query != null) {
                                     _currentMode.value = OrchestratorMode.LISTENING_USER_QUERY
-                                    _assistantState.value = VoiceAssistantState.Recognizing(clean)
-                                    _lastQuery.value = clean
+                                    _assistantState.value = VoiceAssistantState.Recognizing(query)
+                                    _lastQuery.value = query
 
                                     silenceJob = scope.launch {
                                         delay(SILENCE_AFTER_PARTIAL_MS)
                                         if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY) {
                                             speechRecognizerManager.stopListening()
-                                            processUserQuery(clean)
+                                            processUserQuery(query)
                                         }
                                     }
                                 } else {
+                                    // CR-02: прозвучало ТОЛЬКО wake-word — переходим в LISTENING
+                                    // за командой, не запуская processUserQuery с пустым текстом.
                                     _currentMode.value = OrchestratorMode.LISTENING_USER_QUERY
                                     _assistantState.value = VoiceAssistantState.Listening
                                 }
                             }
                         } else if (_currentMode.value == OrchestratorMode.LISTENING_USER_QUERY ||
                             _currentMode.value == OrchestratorMode.CONTINUOUS_CONVERSATION) {
+                            val cleaned = WakeWordExtractor.extractQuery(event.partialText, wakeKeywords) ?: event.partialText
                             _assistantState.value = VoiceAssistantState.Recognizing(event.partialText)
-                            _lastQuery.value = cleanWakeWord(event.partialText)
+                            _lastQuery.value = cleaned
 
                             silenceJob?.cancel()
                             silenceJob = scope.launch {
                                 delay(SILENCE_AFTER_PARTIAL_MS)
                                 val current = _currentMode.value
-                                if ((current == OrchestratorMode.LISTENING_USER_QUERY || current == OrchestratorMode.CONTINUOUS_CONVERSATION) && event.partialText.isNotBlank()) {
+                                if ((current == OrchestratorMode.LISTENING_USER_QUERY || current == OrchestratorMode.CONTINUOUS_CONVERSATION) && cleaned.isNotBlank()) {
                                     speechRecognizerManager.stopListening()
-                                    processUserQuery(cleanWakeWord(event.partialText))
+                                    processUserQuery(cleaned)
                                 }
                             }
                         }
                     }
                     is SpeechRecognitionEvent.FinalResult -> {
+                        // CR-01: игнорируем FinalResult, если мы не в слушающем режиме
+                        // (STANDBY/AI_THINKING/TTS_SPEAKING/PAUSED). Приходит от старого
+                        // распознавания после перехода на другой режим и провоцирует
+                        // двойную обработку.
+                        if (_currentMode.value !in ALLOWED_FINAL_RESULT_MODES) {
+                            Log.d(TAG, "FinalResult ignored in mode=${_currentMode.value} (CR-01 guard)")
+                            return@collectLatest
+                        }
+
                         silenceJob?.cancel()
                         followUpWindowJob?.cancel()
                         val text = event.recognizedText.trim()
@@ -350,11 +396,13 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         }
 
                         if (_currentMode.value == OrchestratorMode.VERIFYING_KEYWORD) {
-                            if (containsWakeWord(text)) {
+                            if (WakeWordExtractor.containsWakeWord(text, wakeKeywords)) {
                                 playWakeChime()
-                                val clean = cleanWakeWord(text)
-                                if (clean.isNotBlank()) {
-                                    processUserQuery(clean)
+                                // CR-02: extractQuery вернёт null, если после wake-word ничего нет
+                                // → переключаемся на LISTENING_USER_QUERY вместо processUserQuery("Джарвис").
+                                val query = WakeWordExtractor.extractQuery(text, wakeKeywords)
+                                if (query != null) {
+                                    processUserQuery(query)
                                 } else {
                                     switchToSpeechRecognition()
                                 }
@@ -364,11 +412,16 @@ class VoiceInteractionOrchestrator @Inject constructor(
                             return@collectLatest
                         }
 
-                        val clean = cleanWakeWord(text)
-                        if (clean.isNotBlank()) {
-                            processUserQuery(clean)
+                        // CR-02: вместо чистки с ifEmpty { raw } используем extractQuery,
+                        // который возвращает null при пустом результате — не дёргаем
+                        // processUserQuery с сырым wake-word.
+                        val query = WakeWordExtractor.extractQuery(text, wakeKeywords)
+                        if (query != null) {
+                            processUserQuery(query)
                         } else {
-                            startStandbyMode()
+                            // Прозвучало только имя ассистента — переходим в LISTENING
+                            // за командой (без AI-вызова/TTS).
+                            switchToSpeechRecognition()
                         }
                     }
                     is SpeechRecognitionEvent.RecognitionError -> {
@@ -390,19 +443,6 @@ class VoiceInteractionOrchestrator @Inject constructor(
                 }
             }
         }
-    }
-
-    private fun containsWakeWord(text: String): Boolean {
-        val lower = text.lowercase().trim()
-        return wakeKeywords.any { kw -> lower.contains(kw) }
-    }
-
-    private fun cleanWakeWord(raw: String): String {
-        var result = raw
-        for (kw in wakeKeywords) {
-            result = result.replace(Regex("(?i)^.*?$kw[,\\s]*"), "").trim()
-        }
-        return result.ifEmpty { raw }
     }
 
     private fun processUserQuery(query: String) {
@@ -439,6 +479,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
         _lastQuery.value = clean
 
         aiJob?.cancel()
+        val captureEpoch = sessionEpoch.get()
         aiJob = scope.launch {
             try {
                 val history = messageRepository.getRecentMessages(limit = 10)
@@ -448,6 +489,14 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         relatedContent = listOf(systemPrompt) + history.map { it.text }
                     )
                 )
+
+                // CR-07: если за время получения истории пользователь успел перейти в standby,
+                // результат отбрасываем.
+                if (sessionEpoch.get() != captureEpoch) {
+                    Log.d(TAG, "Discarding late AI result (epoch mismatch: $captureEpoch vs ${sessionEpoch.get()})")
+                    return@launch
+                }
+
                 _privacyClassification.value = contextualClassification
                 // Этап 1: источник и effective privacy передаются в decision engine.
                 val result = sendPromptUseCase(
@@ -455,14 +504,28 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     source = RequestSource.VOICE,
                     privacyLevel = contextualClassification.level
                 )
+
+                // CR-07: вторая точка проверки эпохи — после сетевого/AI-вызова.
+                if (sessionEpoch.get() != captureEpoch) {
+                    Log.d(TAG, "Discarding late AI result post-sendPrompt (epoch mismatch)")
+                    return@launch
+                }
+
                 when (result) {
                     is Resource.Success -> {
                         when (val execution = result.data) {
                             is PromptExecutionResult.ConfirmationRequired -> {
                                 pendingToolCall = execution.toolCall
                                 pendingConfirmationPrompt = execution.promptMessage
+                                // CR-04: забираем вызов у CHAT_UI под управление голоса
+                                // (чтобы «да» из TTS-потока не подтвердило чат-запрос),
+                                // а токен берём ПО callId, а не с головы очереди.
+                                toolExecutor.claimPendingConfirmation(
+                                    execution.toolCall.callId,
+                                    ConfirmationOwner.VOICE
+                                )
                                 pendingConfirmationToken =
-                                    toolExecutor.peekPendingConfirmation()?.confirmationToken
+                                    toolExecutor.confirmationTokenFor(execution.toolCall.callId)
 
                                 _lastAnswer.value = pendingConfirmationPrompt
                                 _currentMode.value = OrchestratorMode.AWAITING_CONFIRMATION
@@ -473,6 +536,8 @@ class VoiceInteractionOrchestrator @Inject constructor(
                                 confirmationTimeoutJob?.cancel()
                                 confirmationTimeoutJob = scope.launch {
                                     delay(CONFIRMATION_TIMEOUT_MS)
+                                    // CR-07: таймер подтверждения тоже уважает эпоху.
+                                    if (sessionEpoch.get() != captureEpoch) return@launch
                                     if (_currentMode.value == OrchestratorMode.AWAITING_CONFIRMATION) {
                                         val timeoutMsg = context.getString(R.string.vremya_ozhidaniya_isteklo)
                                         _lastAnswer.value = timeoutMsg
@@ -480,7 +545,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                                         textToSpeechManager.speak(timeoutMsg, speechRate, speechPitch)
                                         val timedOut = pendingToolCall
                                         pendingToolCall = null
-                                        pendingConfirmationToken = null
+        pendingConfirmationToken = null
                                         if (timedOut != null) toolExecutor.removePendingConfirmation(timedOut)
                                         delay(2000)
                                         startStandbyMode()
@@ -510,7 +575,11 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     }
                 }
             } finally {
-                isProcessingQuery.set(false)
+                // CR-07: флаг сбрасываем только для «нашей» эпохи, чтобы не
+                // сломать флаг нового сеанса, запущенного поверх отмены.
+                if (sessionEpoch.get() == captureEpoch) {
+                    isProcessingQuery.set(false)
+                }
             }
         }
     }
@@ -555,18 +624,24 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     textToSpeechManager.speak(voiceResponse, speechRate, speechPitch)
 
                     // Пункт аудита #4: следующий запрос подтверждения из очереди.
-                    toolExecutor.peekPendingConfirmation()?.let { next ->
+                    // Голос забирает его себе (owner=VOICE) и токен берёт по callId.
+                    toolExecutor.peekPendingConfirmation()?.let { head ->
+                        toolExecutor.claimPendingConfirmation(head.toolCall.callId, ConfirmationOwner.VOICE)
+                        val next = toolExecutor.findPendingConfirmation(head.toolCall.callId) ?: head
                         pendingToolCall = next.toolCall
                         pendingConfirmationPrompt = next.promptMessage
-                        pendingConfirmationToken = next.confirmationToken
+                        pendingConfirmationToken =
+                            toolExecutor.confirmationTokenFor(next.toolCall.callId)
                         _currentMode.value = OrchestratorMode.AWAITING_CONFIRMATION
+                        _assistantState.value = VoiceAssistantState.Speaking(next.promptMessage)
+                        textToSpeechManager.speak(next.promptMessage, speechRate, speechPitch)
                     }
                 }
             }
             isNo -> {
                 val cancelled = pendingToolCall
                 pendingToolCall = null
-                                        pendingConfirmationToken = null
+        pendingConfirmationToken = null
                 if (cancelled != null) toolExecutor.removePendingConfirmation(cancelled)
                 val cancelMsg = context.getString(R.string.operaciya_otmenena_sir)
                 _lastAnswer.value = cancelMsg
@@ -589,7 +664,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         textToSpeechManager.speak(timeoutMsg, speechRate, speechPitch)
                         val timedOut = pendingToolCall
                         pendingToolCall = null
-                                        pendingConfirmationToken = null
+        pendingConfirmationToken = null
                         if (timedOut != null) toolExecutor.removePendingConfirmation(timedOut)
                         delay(2000)
                         startStandbyMode()
@@ -653,7 +728,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
         confirmationTimeoutJob?.cancel()
         confirmationTimeoutJob = null
         pendingToolCall = null
-                                        pendingConfirmationToken = null
+        pendingConfirmationToken = null
         toolExecutor.clearPendingConfirmation()
         isProcessingQuery.set(false)
         aiJob?.cancel()
@@ -695,12 +770,17 @@ class VoiceInteractionOrchestrator @Inject constructor(
         followUpWindowJob?.cancel()
         confirmationTimeoutJob?.cancel()
         confirmationTimeoutJob = null
-        pendingToolCall = null
-                                        pendingConfirmationToken = null
-        toolExecutor.clearPendingConfirmation()
-        isProcessingQuery.set(false)
+
+        // CR-07: сбрасываем сессию при полном останове, чтобы поздние результаты
+        // не прорвались после restart.
+        sessionEpoch.incrementAndGet()
         aiJob?.cancel()
         aiJob = null
+        pendingToolCall = null
+        pendingConfirmationPrompt = ""
+        pendingConfirmationToken = null
+        toolExecutor.clearPendingConfirmation()
+        isProcessingQuery.set(false)
         wakeWordDetector.stopListening()
         speechRecognizerManager.stopListening()
         textToSpeechManager.stop()

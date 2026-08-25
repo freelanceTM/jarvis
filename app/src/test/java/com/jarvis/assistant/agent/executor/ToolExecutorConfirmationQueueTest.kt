@@ -293,4 +293,53 @@ class ToolExecutorConfirmationQueueTest {
         assertEquals(63, results.count { it.error == "CONFIRMATION_TOKEN_INVALID" })
         assertEquals(0, executor.pendingConfirmationCount())
     }
+
+    /**
+     * CR-04 (mandatory): при двух параллельных confirmations в очереди
+     * подтверждение ВТОРОГО вызова токеном ПЕРВОГО (головы очереди)
+     * ДОЛЖНО быть отклонено. Корректный токен второго подтверждает его,
+     * первый при этом остаётся в очереди нетронутым.
+     */
+    @Test
+    fun `confirming second call with heads token is rejected - CR04 head-of-queue bug`() = runBlocking {
+        val executor = buildExecutor()
+        val first = call("communication.sms")
+        val second = call("communication.call")
+
+        executor.execute(first)
+        executor.execute(second)
+        assertEquals(2, executor.pendingConfirmationCount())
+
+        val headToken = executor.peekPendingConfirmation()!!.confirmationToken  // токен ПЕРВОГО
+        val secondToken = executor.confirmationTokenFor(second.callId)!!        // токен ВТОРОГО
+        assertTrue(headToken != secondToken)
+
+        // 1. Пытаемся подтвердить второй вызов токеном ГОЛОВЫ → должно быть отклонено.
+        val wrong = executor.executeWithBypass(second, headToken, "test")
+        assertFalse("using head's token must reject second call", wrong.isSuccess)
+        assertEquals("CONFIRMATION_TOKEN_INVALID", wrong.error)
+        assertEquals(2, executor.pendingConfirmationCount())  // ни один не удалён
+
+        // 2. Подтверждаем второй его собственным токеном — успешно, первый остаётся.
+        val ok = executor.executeWithBypass(second, secondToken, "test")
+        assertTrue("using own token must execute second call", ok.isSuccess)
+        assertEquals(1, executor.pendingConfirmationCount())
+        assertEquals(first.callId, executor.peekPendingConfirmation()?.toolCall?.callId)
+    }
+
+    @Test
+    fun `claimPendingConfirmation reassigns owner without changing token`() = runBlocking {
+        val executor = buildExecutor()
+        val c = call("communication.sms")
+        executor.execute(c)
+
+        val original = executor.findPendingConfirmation(c.callId)!!
+        assertEquals(ConfirmationOwner.CHAT_UI, original.owner)
+
+        assertTrue(executor.claimPendingConfirmation(c.callId, ConfirmationOwner.VOICE))
+        val claimed = executor.findPendingConfirmation(c.callId)!!
+        assertEquals(ConfirmationOwner.VOICE, claimed.owner)
+        // Токен НЕ меняется — caller запомнил его до claim.
+        assertEquals(original.confirmationToken, claimed.confirmationToken)
+    }
 }

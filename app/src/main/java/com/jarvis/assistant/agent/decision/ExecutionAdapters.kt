@@ -69,13 +69,16 @@ class RepositoryCloudAiExecutor @Inject constructor(
 
         // Передаём контекст решения: сервер применит privacy-политику как
         // вторую линию защиты, даже если клиент ошибётся.
+        // CR-03: прокидываем request.history (последние N сообщений) до
+        // сервера, который уже положит их в messages[] провайдера.
         return aiRepository.generateResponse(
             prompt = request.text,
             systemPrompt = fullSystemPrompt,
             source = request.source.name,
             privacyLevel = request.effectivePrivacyLevel.name,
             requiresWeb = request.requiresWeb,
-            cloudExplicitlyAllowed = request.cloudExplicitlyAllowed
+            cloudExplicitlyAllowed = request.cloudExplicitlyAllowed,
+            history = request.history
         )
     }
 }

@@ -16,18 +16,30 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Источник, который ожидает подтверждения (UI или голосовой флоу). */
+enum class ConfirmationOwner {
+    CHAT_UI,
+    VOICE
+}
+
 /** Вызов инструмента, ожидающий подтверждения пользователя (элемент очереди). */
 data class PendingConfirmationRequest(
     val toolCall: ToolCall,
     val promptMessage: String,
 
     /**
+     * Источник (владелец) подтверждения: чат UI или голосовой orchestrator.
+     * Пункт аудита #4: ответ «да/нет» по каналу X не должен подтвердить запрос,
+     * поставленный в очередь по каналу Y.
+     */
+    val owner: ConfirmationOwner = ConfirmationOwner.CHAT_UI,
+
+    /**
      * Одноразовый криптографический токен подтверждения (пункт аудита #5).
      *
      * Генерируется при постановке в очередь и передаётся в UI/голосовой флоу
-     * ТОЛЬКО через [peekPendingConfirmation]. [executeWithBypass] выполняет
-     * вызов только если токен совпадает — подделать «подтверждение» извне
-     * нельзя (вызывающий не знает токен, пока не получил его из очереди).
+     * ТОЛЬКО через [confirmationTokenFor] (поиск по callId) или [peekPendingConfirmation].
+     * [executeWithBypass] выполняет вызов только если токен совпадает.
      */
     val confirmationToken: String = UUID.randomUUID().toString()
 )
@@ -107,6 +119,17 @@ class ToolExecutor @Inject constructor(
             pendingConfirmations.firstOrNull { it.toolCall.callId == callId }
         }
 
+    /**
+     * CR-04: возвращает одноразовый токен подтверждения по callId, а не по голове
+     * очереди. Исключает ошибку, при которой два параллельных confirmation-запроса
+     * (например, чат + голос) подтверждали НЕ ТУ запись (голову очереди) вместо той,
+     * чей prompt был показан пользователю.
+     */
+    fun confirmationTokenFor(callId: String): String? =
+        synchronized(confirmationLock) {
+            pendingConfirmations.firstOrNull { it.toolCall.callId == callId }?.confirmationToken
+        }
+
     /** Количество ожидающих подтверждения вызовов (для диагностики). */
     fun pendingConfirmationCount(): Int = synchronized(confirmationLock) { pendingConfirmations.size }
 
@@ -116,7 +139,11 @@ class ToolExecutor @Inject constructor(
      * @return true, если вызов добавлен; false — дубликат или очередь переполнена
      *         (в этом случае вызывающий слой обязан НЕ выдавать запрос на подтверждение).
      */
-    private fun enqueuePendingConfirmation(call: ToolCall, prompt: String): Boolean =
+    private fun enqueuePendingConfirmation(
+        call: ToolCall,
+        prompt: String,
+        owner: ConfirmationOwner = ConfirmationOwner.CHAT_UI
+    ): Boolean =
         synchronized(confirmationLock) {
             if (pendingConfirmations.any { it.toolCall.callId == call.callId }) {
                 Log.w(TAG, "Call ${call.callId} уже ожидает подтверждения — дубликат отклонён")
@@ -126,9 +153,37 @@ class ToolExecutor @Inject constructor(
                 Log.w(TAG, "Очередь подтверждений переполнена ($MAX_PENDING_CONFIRMATIONS) — вызов ${call.callId} отклонён")
                 return@synchronized false
             }
-            pendingConfirmations.add(PendingConfirmationRequest(toolCall = call, promptMessage = prompt))
-            Log.d(TAG, "Confirmation enqueued: ${call.toolId} (${call.callId}), queue=${pendingConfirmations.size}")
+            pendingConfirmations.add(
+                PendingConfirmationRequest(toolCall = call, promptMessage = prompt, owner = owner)
+            )
+            Log.d(
+                TAG,
+                "Confirmation enqueued: ${call.toolId} (${call.callId}) owner=$owner, queue=${pendingConfirmations.size}"
+            )
             true
+        }
+
+    /**
+     * CR-04: «заявляет права» на уже стоящий в очереди вызов от имени конкретного
+     * владельца (голосовой orchestrator). Используется, когда ConfirmationRequired
+     * приходит из голосового контура: вызов встаёт в очередь с дефолтным
+     * CHAT_UI-владельцем, но голос должен немедленно перехватить его, иначе
+     * ответ «да» из TTS-потока сможет подтвердить запрос из текстового чата.
+     *
+     * @return true, если запись найдена и владелец обновлён.
+     */
+    fun claimPendingConfirmation(callId: String, owner: ConfirmationOwner): Boolean =
+        synchronized(confirmationLock) {
+            val iter = pendingConfirmations.iterator()
+            while (iter.hasNext()) {
+                val req = iter.next()
+                if (req.toolCall.callId == callId) {
+                    iter.remove()
+                    pendingConfirmations.add(req.copy(owner = owner))
+                    return@synchronized true
+                }
+            }
+            false
         }
 
     /**
