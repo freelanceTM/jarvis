@@ -112,6 +112,12 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private var silenceJob: Job? = null
     private var followUpWindowJob: Job? = null
     private var confirmationTimeoutJob: Job? = null
+
+    /** CR-22: актуальный job перевода в режиме LIVE_EAR_INTERPRETER. Новый перевод
+     * отменяет предыдущий — «последний побеждает». Без этого параллельные
+     * переводы могут завершиться в неправильном порядке и перекрыться в TTS. */
+    private var translationJob: Job? = null
+
     private var isServiceActive = false
 
     private val isProcessingQuery = AtomicBoolean(false)
@@ -272,6 +278,10 @@ class VoiceInteractionOrchestrator @Inject constructor(
         silenceJob?.cancel()
         followUpWindowJob?.cancel()
         confirmationTimeoutJob?.cancel()
+        // CR-22: на всякий случай сбрасываем предыдущий перевод, если кто-то
+        // вошёл в переводчик, пока старый ещё жив.
+        translationJob?.cancel()
+        translationJob = null
         wakeWordDetector.stopListening()
 
         _currentMode.value = OrchestratorMode.LIVE_EAR_INTERPRETER
@@ -374,18 +384,31 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         if (_currentMode.value == OrchestratorMode.LIVE_EAR_INTERPRETER) {
                             _privacyClassification.value =
                                 PrivacyClassifier.classifySafely(PrivacyContent(text))
-                            scope.launch(Dispatchers.IO) {
-                                // Если перевод не выполнен, озвучиваем причину,
-                                // а НЕ исходную фразу под видом перевода.
+                            // CR-22: сериализация «последний побеждает».
+                            // Отменяем предыдущий in-flight перевод (и его TTS),
+                            // чтобы не озвучивать устаревшую фразу собеседника
+                            // поверх актуальной. Без этого два близких FinalResult
+                            // (например, после длинной паузы) порождали параллельные
+                            // translateStructured, которые могли завершиться в
+                            // любом порядке.
+                            translationJob?.cancel()
+                            val captureEpoch = sessionEpoch.get()
+                            translationJob = scope.launch(Dispatchers.IO) {
                                 val result = translatorEngine.translateStructured(
                                     text = text,
                                     sourceLang = "auto",
                                     targetLang = "ru"
                                 )
+                                // Устарело — пользователь ушёл в другой режим
+                                // или сервис остановлен — не озвучиваем.
+                                if (_currentMode.value != OrchestratorMode.LIVE_EAR_INTERPRETER ||
+                                    sessionEpoch.get() != captureEpoch
+                                ) return@launch
                                 val spoken = translatorEngine.describeFailure(result)
                                 _lastAnswer.value = spoken
                                 bluetoothAudioRouter.routeAudioToEarbud()
-                                textToSpeechManager.speakQueued(spoken, speechRate, speechPitch)
+                                // Прерываем предыдущий TTS тоже (FLUSH, а не ADD).
+                                textToSpeechManager.speak(spoken, speechRate, speechPitch)
                             }
                             return@collectLatest
                         }
@@ -770,9 +793,10 @@ class VoiceInteractionOrchestrator @Inject constructor(
         followUpWindowJob?.cancel()
         confirmationTimeoutJob?.cancel()
         confirmationTimeoutJob = null
+        // CR-22: отменяем in-flight перевод при любом останове.
+        translationJob?.cancel()
+        translationJob = null
 
-        // CR-07: сбрасываем сессию при полном останове, чтобы поздние результаты
-        // не прорвались после restart.
         sessionEpoch.incrementAndGet()
         aiJob?.cancel()
         aiJob = null
@@ -790,6 +814,17 @@ class VoiceInteractionOrchestrator @Inject constructor(
         stopAll()
         isServiceActive = false
         orchestratorJob.cancel()
+        // CR-12: каскадный dispose. Порядок: сначала компоненты, которые могут
+        // порождать новые вызовы (wake/STT/TTS), потом аудио-маршрутизация,
+        // потом генератор тонов (самый низкоуровневый ресурс).
+        runCatching { wakeWordDetector.destroy() }
+            .onFailure { Log.e(TAG, "destroy: wakeWordDetector.destroy() failed", it) }
+        runCatching { speechRecognizerManager.destroy() }
+            .onFailure { Log.e(TAG, "destroy: speechRecognizerManager.destroy() failed", it) }
+        runCatching { textToSpeechManager.shutdown() }
+            .onFailure { Log.e(TAG, "destroy: textToSpeechManager.shutdown() failed", it) }
+        runCatching { bluetoothAudioRouter.dispose() }
+            .onFailure { Log.e(TAG, "destroy: bluetoothAudioRouter.dispose() failed", it) }
         try {
             toneGenerator?.release()
         } catch (e: Exception) {

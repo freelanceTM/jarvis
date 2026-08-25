@@ -40,12 +40,20 @@ class TextToSpeechManager @Inject constructor(
     companion object {
         private const val TAG = "TtsManager"
         private const val UTTERANCE_ID_PREFIX = "jarvis_tts_"
-
-        /** CR-09: таймаут инициализации движка — после него считаем init проваленным. */
         private const val INIT_TIMEOUT_MS = 4000L
     }
 
-    private val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
+    private val disposed = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    // CR-13/CR-24: именованный SupervisorJob + CoroutineExceptionHandler,
+    // чтобы можно было безопасно отменить scope на shutdown().
+    private val ttsJob = SupervisorJob()
+    private val exceptionHandler = CoroutineExceptionHandler { _, t ->
+        Log.e(TAG, "uncaught exception in tts scope", t)
+    }
+    private val scope = CoroutineScope(
+        Dispatchers.Main.immediate + ttsJob + exceptionHandler
+    )
 
     private var tts: TextToSpeech? = null
     private var utteranceCounter = 0L
@@ -203,6 +211,7 @@ class TextToSpeechManager @Inject constructor(
         pitch: Float = 1.0f,
         queueMode: Int = TextToSpeech.QUEUE_FLUSH
     ) {
+        if (disposed.get()) return
         if (text.isBlank()) {
             Log.w(TAG, "Empty text, skipping TTS")
             return
@@ -267,6 +276,7 @@ class TextToSpeechManager @Inject constructor(
      * CR-09: также сбрасывает pendingUtterance, чтобы не всплыл отменённый текст.
      */
     fun stop() {
+        if (disposed.get()) return
         scope.launch {
             speakMutex.withLock {
                 pendingUtterance = null
@@ -282,17 +292,20 @@ class TextToSpeechManager @Inject constructor(
      * Проверяет, идёт ли сейчас воспроизведение
      */
     fun isSpeaking(): Boolean {
-        return tts?.isSpeaking == true
+        return if (disposed.get()) false else tts?.isSpeaking == true
     }
 
     /**
      * Полное освобождение ресурсов TTS.
      * ОБЯЗАТЕЛЬНО вызывать при уничтожении сервиса/активности!
+     * Идемпотентен.
      */
     fun shutdown() {
+        if (!disposed.compareAndSet(false, true)) return
         Log.d(TAG, "Shutting down TTS")
         initializationGeneration++
         pendingUtterance = null
+        ttsJob.cancel()
         try {
             tts?.stop()
             tts?.shutdown()

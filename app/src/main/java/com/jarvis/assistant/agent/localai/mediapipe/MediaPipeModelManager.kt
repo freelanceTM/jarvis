@@ -57,7 +57,8 @@ class MediaPipeModelManager @Inject constructor(
 
     /** Защищает загрузку/выгрузку: параллельные запросы не грузят модель дважды. */
     private val lifecycleMutex = Mutex()
-    private val lifecycleScope = CoroutineScope(SupervisorJob() + dispatchers.default)
+    private val lifecycleJob = SupervisorJob()
+    private val lifecycleScope = CoroutineScope(lifecycleJob + dispatchers.default)
 
     @Volatile
     private var currentState: LocalModelState = LocalModelState.NotInitialized
@@ -65,30 +66,72 @@ class MediaPipeModelManager @Inject constructor(
     @Volatile
     private var runtime: LocalModelRuntime? = null
 
+    /**
+     * CR-24: держим сильную ссылку на зарегистрированный ComponentCallbacks2,
+     * чтобы GC не собрал его (аналогично PhoneStateListener до Android 12) и
+     * чтобы мы могли симметрично unregister его в [close].
+     */
+    @Volatile
+    private var trimMemoryCallback: ComponentCallbacks2? = null
+
+    private val closed = java.util.concurrent.atomic.AtomicBoolean(false)
+
     override val state: LocalModelState get() = currentState
 
     /** Путь, где ожидается файл модели. */
     val modelFile: File get() = File(File(context.filesDir, MODEL_DIR), spec.fileName)
 
     init {
-        // Реакция на memory pressure (пункт 17 ТЗ): при нехватке памяти система
-        // просит освободить ресурсы — выгружаем модель вместо того, чтобы
-        // ждать, пока нас убьёт LMK.
-        context.registerComponentCallbacks(object : ComponentCallbacks2 {
+        registerTrimMemoryCallback()
+    }
+
+    /**
+     * CR-24: регистрация ComponentCallbacks2 с сильной ссылкой на callback.
+     * Идемпотентна — повторный вызов не регистрирует второй callback.
+     */
+    private fun registerTrimMemoryCallback() {
+        if (trimMemoryCallback != null) return
+        val cb = object : ComponentCallbacks2 {
             override fun onTrimMemory(level: Int) {
+                if (closed.get()) return
                 if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
                     Log.i(TAG, "onTrimMemory(level=$level) — выгружаю локальную модель")
-                    lifecycleScope.launch { unload() }
+                    lifecycleScope.launch { runCatching { unload() } }
                 }
             }
 
             override fun onLowMemory() {
+                if (closed.get()) return
                 Log.i(TAG, "onLowMemory — выгружаю локальную модель")
-                lifecycleScope.launch { unload() }
+                lifecycleScope.launch { runCatching { unload() } }
             }
 
             override fun onConfigurationChanged(newConfig: Configuration) = Unit
-        })
+        }
+        try {
+            context.registerComponentCallbacks(cb)
+            trimMemoryCallback = cb
+        } catch (t: Throwable) {
+            Log.w(TAG, "registerComponentCallbacks failed", t)
+        }
+    }
+
+    /**
+     * Симметричная unregister-очистка. Идемпотентна. Может вызываться
+     * при необходимости освободить все ресурсы (инструментарий/тесты/
+     * полное выключение локального AI). Как @Singleton в обычном lifecycle
+     * процесса не вызывается — процесс уходит целиком.
+     */
+    fun close() {
+        if (!closed.compareAndSet(false, true)) return
+        Log.d(TAG, "close: releasing MediaPipe resources")
+        lifecycleJob.cancel()
+        trimMemoryCallback?.let { cb ->
+            runCatching { context.unregisterComponentCallbacks(cb) }
+                .onFailure { Log.w(TAG, "unregisterComponentCallbacks failed", it) }
+        }
+        trimMemoryCallback = null
+        closeRuntime()
     }
 
     override fun isReady(): Boolean = currentState is LocalModelState.Ready && runtime != null

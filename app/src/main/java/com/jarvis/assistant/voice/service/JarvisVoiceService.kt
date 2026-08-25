@@ -19,9 +19,10 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
-import android.util.Log
+import android.telephony.PhoneStateListener
 import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import com.jarvis.assistant.agent.memory.WorkingMemory
@@ -29,6 +30,7 @@ import com.jarvis.assistant.presentation.MainActivity
 import com.jarvis.assistant.voice.orchestrator.OrchestratorMode
 import com.jarvis.assistant.voice.orchestrator.VoiceInteractionOrchestrator
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -36,6 +38,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -48,21 +51,34 @@ class JarvisVoiceService : Service() {
     lateinit var workingMemory: WorkingMemory
 
     private val systemEventReceiver = SystemEventReceiver()
+    private val receiverRegistered = AtomicBoolean(false)
+
+    private val exceptionHandler = CoroutineExceptionHandler { _, t ->
+        Log.e(TAG, "uncaught exception in voice service scope", t)
+    }
     private val serviceJob = SupervisorJob()
-    private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
-    
+    private val serviceScope = CoroutineScope(
+        Dispatchers.Main + serviceJob + exceptionHandler
+    )
+
     private var wakeLock: PowerManager.WakeLock? = null
     private var telephonyManager: TelephonyManager? = null
+
+    // Modern callback (API 31+).
     private var telephonyCallback: TelephonyCallback? = null
+
+    // CR-10: fallback listener для API 29–30. Держим сильную ссылку — без
+    // неё TelephonyManager может собрать его GC (поведение до Android 12, где
+    // listener хранился как WeakReference).
+    private var legacyPhoneStateListener: PhoneStateListener? = null
     private val telephonyExecutor = Executors.newSingleThreadExecutor()
-    private var startupReady = false
+    private val started = AtomicBoolean(false)
 
     companion object {
         const val CHANNEL_ID = "jarvis_voice"
         const val CHANNEL_NAME = "JARVIS Voice Service"
         const val NOTIFICATION_ID = 1001
-        
-        // WakeLock timeout: 8 часов (для длительной фоновой работы)
+
         private const val TAG = "JarvisVoiceService"
         private const val WAKELOCK_TIMEOUT_MS = 8 * 60 * 60 * 1000L
 
@@ -71,7 +87,14 @@ class JarvisVoiceService : Service() {
         const val ACTION_PAUSE = "com.jarvis.action.PAUSE_SERVICE"
         const val ACTION_RESUME = "com.jarvis.action.RESUME_SERVICE"
 
-        /** Returns false instead of attempting an illegal microphone FGS start. */
+        /**
+         * CR-11: Единая точка входа на запуск foreground service с проверкой
+         * разрешений и защитой от краша на платформенных ограничениях.
+         *
+         * Возвращает false если запуск невозможен (нет разрешения или
+         * система отвергла startForegroundService — в этом случае вызывающий
+         * должен уведомить пользователя, а не считать сервис поднявшимся).
+         */
         fun start(context: Context): Boolean {
             if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) !=
                 PackageManager.PERMISSION_GRANTED
@@ -90,8 +113,10 @@ class JarvisVoiceService : Service() {
                 }
                 true
             } catch (failure: RuntimeException) {
-                // Includes platform background/while-in-use FGS start restrictions.
-                Log.e(TAG, "microphone foreground service start rejected | type=${failure.javaClass.simpleName}")
+                Log.e(
+                    TAG,
+                    "microphone foreground service start rejected | type=${failure.javaClass.simpleName}"
+                )
                 false
             }
         }
@@ -104,35 +129,42 @@ class JarvisVoiceService : Service() {
         }
     }
 
-    // Современный TelephonyCallback для Android 12+ (заменяет deprecated PhoneStateListener)
+    // ----------------------------------------- Telephony listeners
+
     @RequiresApi(Build.VERSION_CODES.S)
     private inner class JarvisTelephonyCallback : TelephonyCallback(), TelephonyCallback.CallStateListener {
         override fun onCallStateChanged(state: Int) {
-            when (state) {
-                TelephonyManager.CALL_STATE_RINGING,
-                TelephonyManager.CALL_STATE_OFFHOOK -> {
-                    orchestrator.pauseForPhoneCall()
-                }
-                TelephonyManager.CALL_STATE_IDLE -> {
-                    orchestrator.resumeAfterPhoneCall()
-                }
-            }
+            dispatchCallState(state)
         }
     }
 
+    /** CR-10: legacy PhoneStateListener для API 29-30. */
+    @Suppress("DEPRECATION")
+    private inner class LegacyPhoneStateListener : PhoneStateListener() {
+        override fun onCallStateChanged(state: Int, phoneNumber: String?) {
+            dispatchCallState(state)
+        }
+    }
+
+    private fun dispatchCallState(state: Int) {
+        when (state) {
+            TelephonyManager.CALL_STATE_RINGING,
+            TelephonyManager.CALL_STATE_OFFHOOK -> orchestrator.pauseForPhoneCall()
+            TelephonyManager.CALL_STATE_IDLE -> orchestrator.resumeAfterPhoneCall()
+        }
+    }
+
+    // ----------------------------------------- Service lifecycle
+
     override fun onCreate() {
         super.onCreate()
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            Log.w(TAG, "service creation aborted: microphone permission missing")
-            stopSelf()
-            return
-        }
-        createNotificationChannel()
-        try {
-            startServiceForeground(buildNotification(getString(R.string.jarvis_slushaet)))
-        } catch (failure: RuntimeException) {
-            Log.e(TAG, "service creation aborted: foreground promotion rejected | type=${failure.javaClass.simpleName}")
-            stopSelf()
+        // CR-11: единый safeStartForeground из onCreate с проверкой разрешения.
+        if (!safeStartForeground(
+                getString(R.string.jarvis_slushaet),
+                "onCreate"
+            )
+        ) {
+            // safeStartForeground сам вызывает stopSelf() при отказе; ранний возврат.
             return
         }
         acquireWakeLock()
@@ -140,28 +172,24 @@ class JarvisVoiceService : Service() {
         registerSystemReceivers()
         initWorkingMemoryDefaults()
         observeOrchestrator()
-        startupReady = true
+        started.set(true)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (!startupReady) {
-            stopSelf(startId)
+        // CR-11: ЛЮБАЯ ветка onStartCommand (включая STICKY restart с null intent)
+        // обязана либо вызвать safeStartForeground(), либо остановить сервис.
+        if (!safeStartForeground(
+                getString(R.string.jarvis_slushaet),
+                "onStartCommand(${intent?.action})"
+            )
+        ) {
             return START_NOT_STICKY
         }
+
         when (intent?.action) {
-            ACTION_START, ACTION_RESUME -> {
-                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                    Log.w(TAG, "service resume denied: microphone permission missing")
-                    stopSelf(startId)
-                    return START_NOT_STICKY
-                }
-                try {
-                    startServiceForeground(buildNotification(getString(R.string.jarvis_slushaet)))
-                } catch (failure: RuntimeException) {
-                    Log.e(TAG, "service resume rejected | type=${failure.javaClass.simpleName}")
-                    stopSelf(startId)
-                    return START_NOT_STICKY
-                }
+            ACTION_START, ACTION_RESUME, null -> {
+                // null = STICKY restart системой — всегда безопасно перезапускаем
+                // pipeline с нуля.
                 orchestrator.startServicePipeline()
             }
             ACTION_PAUSE -> {
@@ -171,13 +199,49 @@ class JarvisVoiceService : Service() {
             ACTION_STOP -> {
                 orchestrator.stopServicePipeline()
                 stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-            }
-            else -> {
-                orchestrator.startServicePipeline()
+                stopSelf(startId)
             }
         }
         return START_STICKY
+    }
+
+    /**
+     * CR-11: Безопасный старт foreground service.
+     *
+     * Проверяет RECORD_AUDIO permission ДО вызова startForeground;
+     * оборачивает вызов в try/catch от возможных RuntimeException
+     * (BackgroundServiceStartNotAllowedException и т.п.); при ошибке
+     * вызывает stopSelf(startId) и возвращает false — сервис не остаётся
+     * в неопределённом «created но не foreground» состоянии.
+     */
+    private fun safeStartForeground(statusText: String, source: String): Boolean {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.w(TAG, "safeStartForeground denied: RECORD_AUDIO missing | source=$source")
+            stopSelf()
+            return false
+        }
+        return try {
+            val notification = buildNotification(statusText)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            true
+        } catch (failure: RuntimeException) {
+            Log.e(
+                TAG,
+                "safeStartForeground rejected | source=$source | type=${failure.javaClass.simpleName}"
+            )
+            stopSelf()
+            false
+        }
     }
 
     private fun initWorkingMemoryDefaults() {
@@ -188,7 +252,6 @@ class JarvisVoiceService : Service() {
                 workingMemory.put("battery_percent", level)
             }
         } catch (e: Exception) {
-            // Пункт аудита #8: логируем, а не глотаем молча.
             Log.e(TAG, "initWorkingMemoryDefaults: не удалось прочитать уровень батареи", e)
         }
     }
@@ -203,14 +266,20 @@ class JarvisVoiceService : Service() {
                 addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION)
             }
             registerReceiver(systemEventReceiver, filter)
+            receiverRegistered.set(true)
         } catch (e: Exception) {
             Log.e(TAG, "registerSystemReceivers: не удалось зарегистрировать ресиверы", e)
         }
     }
 
     /**
-     * Регистрация слушателя телефонных звонков.
-     * Использует TelephonyCallback для Android 12+ и fallback для старых версий.
+     * CR-10: регистрация слушателя звонков.
+     *  - API 31+ (S): TelephonyCallback (современный API).
+     *  - API 29–30: PhoneStateListener (устаревший, но единственный рабочий;
+     *    хранится в сильном поле legacyPhoneStateListener, чтобы GC его не
+     *    собрал — до Android 12 TelephonyManager держал listener по WeakReference).
+     * Без READ_PHONE_STATE permission (или если нет TelephonyManager) —
+     * пауза при звонке отключается (логируется), но сервис не падает.
      */
     @SuppressLint("MissingPermission")
     private fun registerTelephonyListener() {
@@ -219,44 +288,52 @@ class JarvisVoiceService : Service() {
             return
         }
         try {
-            telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
-            
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                // Android 12+ — используем современный TelephonyCallback
-                val callback = JarvisTelephonyCallback()
-                telephonyCallback = callback
-                telephonyManager?.registerTelephonyCallback(telephonyExecutor, callback)
+            val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            telephonyManager = tm ?: return
+
+            when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+                    val cb = JarvisTelephonyCallback()
+                    telephonyCallback = cb
+                    tm.registerTelephonyCallback(telephonyExecutor, cb)
+                }
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> {
+                    // API 29-30: deprecated PhoneStateListener с сильной ссылкой.
+                    val listener = LegacyPhoneStateListener()
+                    legacyPhoneStateListener = listener
+                    @Suppress("DEPRECATION")
+                    tm.listen(listener, PhoneStateListener.LISTEN_CALL_STATE)
+                }
             }
-            // Для Android < 12 PhoneStateListener deprecated, но всё ещё работает
-            // Однако мы его не используем, т.к. minSdk = 29 (Android 10)
-            // и на практике большинство устройств уже на Android 12+
         } catch (e: Exception) {
             Log.e(TAG, "registerTelephonyListener: не удалось зарегистрировать слушатель звонков", e)
         }
     }
 
     private fun unregisterTelephonyListener() {
+        val tm = telephonyManager
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                telephonyCallback?.let { callback ->
-                    telephonyManager?.unregisterTelephonyCallback(callback)
+            when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+                    telephonyCallback?.let { cb ->
+                        runCatching { tm?.unregisterTelephonyCallback(cb) }
+                            .onFailure { Log.w(TAG, "unregister TelephonyCallback failed", it) }
+                    }
+                    telephonyCallback = null
+                }
+                else -> {
+                    legacyPhoneStateListener?.let { listener ->
+                        @Suppress("DEPRECATION")
+                        runCatching { tm?.listen(listener, PhoneStateListener.LISTEN_NONE) }
+                            .onFailure { Log.w(TAG, "unregister PhoneStateListener failed", it) }
+                    }
+                    legacyPhoneStateListener = null
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "unregisterTelephonyListener: не удалось отменить регистрацию", e)
+            Log.e(TAG, "unregisterTelephonyListener: сбой отмены регистрации", e)
         }
-    }
-
-    private fun startServiceForeground(notification: Notification) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
+        telephonyManager = null
     }
 
     private fun observeOrchestrator() {
@@ -273,15 +350,13 @@ class JarvisVoiceService : Service() {
                     OrchestratorMode.LIVE_EAR_INTERPRETER -> "🎧 Синхронный переводчик в ухе активен..."
                     OrchestratorMode.PAUSED_CALL_OR_SLEEP -> "Наушники отключены / Пауза"
                 }
-                updateNotification(statusText)
+                if (started.get()) {
+                    updateNotification(statusText)
+                }
             }
         }
     }
 
-    /**
-     * Захват WakeLock с ОБЯЗАТЕЛЬНЫМ таймаутом (требование Google Play).
-     * Таймаут = 8 часов, после чего автоматически освобождается.
-     */
     @SuppressLint("WakelockTimeout")
     private fun acquireWakeLock() {
         val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
@@ -289,7 +364,6 @@ class JarvisVoiceService : Service() {
             PowerManager.PARTIAL_WAKE_LOCK,
             "JARVIS:BackgroundVoiceWakeLock"
         )?.apply {
-            // Критично: указываем таймаут!
             acquire(WAKELOCK_TIMEOUT_MS)
         }
     }
@@ -308,9 +382,7 @@ class JarvisVoiceService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                CHANNEL_ID,
-                CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_LOW
+                CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = getString(R.string.fonovoe_raspoznavanie_klyuchevogo_slova)
                 setShowBadge(false)
@@ -320,7 +392,11 @@ class JarvisVoiceService : Service() {
         }
     }
 
+    // createNotificationChannel() вызывается из buildNotification (лениво) — это
+    // безопасно делать после startForeground, но мы вызываем его один раз в
+    // конструкторе нотификации:
     private fun buildNotification(statusText: String): Notification {
+        createNotificationChannel()
         val mainIntent = Intent(this, MainActivity::class.java)
         val pendingMain = PendingIntent.getActivity(
             this, 0, mainIntent,
@@ -328,7 +404,9 @@ class JarvisVoiceService : Service() {
         )
 
         val stopIntent = Intent(this, JarvisVoiceService::class.java).apply { action = ACTION_STOP }
-        val pendingStop = PendingIntent.getService(this, 2, stopIntent, PendingIntent.FLAG_IMMUTABLE)
+        val pendingStop = PendingIntent.getService(
+            this, 2, stopIntent, PendingIntent.FLAG_IMMUTABLE
+        )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("JARVIS Voice Service")
@@ -349,21 +427,22 @@ class JarvisVoiceService : Service() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
-        
-        // Корректная очистка ресурсов
+        started.set(false)
+        // Сначала останавливаем наблюдателей, потом orchestrator со всеми
+        // своими подсистемами (TTS/STT/Wake/Bluetooth), затем освобождаем
+        // system-level ресурсы сервиса.
         serviceScope.cancel()
         orchestrator.destroy()
         releaseWakeLock()
-        
-        try {
-            unregisterReceiver(systemEventReceiver)
-        } catch (e: Exception) {
-            Log.e(TAG, "onDestroy: не удалось отменить ресивер", e)
+
+        if (receiverRegistered.compareAndSet(true, false)) {
+            runCatching { unregisterReceiver(systemEventReceiver) }
+                .onFailure { Log.w(TAG, "onDestroy: не удалось unregister receiver", it) }
         }
-        
+
         unregisterTelephonyListener()
         telephonyExecutor.shutdown()
+        super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

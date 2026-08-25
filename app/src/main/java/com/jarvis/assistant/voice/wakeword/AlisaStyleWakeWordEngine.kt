@@ -5,10 +5,18 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.sqrt
@@ -28,19 +36,17 @@ interface WakeWordDetector {
 }
 
 /**
- * Acoustic Speech Activity & Formant Filter (Front-End для Wake Word)
- * 
- * Принцип работы:
- * 1. Низкопотребляющий VAD по RMS-энергии сигнала (16 кГц 16-бит моно PCM через AudioRecord).
- * 2. Фильтрация неречевых шумов через Zero-Crossing Rate (ZCR):
- *    - Человеческая речь: ZCR в диапазоне 0.02 .. 0.48.
- *    - Стуки, хлопки, щелчки: ZCR > 0.55.
- *    - Низкочастотный гул: ZCR < 0.015.
- * 3. Временной фильтр непрерывности (требует 3 последовательных речевых фрейма ~100 мс).
- * 4. Защитный 2000 мс антиспам кулдаун.
- * 5. При обнаружении речи передаёт управление на Stage-2 (Keyword Spotting через SpeechRecognizer).
- * 
- * Потребление CPU: < 1%, 0 МБ оверхеда.
+ * Acoustic Speech Activity & Formant Filter (Front-End для Wake Word).
+ *
+ * CR-14: жизненный цикл engine:
+ *  - Собственный CoroutineScope с SupervisorJob + CoroutineExceptionHandler
+ *    (никаких падений scope из-за одной ошибки в аудио-лупе).
+ *  - destroy() идемпотентен через AtomicBoolean; отменяет scope, workerJob,
+ *    cooldown jobs и останавливает AudioRecord.
+ *  - workerJob после cooldown-delay проверяет, что engine всё ещё жив
+ *    и не уничтожен — в противном случае не стартует новое прослушивание.
+ *  - stopListening() синхронизирован и безопасно вызываться из любого потока
+ *    и из любого состояния (частично инициализированный / уже остановленный).
  */
 @Singleton
 class AlisaStyleWakeWordEngine @Inject constructor() : WakeWordDetector {
@@ -50,11 +56,25 @@ class AlisaStyleWakeWordEngine @Inject constructor() : WakeWordDetector {
     private val _events = MutableSharedFlow<WakeWordEvent>(extraBufferCapacity = 16)
     override val events: SharedFlow<WakeWordEvent> = _events.asSharedFlow()
 
+    private val disposed = AtomicBoolean(false)
+
+    @Volatile
     private var audioRecord: AudioRecord? = null
+
+    @Volatile
     private var workerJob: Job? = null
-    
-    private val supervisorJob = SupervisorJob()
-    private val scope = CoroutineScope(Dispatchers.Default + supervisorJob)
+
+    @Volatile
+    private var cooldownJob: Job? = null
+
+    private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        if (throwable is CancellationException) throw throwable
+        Log.e(TAG, "uncaught exception in wake word engine", throwable)
+        // Важно: ошибка в аудио-лупе НЕ должна оставлять AudioRecord висеть.
+        try { stopListeningInternal() } catch (_: Throwable) {}
+    }
+    private val engineJob = SupervisorJob()
+    private val scope = CoroutineScope(Dispatchers.Default + engineJob + exceptionHandler)
 
     @Volatile
     private var isRecording = false
@@ -65,22 +85,22 @@ class AlisaStyleWakeWordEngine @Inject constructor() : WakeWordDetector {
     @Volatile
     private var effectiveRmsThreshold = 850f
 
+    @Volatile
     private var lastTriggerTimestamp = 0L
     private val cooldownMs = 2000L
 
     private val sampleRate = 16000
     private val channelConfig = AudioFormat.CHANNEL_IN_MONO
     private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-    private val frameSizeSamples = 512 // 32 мс при 16 кГц
-    private val minBufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat).coerceAtLeast(4096)
+    private val frameSizeSamples = 512
+    private val minBufferSize = AudioRecord.getMinBufferSize(
+        sampleRate, channelConfig, audioFormat
+    ).coerceAtLeast(4096)
 
     init {
         updateThreshold()
     }
 
-    /**
-     * Настройка чувствительности (0.0 - только громкий голос вблизи, 1.0 - высокая чувствительность)
-     */
     override fun setSensitivity(sensitivity: Float) {
         currentSensitivity = sensitivity.coerceIn(0.1f, 1.0f)
         updateThreshold()
@@ -95,109 +115,153 @@ class AlisaStyleWakeWordEngine @Inject constructor() : WakeWordDetector {
     @SuppressLint("MissingPermission")
     @Synchronized
     override fun startListening() {
+        if (disposed.get()) return
         if (isRecording) return
-        stopListening()
+        // Сбросить предыдущий worker (если остался в некорректном состоянии).
+        stopListeningInternal()
 
         val now = System.currentTimeMillis()
         if (now - lastTriggerTimestamp < cooldownMs) {
-            scope.launch {
-                delay(cooldownMs - (now - lastTriggerTimestamp))
-                if (!isRecording) {
-                    startListening()
+            // CR-14: cooldown-launch запоминается в отдельную job, чтобы
+            // destroy/stop мог его отменить.
+            cooldownJob?.cancel()
+            cooldownJob = scope.launch {
+                val waitMs = cooldownMs - (now - lastTriggerTimestamp)
+                delay(waitMs)
+                // Повторный старт только если нас не утилизировали за время
+                // ожидания и не стартовали другой listening.
+                if (!disposed.get() && !isRecording) {
+                    // синхронный повторный старт (уже в @Synchronized через
+                    // вызов startListening нельзя напрямую — рекурсивный
+                    // monitor; поэтому стартуем внутренне).
+                    startListeningInternal()
                 }
             }
             return
         }
 
+        startListeningInternal()
+    }
+
+    @SuppressLint("MissingPermission")
+    @Synchronized
+    private fun startListeningInternal() {
+        if (disposed.get() || isRecording) return
         try {
-            audioRecord = AudioRecord(
+            val record = AudioRecord(
                 MediaRecorder.AudioSource.VOICE_RECOGNITION,
                 sampleRate,
                 channelConfig,
                 audioFormat,
                 minBufferSize
             )
-
-            if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-                audioRecord?.release()
-                audioRecord = null
+            if (record.state != AudioRecord.STATE_INITIALIZED) {
+                record.release()
                 return
             }
-
-            audioRecord?.startRecording()
+            audioRecord = record
+            record.startRecording()
             isRecording = true
 
             workerJob = scope.launch {
                 val pcmBuffer = ShortArray(frameSizeSamples)
                 var speechFrames = 0
+                try {
+                    while (isActive && isRecording && !disposed.get()) {
+                        val currentRec = audioRecord ?: break
+                        val read = currentRec.read(pcmBuffer, 0, frameSizeSamples)
+                        if (read <= 0 || !isRecording) break
 
-                while (isActive && isRecording) {
-                    val read = audioRecord?.read(pcmBuffer, 0, frameSizeSamples) ?: 0
-                    if (read <= 0 || !isRecording) break
-
-                    // 1. Вычисление энергии (RMS) и частоты перехода через ноль (ZCR)
-                    var sumSquares = 0.0
-                    var zeroCrossings = 0
-                    for (i in 0 until read) {
-                        val sample = pcmBuffer[i].toDouble()
-                        sumSquares += sample * sample
-
-                        if (i > 0) {
-                            val prev = pcmBuffer[i - 1]
-                            val curr = pcmBuffer[i]
-                            if ((prev > 0 && curr <= 0) || (prev < 0 && curr >= 0)) {
-                                zeroCrossings++
+                        var sumSquares = 0.0
+                        var zeroCrossings = 0
+                        for (i in 0 until read) {
+                            val sample = pcmBuffer[i].toDouble()
+                            sumSquares += sample * sample
+                            if (i > 0) {
+                                val prev = pcmBuffer[i - 1]
+                                val curr = pcmBuffer[i]
+                                if ((prev > 0 && curr <= 0) || (prev < 0 && curr >= 0)) {
+                                    zeroCrossings++
+                                }
                             }
                         }
-                    }
-                    val rms = sqrt(sumSquares / read).toFloat()
-                    val zcr = zeroCrossings.toFloat() / read.toFloat()
+                        val rms = sqrt(sumSquares / read).toFloat()
+                        val zcr = zeroCrossings.toFloat() / read.toFloat()
 
-                    _events.tryEmit(WakeWordEvent.VoiceLevelChanged(rms))
+                        _events.tryEmit(WakeWordEvent.VoiceLevelChanged(rms))
 
-                    // 2. Спектральная верификация речи
-                    val isSpeechFormant = zcr in 0.02f..0.48f
-                    val isAboveThreshold = rms > effectiveRmsThreshold
+                        val isSpeechFormant = zcr in 0.02f..0.48f
+                        val isAboveThreshold = rms > effectiveRmsThreshold
 
-                    if (isAboveThreshold && isSpeechFormant) {
-                        speechFrames++
-                        if (speechFrames >= 3) {
-                            speechFrames = 0
-                            lastTriggerTimestamp = System.currentTimeMillis()
-
-                            // Синхронно освобождаем AudioRecord перед передачей микрофона SpeechRecognizer
-                            stopListening()
-                            _events.emit(WakeWordEvent.VoiceActivityDetected)
-                            break
+                        if (isAboveThreshold && isSpeechFormant) {
+                            speechFrames++
+                            if (speechFrames >= 3) {
+                                speechFrames = 0
+                                lastTriggerTimestamp = System.currentTimeMillis()
+                                // Синхронно отпускаем микрофон и сигнализируем.
+                                stopListeningInternal()
+                                _events.emit(WakeWordEvent.VoiceActivityDetected)
+                                break
+                            }
+                        } else {
+                            speechFrames = (speechFrames - 1).coerceAtLeast(0)
                         }
-                    } else {
-                        speechFrames = (speechFrames - 1).coerceAtLeast(0)
                     }
+                } catch (ce: CancellationException) {
+                    throw ce
+                } catch (t: Throwable) {
+                    Log.e(TAG, "audio loop failed", t)
+                } finally {
+                    stopListeningInternal()
                 }
             }
-        } catch (_: Exception) {
-            stopListening()
+        } catch (t: Throwable) {
+            Log.e(TAG, "startListening: не удалось запустить AudioRecord", t)
+            stopListeningInternal()
         }
     }
 
     @Synchronized
     override fun stopListening() {
-        isRecording = false
+        cooldownJob?.cancel()
+        cooldownJob = null
         workerJob?.cancel()
         workerJob = null
-        try {
-            if (audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                audioRecord?.stop()
-            }
-            audioRecord?.release()
-        } catch (e: Exception) {
-            Log.e(TAG, "stopListening: не удалось остановить AudioRecord", e)
-        }
-        audioRecord = null
+        stopListeningInternal()
     }
 
+    /**
+     * Внутренняя, повторно-входимая очистка AudioRecord. Не отменяет jobs
+     * (это делает stopListening()), поэтому может безопасно вызываться из
+     * callback'ов/exception-handler'ов.
+     */
+    @Synchronized
+    private fun stopListeningInternal() {
+        isRecording = false
+        val record = audioRecord
+        audioRecord = null
+        if (record != null) {
+            try {
+                if (record.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                    record.stop()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "stopListening: не удалось остановить AudioRecord", e)
+            } finally {
+                try { record.release() } catch (_: Throwable) {}
+            }
+        }
+    }
+
+    @Synchronized
     override fun destroy() {
-        stopListening()
-        supervisorJob.cancel()
+        if (!disposed.compareAndSet(false, true)) return
+        Log.d(TAG, "destroy: releasing wake word engine")
+        cooldownJob?.cancel()
+        cooldownJob = null
+        workerJob?.cancel()
+        workerJob = null
+        engineJob.cancel()
+        stopListeningInternal()
     }
 }
