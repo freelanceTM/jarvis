@@ -25,10 +25,16 @@ class FakeAiProvider(
 
     val calls = AtomicInteger(0)
 
+    /** Запрос, который получил провайдер в последнем вызове (CR-03 history test). */
+    @Volatile
+    var lastRequest: ProviderRequest? = null
+        private set
+
     override fun isConfigured(): Boolean = configured
 
     override suspend fun execute(request: ProviderRequest): ProviderResult {
         calls.incrementAndGet()
+        lastRequest = request
         if (delayMs > 0) delay(delayMs)
         return script[minOf(calls.get() - 1, script.lastIndex)]
     }

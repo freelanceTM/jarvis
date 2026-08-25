@@ -1,6 +1,7 @@
 package com.jarvis.server
 
 import com.jarvis.server.config.ProviderConfig
+import com.jarvis.server.provider.BaseHttpProvider
 import com.jarvis.server.provider.GeminiProvider
 import com.jarvis.server.provider.GroqProvider
 import com.jarvis.server.provider.HttpTransport
@@ -8,6 +9,7 @@ import com.jarvis.server.provider.HttpTransportResponse
 import com.jarvis.server.provider.OpenRouterProvider
 import com.jarvis.server.provider.ProviderFailureKind
 import com.jarvis.server.provider.ProviderId
+import com.jarvis.server.provider.ProviderMessage
 import com.jarvis.server.provider.ProviderRequest
 import com.jarvis.server.provider.ProviderResult
 import com.jarvis.server.provider.TransportException
@@ -24,7 +26,7 @@ import org.junit.Test
 
 class HttpProvidersTest {
 
-    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = false }
 
     private data class Captured(
         val url: String,
@@ -72,6 +74,174 @@ class HttpProvidersTest {
         maxTokens = 77,
         temperature = 0.25
     )
+
+    @Test
+    fun `groq includes history in system-user-assistant order`() = runBlocking {
+        val transport = FakeTransport(
+            HttpTransportResponse(
+                200,
+                """{"choices":[{"message":{"role":"assistant","content":"ok"}}]}"""
+            )
+        )
+        val req = request().copy(
+            history = listOf(
+                ProviderMessage("user", "hi"),
+                ProviderMessage("assistant", "hello"),
+                ProviderMessage("user", "how are you")
+            )
+        )
+        GroqProvider(config(ProviderId.GROQ), transport, json).execute(req)
+        val body = json.parseToJsonElement(transport.captured!!.body).jsonObject
+        val messages = body["messages"]!!.jsonArray
+        // 1 system + 3 history + 1 current user = 5
+        assertEquals(5, messages.size)
+        assertEquals("system", messages[0].jsonObject["role"]!!.jsonPrimitive.content)
+        assertEquals("system rules", messages[0].jsonObject["content"]!!.jsonPrimitive.content)
+        assertEquals("user", messages[1].jsonObject["role"]!!.jsonPrimitive.content)
+        assertEquals("hi", messages[1].jsonObject["content"]!!.jsonPrimitive.content)
+        assertEquals("assistant", messages[2].jsonObject["role"]!!.jsonPrimitive.content)
+        assertEquals("hello", messages[2].jsonObject["content"]!!.jsonPrimitive.content)
+        assertEquals("user", messages[3].jsonObject["role"]!!.jsonPrimitive.content)
+        assertEquals("how are you", messages[3].jsonObject["content"]!!.jsonPrimitive.content)
+        // last = current prompt
+        assertEquals("user", messages[4].jsonObject["role"]!!.jsonPrimitive.content)
+        assertEquals("hello", messages[4].jsonObject["content"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `groq trims history to 24 KB budget dropping oldest first`() = runBlocking {
+        val transport = FakeTransport(
+            HttpTransportResponse(
+                200,
+                """{"choices":[{"message":{"role":"assistant","content":"ok"}}]}"""
+            )
+        )
+        val big = "x".repeat(5_000) // 5000 bytes in UTF-8 per message
+        val req = request().copy(
+            history = listOf(
+                ProviderMessage("user", "first-$big"),
+                ProviderMessage("assistant", "second-$big"),
+                ProviderMessage("user", "third-$big"),
+                ProviderMessage("assistant", "fourth-$big"),
+                ProviderMessage("user", "fifth-$big"),
+                ProviderMessage("assistant", "sixth-$big")
+            )
+        )
+        GroqProvider(config(ProviderId.GROQ), transport, json).execute(req)
+        val messages = json.parseToJsonElement(transport.captured!!.body)
+            .jsonObject["messages"]!!.jsonArray
+        // 1 system + latest history fits in 24KB + 1 current prompt
+        // The first (oldest) message(s) must be dropped.
+        val roleContents = messages.map {
+            val c = it.jsonObject["content"]!!.jsonPrimitive.content
+            c.take(15)
+        }
+        // "first-" must be gone
+        assertTrue(roleContents.none { it.startsWith("first-") })
+        // Latest history ("sixth-") must remain, and current prompt "hello" is last.
+        assertTrue(roleContents.any { it.startsWith("sixth-") })
+        assertEquals("hello", messages.last().jsonObject["content"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `groq with empty history preserves old behavior (system + user)`() = runBlocking {
+        val transport = FakeTransport(
+            HttpTransportResponse(
+                200,
+                """{"choices":[{"message":{"role":"assistant","content":"ok"}}]}"""
+            )
+        )
+        GroqProvider(config(ProviderId.GROQ), transport, json).execute(request())
+        val messages = json.parseToJsonElement(transport.captured!!.body)
+            .jsonObject["messages"]!!.jsonArray
+        assertEquals(2, messages.size)
+        assertEquals("system", messages[0].jsonObject["role"]!!.jsonPrimitive.content)
+        assertEquals("user", messages[1].jsonObject["role"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `gemini maps assistant role to model and preserves history order`() = runBlocking {
+        val transport = FakeTransport(
+            HttpTransportResponse(
+                200,
+                """{"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}"""
+            )
+        )
+        val req = request().copy(
+            history = listOf(
+                ProviderMessage("user", "hi"),
+                ProviderMessage("assistant", "hello"),
+                ProviderMessage("system", "be nice")
+            )
+        )
+        GeminiProvider(config(ProviderId.GEMINI), transport, json).execute(req)
+        val body = json.parseToJsonElement(transport.captured!!.body).jsonObject
+        val contents = body["contents"]!!.jsonArray
+        // 3 turns (hi user, hello model, how-are-you user? — wait: system folded into instruction)
+        // history has 2 user/assistant turns + 1 current = 3 contents entries
+        assertEquals(3, contents.size)
+        assertEquals("user", contents[0].jsonObject["role"]!!.jsonPrimitive.content)
+        assertEquals("hi", contents[0].jsonObject["parts"]!!.jsonArray[0].jsonObject["text"]!!.jsonPrimitive.content)
+        assertEquals("model", contents[1].jsonObject["role"]!!.jsonPrimitive.content)
+        assertEquals("hello", contents[1].jsonObject["parts"]!!.jsonArray[0].jsonObject["text"]!!.jsonPrimitive.content)
+        assertEquals("user", contents[2].jsonObject["role"]!!.jsonPrimitive.content)
+        assertEquals("hello", contents[2].jsonObject["parts"]!!.jsonArray[0].jsonObject["text"]!!.jsonPrimitive.content)
+        // system from history must be folded into systemInstruction
+        val sys = body["systemInstruction"]!!.jsonObject["parts"]!!.jsonArray[0].jsonObject["text"]!!.jsonPrimitive.content
+        assertTrue(sys.contains("system rules"))
+        assertTrue(sys.contains("be nice"))
+    }
+
+    @Test
+    fun `gemini includes google_search_retrieval tool only when requiresWeb=true`() = runBlocking {
+        val transport = FakeTransport(
+            HttpTransportResponse(
+                200,
+                """{"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}"""
+            )
+        )
+        val cfg = config(ProviderId.GEMINI)
+
+        // Without web — tools либо отсутствует, либо пустой.
+        GeminiProvider(cfg, transport, json).execute(request().copy(requiresWeb = false))
+        val bodyNoWeb = json.parseToJsonElement(transport.captured!!.body).jsonObject
+        val toolsNoWeb = bodyNoWeb["tools"]?.jsonArray
+        val hasSearchNoWeb = toolsNoWeb?.any {
+            it.jsonObject.containsKey("google_search_retrieval")
+        } ?: false
+        assertFalse("requiresWeb=false should not add google_search_retrieval", hasSearchNoWeb)
+
+        val transport2 = FakeTransport(
+            HttpTransportResponse(
+                200,
+                """{"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}"""
+            )
+        )
+        GeminiProvider(cfg, transport2, json).execute(request().copy(requiresWeb = true))
+        val bodyWeb = json.parseToJsonElement(transport2.captured!!.body).jsonObject
+        val toolsWeb = bodyWeb["tools"]!!.jsonArray
+        assertTrue(
+            "requiresWeb=true must add google_search_retrieval tool",
+            toolsWeb.any { it.jsonObject.containsKey("google_search_retrieval") }
+        )
+    }
+
+    @Test
+    fun `gemini advertises supportsWeb=true`() {
+        assertTrue(
+            "Gemini must declare supportsWeb for CR-16 routing",
+            GeminiProvider(
+                config(ProviderId.GEMINI),
+                FakeTransport(HttpTransportResponse(200, "{}")),
+                json
+            ).capabilities.supportsWeb
+        )
+    }
+
+    @Test
+    fun `HISTORY_BUDGET_BYTES constant is 24 KB`() {
+        assertEquals(24 * 1024, BaseHttpProvider.HISTORY_BUDGET_BYTES)
+    }
 
     @Test
     fun `groq sends normalized OpenAI request and parses usage`() = runBlocking {

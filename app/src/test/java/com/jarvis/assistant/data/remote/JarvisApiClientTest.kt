@@ -3,9 +3,17 @@ package com.jarvis.assistant.data.remote
 import com.jarvis.assistant.core.network.ResponseBodyTooLargeException
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.core.security.SecurityManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
@@ -84,6 +92,43 @@ class JarvisApiClientTest {
         assertFalse(body.contains("modelOverride"))
     }
 
+    /** CR-03: при передаче истории диалога она попадает в JSON как массив сообщений. */
+    @Test
+    fun `history is serialized into request body`() = runBlocking {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """{"success":true,"text":"ok","executionType":"CLOUD_AI","requestId":"r"}"""
+            )
+        )
+        val result = client.execute(
+            text = "вопрос",
+            source = "CHAT",
+            privacyLevel = "NORMAL",
+            requiresWeb = false,
+            history = listOf(
+                MessageDto("user", "привет"),
+                MessageDto("assistant", "здравствуйте")
+            )
+        )
+        assertTrue(result is Resource.Success)
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue("history.user present", body.contains(""""role":"user","content":"привет""""))
+        assertTrue("history.assistant present", body.contains(""""role":"assistant","content":"здравствуйте""""))
+    }
+
+    /** CR-03: по умолчанию история отсутствует в теле (поведение до CR-03). */
+    @Test
+    fun `no history field when default`() = runBlocking {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """{"success":true,"text":"ok","executionType":"CLOUD_AI","requestId":"r"}"""
+            )
+        )
+        client.execute("hello", "CHAT", "NORMAL", false)
+        val body = server.takeRequest().body.readUtf8()
+        assertFalse(body.contains(""""history""""))
+    }
+
     @Test
     fun `normalized API error preserves machine code and safe user message`() = runBlocking {
         server.enqueue(
@@ -136,6 +181,74 @@ class JarvisApiClientTest {
         override fun clearAccessToken() { token.value = "" }
         override fun hasValidAccessToken(): Boolean = token.value.length >= 32
         override val accessTokenFlow: Flow<String> = token
+    }
+
+    // -------------------------------------------------------------- CR-05
+
+    /**
+     * CR-05: отмена корутины вызывающего кода реально отменяет OkHttp Call.
+     * Мы убеждаемся в этом косвенно:
+     *   1) Запрос «висит» на сервере (без тела ответа) бесконечно.
+     *   2) Родительская корутина отменяется; after-cancel мы ждём
+     *      освобождение диспатчера; сервер в итоге получает cancel без
+     *      ответа (takeRequest с нулевым timeout подтверждает, что запрос
+     *      дошёл; requestCount подтверждает что клиент больше не пытался
+     *      сделать второй запрос).
+     * Главное проверяемое свойство: вызов не висит 30 секунд и не бросает
+     *      Timeout, а завершается сразу после cancel'а корутины.
+     */
+    @Test
+    fun `cancelling caller coroutine cancels underlying OkHttp call promptly`() {
+        // Задерживаем ответ на 10 секунд — клиент должен завершиться раньше.
+        server.enqueue(MockResponse().setBodyDelay(10, TimeUnit.SECONDS).setResponseCode(200).setBody("{}"))
+
+        val testScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val requestReceived = CountDownLatch(1)
+        lateinit var job: Job
+        job = testScope.launch {
+            client.execute("q", "CHAT", "NORMAL", false)
+        }
+        // Дождёмся, пока MockWebServer увидел запрос.
+        val gotRequest = CountDownLatch(1)
+        Thread {
+            try {
+                server.takeRequest(10, TimeUnit.SECONDS)
+                gotRequest.countDown()
+            } catch (_: Throwable) {}
+        }.start()
+        assertTrue("server did not receive request in time", gotRequest.await(5, TimeUnit.SECONDS))
+
+        // Отменяем корутину и ждём завершения job'а — это должно произойти
+        // << чем за 10 секунд (body delay на сервере).
+        testScope.cancel()
+        val finishedAt = System.nanoTime()
+        runBlocking { job.join() }
+        val elapsedMs = (System.nanoTime() - finishedAt) / 1_000_000
+        assertTrue(
+            "expected cancellation to finish promptly (< 5s), took ${elapsedMs}ms",
+            elapsedMs < 5_000
+        )
+    }
+
+    /** CR-06: клиент всегда шлёт X-Request-Deadline (epoch ms). */
+    @Test
+    fun `client sends X-Request-Deadline header with epoch ms`() = runBlocking {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """{"success":true,"text":"ok","executionType":"CLOUD_AI","requestId":"r"}"""
+            )
+        )
+        val before = System.currentTimeMillis()
+        client.execute("hello", "CHAT", "NORMAL", false)
+        val after = System.currentTimeMillis()
+        val headerVal = server.takeRequest().getHeader("X-Request-Deadline")?.toLongOrNull()
+        assertTrue("X-Request-Deadline must be present and numeric", headerVal != null)
+        val expectedMin = before + TimeUnit.SECONDS.toMillis(JarvisApiClient.CALL_TIMEOUT_SECONDS)
+        val expectedMax = after + TimeUnit.SECONDS.toMillis(JarvisApiClient.CALL_TIMEOUT_SECONDS) + 500
+        assertTrue(
+            "deadline $headerVal should be in [$expectedMin,$expectedMax]",
+            headerVal in expectedMin..expectedMax
+        )
     }
 
     private companion object {

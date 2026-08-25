@@ -20,6 +20,18 @@ enum class ApiPrivacyLevel { UNKNOWN, NORMAL, PRIVATE, SENSITIVE }
 enum class ApiExecutionType { CLOUD_AI }
 
 /**
+ * Одно сообщение диалога (CR-03).
+ *
+ * `role` использует OpenAI-совместимые строки: `user` / `assistant` / `system`.
+ * Пустая история (`emptyList()`) эквивалентна поведению до CR-03.
+ */
+@Serializable
+data class MessageDto(
+    @SerialName("role") val role: String,
+    @SerialName("content") val content: String
+)
+
+/**
  * Запрос на выполнение.
  *
  * Намеренно НЕТ поля `provider`: клиент не имеет права выбирать провайдера
@@ -57,7 +69,18 @@ data class AiExecutionRequest(
      *  - длина валидируется наравне с [text];
      *  - сервер добавляет свой базовый system prompt поверх, а не заменяет его.
      */
-    @SerialName("systemContext") val systemContext: String? = null
+    @SerialName("systemContext") val systemContext: String? = null,
+
+    /**
+     * История диалога (CR-03). Последние сообщения пользователя и ассистента,
+     * которые проксируются в провайдера как messages, а не как одиночный prompt.
+     *
+     * Порядок: от старых к новым. Текущий пользовательский запрос ([text])
+     * добавляется последним и НЕ должен дублироваться в history.
+     *
+     * При `history == emptyList()` поведение идентично прежнему.
+     */
+    @SerialName("history") val history: List<MessageDto> = emptyList()
 )
 
 /**

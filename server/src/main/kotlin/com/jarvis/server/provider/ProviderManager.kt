@@ -126,6 +126,27 @@ class ProviderManager(
         val maxProviderAttempts = policy.maxProviderAttempts.coerceAtLeast(0)
         for (provider in candidates) {
             if (attempted.size >= maxProviderAttempts) break
+
+            // CR-06: сперва проверяем бюджет. Бюджетный early-out НЕ должен
+            // тратить HALF_OPEN-слот провайдера и не должен дёргать
+            // health.tryAcquire — мы заранее знаем, что у нас нет шансов
+            // дождаться ответа.
+            val providerTimeoutMs = configs[provider.id]?.requestTimeoutMs
+                ?.coerceAtLeast(1L)
+                ?: 30_000L
+            val remainingMs = request.deadlineEpochMs?.let { it - clock() }
+            if (remainingMs != null && remainingMs < providerTimeoutMs) {
+                logger.warn(
+                    "insufficient remaining budget for next provider; failing fast",
+                    "requestId" to request.requestId,
+                    "provider" to provider.id.name,
+                    "remainingMs" to remainingMs.toString(),
+                    "providerTimeoutMs" to providerTimeoutMs.toString()
+                )
+                lastKind = ProviderFailureKind.TIMEOUT
+                break
+            }
+
             if (!health.tryAcquire(provider.id)) continue
 
             attempted += provider.id
@@ -173,10 +194,19 @@ class ProviderManager(
                 // реализации провайдера. HTTP-транспорт имеет собственный
                 // callTimeout, но fake/будущий SDK-провайдер тоже не должен
                 // иметь возможность зависнуть навсегда.
-                val timeoutMs = configs[provider.id]?.requestTimeoutMs
+                // CR-06: берём min(per-provider timeout, оставшийся общий
+                // deadline), чтобы не стартовать попытку, которая гарантированно
+                // истечёт по общему deadline раньше, чем закончится таймаут
+                // провайдера.
+                val providerTimeoutMs = configs[provider.id]?.requestTimeoutMs
                     ?.coerceAtLeast(1L)
                     ?: 30_000L
-                withTimeout(timeoutMs) {
+                val remainingMs = request.deadlineEpochMs?.let { it - clock() }
+                val effectiveTimeoutMs = when {
+                    remainingMs == null -> providerTimeoutMs
+                    else -> minOf(providerTimeoutMs, remainingMs).coerceAtLeast(1L)
+                }
+                withTimeout(effectiveTimeoutMs) {
                     provider.execute(request)
                 }
             } catch (_: TimeoutCancellationException) {
@@ -237,6 +267,22 @@ class ProviderManager(
 
                     if (!result.kind.isRetryable || attempt == maxAttempts) {
                         return ManagerOutcome.Failure(lastKind, listOf(provider.id))
+                    }
+
+                    // CR-06: не ждём backoff, если общий deadline уже истечёт
+                    // за время ожидания — бессмысленно тратить время.
+                    val remainingMs = request.deadlineEpochMs?.let { it - clock() }
+                    if (remainingMs != null && remainingMs <= policy.retryBackoffMs + 100) {
+                        logger.warn(
+                            "skipping retry backoff; deadline too near",
+                            "requestId" to request.requestId,
+                            "provider" to provider.id.name,
+                            "remainingMs" to remainingMs.toString()
+                        )
+                        return ManagerOutcome.Failure(
+                            lastKind = ProviderFailureKind.TIMEOUT,
+                            attempted = listOf(provider.id)
+                        )
                     }
 
                     delay(policy.retryBackoffMs)

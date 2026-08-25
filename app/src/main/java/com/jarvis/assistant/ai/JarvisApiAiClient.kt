@@ -35,7 +35,8 @@ interface ContextualCloudAIClient {
         privacyLevel: String,
         requiresWeb: Boolean,
         cloudExplicitlyAllowed: Boolean = false,
-        relatedContent: List<String> = emptyList()
+        relatedContent: List<String> = emptyList(),
+        history: List<Message> = emptyList()
     ): Resource<String>
 }
 
@@ -56,7 +57,8 @@ class JarvisApiAiClient @Inject constructor(
         privacyLevel = PrivacyLevel.UNKNOWN.name,
         requiresWeb = false,
         cloudExplicitlyAllowed = false,
-        relatedContent = history.map(Message::text)
+        relatedContent = history.map(Message::text),
+        history = history
     )
 
     /**
@@ -72,7 +74,8 @@ class JarvisApiAiClient @Inject constructor(
         privacyLevel: String,
         requiresWeb: Boolean,
         cloudExplicitlyAllowed: Boolean,
-        relatedContent: List<String>
+        relatedContent: List<String>,
+        history: List<Message>
     ): Resource<String> {
         val declared = PrivacyLevel.entries.firstOrNull { it.name == privacyLevel.uppercase() }
             ?: return Resource.Error(
@@ -97,7 +100,18 @@ class JarvisApiAiClient @Inject constructor(
             privacyLevel = effective.name,
             requiresWeb = requiresWeb,
             systemContext = systemPrompt,
-            cloudExplicitlyAllowed = cloudExplicitlyAllowed
+            cloudExplicitlyAllowed = cloudExplicitlyAllowed,
+            // CR-03: преобразуем доменные Message → DTO, исключаем SYSTEM
+            // (systemPrompt отправляется отдельно и серверный базовый промпт
+            // не должен дублироваться через историю).
+            history = history
+                .filter { it.role.value != "system" && it.text.isNotBlank() }
+                .map {
+                    com.jarvis.assistant.data.remote.MessageDto(
+                        role = it.role.value,
+                        content = it.text
+                    )
+                }
         )
     }
 }

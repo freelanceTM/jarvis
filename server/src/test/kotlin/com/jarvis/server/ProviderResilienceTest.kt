@@ -205,5 +205,11 @@ class ProviderResilienceTest {
         requestTimeoutMs = requestTimeoutMs
     )
 
-    private fun request() = ProviderRequest("req", "prompt", "system", 10, 0.5)
+    private fun request() = ProviderRequest(
+        requestId = "req",
+        prompt = "prompt",
+        systemPrompt = "system",
+        maxTokens = 10,
+        temperature = 0.5
+    )
 }

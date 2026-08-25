@@ -84,11 +84,32 @@ private data class GemGenerationConfig(
     @SerialName("maxOutputTokens") val maxOutputTokens: Int
 )
 
+/**
+ * CR-16: Google Search grounding (Google Search as a tool). Для Gemini
+ * 1.5 Flash/Pro это встроенная возможность — передаём её как tools[] и
+ * включаем dynamicRetrieval, если запрос требует веб-доступа.
+ */
+@Serializable
+private data class GemDynamicRetrievalConfig(
+    @SerialName("mode") val mode: String = "MODE_DYNAMIC",
+    @SerialName("dynamicThreshold") val dynamicThreshold: Double = 0.0
+)
+
+@Serializable
+private data class GemGoogleSearchRetrieval(
+    @SerialName("google_search_retrieval") val googleSearchRetrieval: GemDynamicRetrieval
+)
+
 @Serializable
 private data class GemRequest(
     @SerialName("contents") val contents: List<GemContent>,
     @SerialName("systemInstruction") val systemInstruction: GemSystemInstruction? = null,
-    @SerialName("generationConfig") val generationConfig: GemGenerationConfig
+    @SerialName("generationConfig") val generationConfig: GemGenerationConfig,
+    /**
+     * CR-16: Google Search grounding включается условно. Для обычных запросов —
+     * пустой список, при requiresWeb — список с google_search_retrieval.
+     */
+    @SerialName("tools") val tools: List<GemGoogleSearchRetrieval> = emptyList()
 )
 
 @Serializable
@@ -120,6 +141,14 @@ abstract class BaseHttpProvider(
     protected val transport: HttpTransport,
     protected val json: Json
 ) : AiProvider {
+
+    companion object {
+        /**
+         * CR-03: бюджет на сериализованный history-блок. Общий body — 32 KB;
+         * 24 KB на историю + 8 KB на systemPrompt+prompt+обвязку.
+         */
+        const val HISTORY_BUDGET_BYTES: Int = 24 * 1024
+    }
 
     override fun isConfigured(): Boolean = config.enabled && config.hasKey
 
@@ -197,19 +226,50 @@ abstract class BaseHttpProvider(
         )
     }
 
+    /**
+     * CR-03: собирает messages для OpenAI-совместимого провайдера в каноничном
+     * порядке: system, *trimmedHistory, user(current prompt). История режется
+     * с НАЧАЛА (старые сообщения выпадают), чтобы влезть в бюджет 32 KB.
+     */
+    protected fun buildOpenAiMessages(request: ProviderRequest): List<OaiMessage> {
+        val historyMsgs = request.history.map { OaiMessage(it.role, it.content) }
+        val trimmed = trimHistoryForBudget(historyMsgs)
+        return buildList {
+            add(OaiMessage("system", request.systemPrompt))
+            addAll(trimmed)
+            add(OaiMessage("user", request.prompt))
+        }
+    }
+
     protected fun buildOpenAiCompatibleBody(request: ProviderRequest, model: String): String =
         json.encodeToString(
             OaiRequest.serializer(),
             OaiRequest(
                 model = model,
-                messages = listOf(
-                    OaiMessage("system", request.systemPrompt),
-                    OaiMessage("user", request.prompt)
-                ),
+                messages = buildOpenAiMessages(request),
                 temperature = request.temperature,
                 maxTokens = request.maxTokens
             )
         )
+
+    /**
+     * CR-03: жадно выкидывает самые СТАРЫЕ сообщения истории, пока
+     * сериализованный размер не впишется в [HISTORY_BUDGET_BYTES]. Никогда
+     * не режет сообщение посередине и не трогает system/user(current).
+     */
+    private fun trimHistoryForBudget(history: List<OaiMessage>): List<OaiMessage> {
+        if (history.isEmpty()) return emptyList()
+        val work = ArrayDeque(history)
+        val overheadPerMsg = 5 // запятая/скобки/кавычки
+        while (work.isNotEmpty()) {
+            val bytes = work.sumOf {
+                json.encodeToString(OaiMessage.serializer(), it).toByteArray().size + overheadPerMsg
+            }
+            if (bytes <= HISTORY_BUDGET_BYTES) break
+            work.removeFirst()
+        }
+        return work
+    }
 }
 
 // =============================================================== Groq
@@ -290,13 +350,6 @@ class GeminiProvider(
 
     override val id = ProviderId.GEMINI
 
-    override val capabilities = ProviderCapabilities(
-        supportsChat = true,
-        supportsWeb = false,
-        supportsStreaming = false,
-        supportsToolCalling = false
-    )
-
     override fun endpointUrl() = "${config.baseUrl}/${config.model}:generateContent"
 
     override fun headers() = mapOf(
@@ -304,22 +357,94 @@ class GeminiProvider(
         "Content-Type" to "application/json"
     )
 
-    override fun buildBody(request: ProviderRequest): String =
-        json.encodeToString(
+    override fun buildBody(request: ProviderRequest): String {
+        // CR-03/16: history + current prompt в Gemini-формате. Gemini не имеет
+        // отдельного assistant/user контента в systemInstruction; system
+        // сообщения из истории подмешиваем к systemPrompt.
+        val systemFromHistory = request.history
+            .filter { it.role == "system" }
+            .joinToString("\n\n") { it.content }
+        val combinedSystem = if (systemFromHistory.isBlank()) {
+            request.systemPrompt
+        } else {
+            "${request.systemPrompt}\n\n$systemFromHistory"
+        }
+
+        val turnHistory = request.history.filter { it.role in setOf("user", "assistant") }
+            .map { GemContent(role = geminiRole(it.role), parts = listOf(GemPart(it.content))) }
+        val trimmedHistory = trimGemHistory(turnHistory)
+
+        val contents = trimmedHistory + GemContent(role = "user", parts = listOf(GemPart(request.prompt)))
+
+        val tools: List<GemGoogleSearchRetrieval> =
+            if (request.requiresWeb && capabilities.supportsWeb) {
+                listOf(
+                    GemGoogleSearchRetrieval(
+                        googleSearchRetrieval = GemDynamicRetrievalConfig(
+                            mode = "MODE_DYNAMIC",
+                            // CR-16: порог 0.0 = "всегда использовать retrieval при
+                            // requiresWeb", т. е. роутер явно попросил веб-доступ.
+                            dynamicThreshold = 0.0
+                        )
+                    )
+                )
+            } else {
+                emptyList()
+            }
+
+        return json.encodeToString(
             GemRequest.serializer(),
             GemRequest(
-                contents = listOf(
-                    GemContent(role = "user", parts = listOf(GemPart(request.prompt)))
-                ),
+                contents = contents,
                 systemInstruction = GemSystemInstruction(
-                    parts = listOf(GemPart(request.systemPrompt))
+                    parts = listOf(GemPart(combinedSystem))
                 ),
                 generationConfig = GemGenerationConfig(
                     temperature = request.temperature,
                     maxOutputTokens = request.maxTokens
-                )
+                ),
+                tools = tools
             )
         )
+    }
+
+    /**
+     * CR-16: сообщаем роутеру, что Gemini может обслуживать requiresWeb=true
+     * через встроенный Google Search grounding.
+     */
+    override val capabilities = ProviderCapabilities(
+        supportsChat = true,
+        supportsWeb = true,
+        supportsStreaming = false,
+        supportsToolCalling = false
+    )
+
+    /** Маппинг OpenAI-ролей на Gemini-роли: assistant → model. */
+    private fun geminiRole(role: String): String = when (role) {
+        "assistant" -> "model"
+        else -> "user"
+    }
+
+    /**
+     * CR-03: жадно отсекает самые СТАРЫЕ turns истории, пока сериализованный
+     * размер contents[] не впишется в [HISTORY_BUDGET_BYTES]. Gemini не любит
+     * пустые turns; всегда возвращаем чётное сбалансированное число сообщений
+     * (user/model чередуются), но не стрижём текущий prompt — он добавляется
+     * после вызова этой функции.
+     */
+    private fun trimGemHistory(history: List<GemContent>): List<GemContent> {
+        if (history.isEmpty()) return emptyList()
+        val work = ArrayDeque(history)
+        val overheadPerMsg = 5
+        while (work.isNotEmpty()) {
+            val bytes = work.sumOf {
+                json.encodeToString(GemContent.serializer(), it).toByteArray().size + overheadPerMsg
+            }
+            if (bytes <= HISTORY_BUDGET_BYTES) break
+            work.removeFirst()
+        }
+        return work
+    }
 
     override fun parseSuccess(body: String): ProviderResult {
         val parsed = json.decodeFromString(GemResponse.serializer(), body)

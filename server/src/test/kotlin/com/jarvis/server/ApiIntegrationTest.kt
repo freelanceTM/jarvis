@@ -18,7 +18,9 @@ import com.jarvis.server.http.JarvisApiHandler
 import com.jarvis.server.observability.ConsoleStructuredLogger
 import com.jarvis.server.observability.Metrics
 import com.jarvis.server.provider.AiProvider
+import com.jarvis.server.provider.ProviderCapabilities
 import com.jarvis.server.provider.ProviderFailureKind
+import com.jarvis.server.provider.ProviderResult
 import com.jarvis.server.provider.ProviderHealthTracker
 import com.jarvis.server.provider.ProviderId
 import com.jarvis.server.provider.ProviderManager
@@ -135,8 +137,17 @@ class ApiIntegrationTest {
     private fun requestBody(
         text: String = "Объясни квантовую запутанность",
         privacy: String = "NORMAL",
-        requiresWeb: Boolean = false
-    ) = """{"text":"$text","source":"VOICE","privacyLevel":"$privacy","requiresWeb":$requiresWeb}"""
+        requiresWeb: Boolean = false,
+        history: String? = null
+    ): String {
+        val base = StringBuilder()
+        base.append("""{"text":"$text","source":"VOICE","privacyLevel":"$privacy","requiresWeb":$requiresWeb""")
+        if (history != null) {
+            base.append(""","history":$history""")
+        }
+        base.append("}")
+        return base.toString()
+    }
 
     private fun errorOf(body: String): ApiErrorResponse =
         json.decodeFromString(ApiErrorResponse.serializer(), body)
@@ -648,5 +659,65 @@ class ApiIntegrationTest {
         assertEquals(400, malformed.status)
         assertEquals(429, next.status)
         assertEquals(0, h.providers[0].calls.get())
+    }
+
+    /** CR-03: клиентская история доходит до провайдера как ProviderRequest.history. */
+    @Test
+    fun `history flows end-to-end from DTO to provider`() = runBlocking {
+        val groq = FakeAiProvider.ok(ProviderId.GROQ, "ok")
+        val h = harness(providers = listOf(groq))
+        val body = requestBody(
+            text = "а теперь подробнее?",
+            history = """[{"role":"user","content":"привет"},{"role":"assistant","content":"здравствуйте"},{"role":"MODEL","content":"чем могу помочь"}]"""
+        )
+        val response = h.handler.handle(post(body))
+        assertEquals(200, response.status)
+        val req = groq.lastRequest!!
+        assertEquals("а теперь подробнее?", req.prompt)
+        // "MODEL" должен быть нормализован в "assistant".
+        val roles = req.history.map { it.role }
+        assertEquals(listOf("user", "assistant", "assistant"), roles)
+        assertEquals("здравствуйте", req.history[1].content)
+    }
+
+    /** CR-03: пустая история работает как раньше — в ProviderRequest.history пусто. */
+    @Test
+    fun `empty history behaves like pre-CR-03`() = runBlocking {
+        val groq = FakeAiProvider.ok(ProviderId.GROQ, "ok")
+        val h = harness(providers = listOf(groq))
+        val response = h.handler.handle(post(requestBody()))
+        assertEquals(200, response.status)
+        assertTrue(groq.lastRequest!!.history.isEmpty())
+    }
+
+    /** CR-03: невалидная роль в истории → 400. */
+    @Test
+    fun `invalid history role returns INVALID_REQUEST`() = runBlocking {
+        val h = harness()
+        val body = requestBody(
+            history = """[{"role":"potato","content":"test"}]"""
+        )
+        val response = h.handler.handle(post(body))
+        assertEquals(400, response.status)
+    }
+
+    /** CR-16: запрос с requiresWeb=true доходит до Gemini web-capable провайдера. */
+    @Test
+    fun `requiresWeb request reaches web-capable provider`() = runBlocking {
+        val groqNoWeb = FakeAiProvider.ok(ProviderId.GROQ, "groq")
+        val geminiWeb = FakeAiProvider(
+            id = ProviderId.GEMINI,
+            script = listOf(ProviderResult.Success("из сети", "gemini-test", 1, 2, 3)),
+            capabilities = ProviderCapabilities(supportsChat = true, supportsWeb = true)
+        )
+        val h = harness(providers = listOf(groqNoWeb, geminiWeb))
+        val response = h.handler.handle(post(requestBody(requiresWeb = true)))
+        assertEquals(200, response.status)
+        val parsed = json.decodeFromString(AiExecutionResponse.serializer(), response.body)
+        assertEquals("из сети", parsed.text)
+        assertEquals(0, groqNoWeb.calls.get())
+        assertEquals(1, geminiWeb.calls.get())
+        // requiresWeb должен дойти до провайдерного запроса.
+        assertEquals(true, geminiWeb.lastRequest!!.requiresWeb)
     }
 }

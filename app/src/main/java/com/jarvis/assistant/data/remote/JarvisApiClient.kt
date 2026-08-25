@@ -8,20 +8,26 @@ import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.core.security.AccessTokenPolicy
 import com.jarvis.assistant.core.security.SecurityManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * Клиент JARVIS API (Этап 3).
@@ -38,6 +44,13 @@ import javax.inject.Singleton
  * (AIRepository → ExecutionDecisionEngine) не меняется.
  */
 
+/** Одно сообщение истории диалога (CR-03). Зеркалит server `MessageDto`. */
+@Serializable
+data class MessageDto(
+    @SerialName("role") val role: String,
+    @SerialName("content") val content: String
+)
+
 @Serializable
 data class JarvisAiRequestDto(
     @SerialName("text") val text: String,
@@ -46,7 +59,8 @@ data class JarvisAiRequestDto(
     @SerialName("requiresWeb") val requiresWeb: Boolean,
     @SerialName("cloudExplicitlyAllowed") val cloudExplicitlyAllowed: Boolean = false,
     @SerialName("requestId") val requestId: String,
-    @SerialName("systemContext") val systemContext: String? = null
+    @SerialName("systemContext") val systemContext: String? = null,
+    @SerialName("history") val history: List<MessageDto> = emptyList()
 )
 
 @Serializable
@@ -92,7 +106,17 @@ class JarvisApiClient @Inject constructor(
         val BASE_URL: String = AppConstants.JARVIS_API_BASE_URL
         const val EXECUTE_PATH = "/v1/ai/execute"
         private const val MAX_RESPONSE_BYTES = 1L * 1024 * 1024
-        private const val CALL_TIMEOUT_SECONDS = 35L
+
+        /**
+         * CR-06: клиентский deadline.
+         *
+         * Единый контракт с сервером: серверный per-request deadline = 28 секунд
+         * (SERVER_REQUEST_DEADLINE_MS в Main.kt). Клиентский callTimeout = 30
+         * секунд — даёт 2 секунды запаса, чтобы сервер успел вернуть 504
+         * PROVIDER_TIMEOUT с телом ошибки, а не выкинуть SocketTimeoutException
+         * без внятного ответа.
+         */
+        const val CALL_TIMEOUT_SECONDS: Long = 30L
     }
 
     private val mediaType = "application/json; charset=utf-8".toMediaType()
@@ -106,6 +130,8 @@ class JarvisApiClient @Inject constructor(
     /**
      * @param source        VOICE или CHAT.
      * @param privacyLevel  NORMAL / PRIVATE / SENSITIVE — сервер применит политику.
+     * @param history       CR-03: последние сообщения диалога (user/assistant).
+     *                      Пустой список = поведение до CR-03.
      */
     suspend fun execute(
         text: String,
@@ -113,7 +139,8 @@ class JarvisApiClient @Inject constructor(
         privacyLevel: String,
         requiresWeb: Boolean,
         systemContext: String? = null,
-        cloudExplicitlyAllowed: Boolean = false
+        cloudExplicitlyAllowed: Boolean = false,
+        history: List<MessageDto> = emptyList()
     ): Resource<String> = withContext(Dispatchers.IO) {
         val token = securityManager.getAccessToken()
         if (!AccessTokenPolicy.isValid(token)) {
@@ -134,7 +161,10 @@ class JarvisApiClient @Inject constructor(
                 requiresWeb = requiresWeb,
                 cloudExplicitlyAllowed = cloudExplicitlyAllowed,
                 requestId = requestId,
-                systemContext = systemContext?.takeIf { it.isNotBlank() }
+                systemContext = systemContext?.takeIf { it.isNotBlank() },
+                // CR-03: отсылаем только непустые сообщения. Роли подгоняем под
+                // OpenAI-каноничный вид (user/assistant/system).
+                history = history.filter { it.content.isNotBlank() }
             )
         )
 
@@ -142,51 +172,98 @@ class JarvisApiClient @Inject constructor(
             .url("$BASE_URL$EXECUTE_PATH")
             .header("Authorization", "Bearer $token")
             .header("Content-Type", "application/json")
+            // CR-06: сообщаем серверу wall-clock deadline (epoch ms) до
+            // которого мы готовы ждать ответ. Сервер использует
+            // min(28s server budget, X-Request-Deadline) и делает early-out,
+            // если попытка провайдера не укладывается.
+            .header(
+                "X-Request-Deadline",
+                (System.currentTimeMillis() +
+                    TimeUnit.SECONDS.toMillis(CALL_TIMEOUT_SECONDS.toLong())).toString()
+            )
             .post(payload.toRequestBody(mediaType))
             .build()
 
-        try {
-            apiHttpClient.newCall(request).execute().use { response ->
-                val body = response.body?.readUtf8Bounded(MAX_RESPONSE_BYTES).orEmpty()
-
-                if (response.isSuccessful) {
-                    val parsed = json.decodeFromString(JarvisAiResponseDto.serializer(), body)
-                    if (parsed.success && parsed.text.isNotBlank()) {
-                        Log.d(TAG, "ai request ok | requestId=${parsed.requestId}")
-                        return@use Resource.Success(parsed.text)
+        // CR-05: вместо блокирующего execute() используем асинхронный enqueue
+        // с suspendCancellableCoroutine, чтобы отмена корутины реально
+        // отменяла OkHttp Call (invokeOnCancellation → call.cancel()),
+        // а не просто бросала ждать IO-поток в никуда.
+        return@withContext try {
+            suspendCancellableCoroutine { cont ->
+                val call = apiHttpClient.newCall(request)
+                cont.invokeOnCancellation { call.cancel() }
+                call.enqueue(object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {
+                        if (!cont.isActive) return
+                        cont.resume(exceptionToResource(e, requestId))
                     }
-                    return@use Resource.Error(
-                        JarvisApiException("EMPTY_RESPONSE", requestId, "Пустой ответ сервера"),
-                        "Сервер вернул пустой ответ."
-                    )
-                }
 
-                // Ошибка: разбираем нормализованный контракт сервера.
-                val error = runCatching {
-                    json.decodeFromString(JarvisApiErrorResponseDto.serializer(), body).error
-                }.getOrElse {
-                    JarvisApiErrorDto(code = "HTTP_${response.code}", requestId = requestId)
-                }
-
-                Log.w(TAG, "ai request failed | code=${error.code} | requestId=${error.requestId}")
-
-                Resource.Error(
-                    JarvisApiException(error.code, error.requestId, error.message),
-                    userMessageFor(error.code)
-                )
+                    override fun onResponse(call: Call, response: Response) {
+                        if (!cont.isActive) {
+                            response.close()
+                            return
+                        }
+                        try {
+                            response.use { resp ->
+                                val body = resp.body?.readUtf8Bounded(MAX_RESPONSE_BYTES).orEmpty()
+                                cont.resume(parseHttpResponse(resp, body, requestId))
+                            }
+                        } catch (t: Throwable) {
+                            if (cont.isActive) cont.resumeWithException(t) else throw t
+                        }
+                    }
+                })
             }
         } catch (e: ResponseBodyTooLargeException) {
             Log.w(TAG, "oversized response | requestId=$requestId")
             Resource.Error(e, "Сервер JARVIS вернул слишком большой ответ.")
-        } catch (e: SocketTimeoutException) {
-            Log.w(TAG, "timeout | requestId=$requestId")
-            Resource.Error(e, "Таймаут подключения к серверу JARVIS. Проверьте интернет.")
-        } catch (e: IOException) {
-            Log.w(TAG, "network error | requestId=$requestId")
-            Resource.Error(e, "Ошибка сети при обращении к серверу JARVIS.")
         } catch (e: Exception) {
             Log.e(TAG, "unexpected failure | requestId=$requestId | type=${e.javaClass.simpleName}")
             Resource.Error(e, "Не удалось выполнить запрос.")
+        }
+    }
+
+    /** CR-05: разбор ответа вынесен из enqueue-callback для читаемости. */
+    private fun parseHttpResponse(response: Response, body: String, requestId: String): Resource<String> {
+        if (response.isSuccessful) {
+            val parsed = json.decodeFromString(JarvisAiResponseDto.serializer(), body)
+            if (parsed.success && parsed.text.isNotBlank()) {
+                Log.d(TAG, "ai request ok | requestId=${parsed.requestId}")
+                return Resource.Success(parsed.text)
+            }
+            return Resource.Error(
+                JarvisApiException("EMPTY_RESPONSE", requestId, "Пустой ответ сервера"),
+                "Сервер вернул пустой ответ."
+            )
+        }
+        val error = runCatching {
+            json.decodeFromString(JarvisApiErrorResponseDto.serializer(), body).error
+        }.getOrElse {
+            JarvisApiErrorDto(code = "HTTP_${response.code}", requestId = requestId)
+        }
+        Log.w(TAG, "ai request failed | code=${error.code} | requestId=${error.requestId}")
+        return Resource.Error(
+            JarvisApiException(error.code, error.requestId, error.message),
+            userMessageFor(error.code)
+        )
+    }
+
+    /** CR-05: маппинг сетевых исключений на Resource.Error (вызывается из onFailure). */
+    private fun exceptionToResource(e: IOException, requestId: String): Resource<String> = when (e) {
+        is SocketTimeoutException -> {
+            Log.w(TAG, "timeout | requestId=$requestId")
+            Resource.Error(e, "Таймаут подключения к серверу JARVIS. Проверьте интернет.")
+        }
+        else -> {
+            // Cancellation от OkHttp после call.cancel() прилетает как IOException
+            // с message "Canceled" — это ожидаемое состояние, маппим в ошибку
+            // отмены; вызывающий код корректно обрабатывает её как завершение.
+            if (e.message?.contains("Canceled", ignoreCase = true) == true) {
+                Log.d(TAG, "call cancelled | requestId=$requestId")
+            } else {
+                Log.w(TAG, "network error | requestId=$requestId", e)
+            }
+            Resource.Error(e, "Ошибка сети при обращении к серверу JARVIS.")
         }
     }
 

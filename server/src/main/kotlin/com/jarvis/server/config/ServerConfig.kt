@@ -61,10 +61,17 @@ data class RateLimitConfig(
 /** Политика fallback и retry (пункты 14 и 23 ТЗ). */
 data class ExecutionPolicyConfig(
     /** Максимум провайдеров, которые будут опробованы за один запрос. */
-    val maxProviderAttempts: Int = 3,
-    /** Максимум повторов у ОДНОГО провайдера при transient-сбое. */
-    val maxRetriesPerProvider: Int = 1,
-    val retryBackoffMs: Long = 250
+    val maxProviderAttempts: Int = 2,
+    /**
+     * CR-06: повторы у одного провайдера по умолчанию отключены.
+     * Worst-case бюджет: 2 провайдера × (per-provider timeout 10s) + backoff
+     * ≤ ~21 секунд, что укладывается в серверный deadline 28 секунд и даёт
+     * запас клиентскому callTimeout=30с. Включение retries с нестандартными
+     * таймаутами провайдера может привести к тому, что клиент не дождётся
+     * ответа; рекомендуется держать maxRetriesPerProvider = 0.
+     */
+    val maxRetriesPerProvider: Int = 0,
+    val retryBackoffMs: Long = 200
 ) {
     init {
         require(maxProviderAttempts >= 0) { "maxProviderAttempts must be non-negative" }
@@ -210,8 +217,10 @@ data class ServerConfig(
                     apiKey = str("GROQ_API_KEY"),
                     model = str("GROQ_MODEL") ?: "llama-3.3-70b-versatile",
                     baseUrl = str("GROQ_BASE_URL") ?: "https://api.groq.com/openai/v1/chat/completions",
-                    connectTimeoutMs = long("GROQ_CONNECT_TIMEOUT_MS", 3_000),
-                    requestTimeoutMs = long("GROQ_REQUEST_TIMEOUT_MS", 15_000)
+                    connectTimeoutMs = long("GROQ_CONNECT_TIMEOUT_MS", 2_000),
+                    // CR-06: request timeout ≤ budget/maxAttempts (28s/2 = 14s,
+                    // берём 10s с запасом).
+                    requestTimeoutMs = long("GROQ_REQUEST_TIMEOUT_MS", 10_000)
                 ),
                 ProviderConfig(
                     id = ProviderId.GEMINI,
@@ -221,8 +230,8 @@ data class ServerConfig(
                     model = str("GEMINI_MODEL") ?: "gemini-1.5-flash",
                     baseUrl = str("GEMINI_BASE_URL")
                         ?: "https://generativelanguage.googleapis.com/v1beta/models",
-                    connectTimeoutMs = long("GEMINI_CONNECT_TIMEOUT_MS", 3_000),
-                    requestTimeoutMs = long("GEMINI_REQUEST_TIMEOUT_MS", 20_000)
+                    connectTimeoutMs = long("GEMINI_CONNECT_TIMEOUT_MS", 2_000),
+                    requestTimeoutMs = long("GEMINI_REQUEST_TIMEOUT_MS", 10_000)
                 ),
                 ProviderConfig(
                     id = ProviderId.OPENROUTER,
@@ -231,8 +240,8 @@ data class ServerConfig(
                     apiKey = str("OPENROUTER_API_KEY"),
                     model = str("OPENROUTER_MODEL") ?: "meta-llama/llama-3.3-70b-instruct",
                     baseUrl = str("OPENROUTER_BASE_URL") ?: "https://openrouter.ai/api/v1/chat/completions",
-                    connectTimeoutMs = long("OPENROUTER_CONNECT_TIMEOUT_MS", 3_000),
-                    requestTimeoutMs = long("OPENROUTER_REQUEST_TIMEOUT_MS", 25_000)
+                    connectTimeoutMs = long("OPENROUTER_CONNECT_TIMEOUT_MS", 2_000),
+                    requestTimeoutMs = long("OPENROUTER_REQUEST_TIMEOUT_MS", 10_000)
                 )
             )
 
@@ -353,9 +362,12 @@ data class ServerConfig(
                     halfOpenSuccessesToClose = int("CB_HALF_OPEN_SUCCESSES", 1)
                 ),
                 executionPolicy = ExecutionPolicyConfig(
-                    maxProviderAttempts = int("MAX_PROVIDER_ATTEMPTS", 3),
-                    maxRetriesPerProvider = int("MAX_RETRIES_PER_PROVIDER", 1),
-                    retryBackoffMs = long("RETRY_BACKOFF_MS", 250)
+                    // CR-06: defaults подобраны так, чтобы worst-case
+                    // (2 провайдера × 10s timeout + backoff) ≤ ~21 с, что
+                    // укладывается в серверный deadline 28 с.
+                    maxProviderAttempts = int("MAX_PROVIDER_ATTEMPTS", 2),
+                    maxRetriesPerProvider = int("MAX_RETRIES_PER_PROVIDER", 0),
+                    retryBackoffMs = long("RETRY_BACKOFF_MS", 200)
                 ),
                 validation = ValidationConfig(
                     maxTextLength = int("MAX_TEXT_LENGTH", 8_000),

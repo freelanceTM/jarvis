@@ -68,11 +68,13 @@ class AIRepositoryImpl @Inject constructor(
         source: String,
         privacyLevel: String,
         requiresWeb: Boolean,
-        cloudExplicitlyAllowed: Boolean
+        cloudExplicitlyAllowed: Boolean,
+        history: List<Message>
     ): Resource<String> = withContext(dispatchers.io) {
         val declared = PrivacyLevel.entries.firstOrNull { it.name == privacyLevel.uppercase() }
             ?: return@withContext privacyBlocked(PrivacyLevel.UNKNOWN)
-        val effective = classifyOutbound(prompt, systemPrompt, emptyList(), declared)
+        val related = history.map(Message::text)
+        val effective = classifyOutbound(prompt, systemPrompt, related, declared)
         val permitted = effective == PrivacyLevel.NORMAL ||
             (effective in setOf(PrivacyLevel.PRIVATE, PrivacyLevel.SENSITIVE) && cloudExplicitlyAllowed)
         if (!permitted) {
@@ -85,7 +87,9 @@ class AIRepositoryImpl @Inject constructor(
                 source = source,
                 privacyLevel = effective.name,
                 requiresWeb = requiresWeb,
-                cloudExplicitlyAllowed = cloudExplicitlyAllowed
+                cloudExplicitlyAllowed = cloudExplicitlyAllowed,
+                relatedContent = related,
+                history = history
             )
             // An unknown implementation cannot silently discard privacy metadata.
             else -> privacyBlocked(PrivacyLevel.UNKNOWN)

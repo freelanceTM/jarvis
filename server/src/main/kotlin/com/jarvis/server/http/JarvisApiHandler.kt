@@ -29,7 +29,14 @@ data class HttpRequestContext(
     val remoteAddress: String? = null,
     val scheme: String = "http",
     val host: String? = null,
-    val viaTrustedProxy: Boolean = false
+    val viaTrustedProxy: Boolean = false,
+    /**
+     * CR-06: wall-clock deadline (epoch ms) до которого обработчик должен
+     * завершиться. null — использовать серверный default. Провайдер-менеджер
+     * использует это значение для early-out при исчерпании бюджета между
+     * провайдерами/попытками.
+     */
+    val deadlineEpochMs: Long? = null
 ) {
     fun header(name: String): String? = headers.entries
         .firstOrNull { it.key.equals(name, ignoreCase = true) }
@@ -72,8 +79,17 @@ class JarvisApiHandler(
     private val healthProvider: () -> String = { "{}" },
     private val metricsProvider: () -> String = { "{}" },
     private val entitlementChecker: (com.jarvis.server.auth.AuthenticatedClient) -> Boolean = { true },
-    private val extensionHandler: suspend (HttpRequestContext) -> HttpResponseContext? = { null }
+    private val extensionHandler: suspend (HttpRequestContext) -> HttpResponseContext? = { null },
+    /**
+     * CR-15: внешняя ссылка на ту же health-лямбду, чтобы отдельный
+     * health-kickoff в Main мог использовать её без DB/AI-пула. По умолчанию
+     * совпадает с healthProvider (нужно для тестов, которые создают
+     * JarvisApiHandler напрямую).
+     */
+    private val healthProviderFunc: (() -> String)? = null
 ) {
+    /** Внешний (main-kickoff) вход в health — то же самое, что и PATH_HEALTH. */
+    fun healthSnapshot(): String = (healthProviderFunc ?: healthProvider)()
     companion object {
         const val PATH_EXECUTE = "/v1/ai/execute"
         const val PATH_HEALTH = "/v1/health"
@@ -179,7 +195,9 @@ class JarvisApiHandler(
         }
 
         // ------------------------------------------------- 5. AI Router
-        return when (val result = router.execute(parsed, client, requestId)) {
+        // CR-06: прокидываем deadline из HttpRequestContext (выставлен
+        // Main.kt на основании X-Request-Deadline / server default).
+        return when (val result = router.execute(parsed, client, requestId, request.deadlineEpochMs)) {
             is RouterResult.Success -> {
                 val payload = AiExecutionResponse(text = result.text, requestId = result.requestId)
                 HttpResponseContext(

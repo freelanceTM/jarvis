@@ -26,6 +26,9 @@ interface AIRepository {
      * Контекст нужен серверу: JARVIS API применяет privacy-политику как вторую
      * линию защиты и учитывает источник запроса. Реализация обязательна:
      * default fallback не должен терять privacy metadata.
+     *
+     * @param history CR-03: последние сообщения диалога, которые сервер
+     *                прокинет в провайдера как messages.
      */
     suspend fun generateResponse(
         prompt: String,
@@ -33,7 +36,8 @@ interface AIRepository {
         source: String,
         privacyLevel: String,
         requiresWeb: Boolean,
-        cloudExplicitlyAllowed: Boolean = false
+        cloudExplicitlyAllowed: Boolean = false,
+        history: List<Message> = emptyList()
     ): Resource<String>
 }
 

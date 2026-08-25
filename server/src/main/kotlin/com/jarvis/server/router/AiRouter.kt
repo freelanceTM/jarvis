@@ -58,7 +58,8 @@ class AiRouter(
     suspend fun execute(
         request: AiExecutionRequest,
         client: AuthenticatedClient,
-        requestId: String
+        requestId: String,
+        deadlineEpochMs: Long? = null
     ): RouterResult {
         val startedAt = clock()
         metrics.recordRequest()
@@ -81,10 +82,14 @@ class AiRouter(
         // Вторая линия защиты: сервер не доверяет клиентской метке NORMAL.
         // Явный уровень усиливается локальной классификацией текста и никогда
         // не понижается автоматически.
+        val relatedForClassification = buildList {
+            addAll(request.history.map { it.content })
+            request.systemContext?.let { add(it) }
+        }
         val automaticPrivacy = PromptPrivacyClassifier.classifySafely(
             content = PrivacyContent(
                 text = request.text,
-                relatedContent = listOfNotNull(request.systemContext)
+                relatedContent = relatedForClassification
             ),
             classifier = privacyClassifier
         )
@@ -128,8 +133,16 @@ class AiRouter(
             requestId = requestId,
             prompt = request.text,
             systemPrompt = buildSystemPrompt(request),
+            history = request.history
+                .filter { it.content.isNotBlank() }
+                .map { com.jarvis.server.provider.ProviderMessage(role = normalizeRole(it.role), content = it.content) },
+            requiresWeb = request.requiresWeb,
             maxTokens = generation.maxTokens,
-            temperature = generation.temperature
+            temperature = generation.temperature,
+            // CR-06: прокидываем общий deadline до менеджера провайдеров,
+            // чтобы он мог делать early-out между fallback'ами и подрезать
+            // per-provider timeout оставшимся бюджетом.
+            deadlineEpochMs = deadlineEpochMs
         )
 
         // ----------------------------------------------- 4. Provider Manager
@@ -198,6 +211,26 @@ class AiRouter(
         // иначе он стал бы способом обойти лимит размера.
         (request.systemContext?.length ?: 0) > validation.maxTextLength ->
             ApiErrorCode.INVALID_REQUEST
+        // CR-03: каждое сообщение истории валидируется по тому же пределу длины,
+        // чтобы клиент не мог прислать одного гигантского history[*].content.
+        request.history.any { msg ->
+            msg.content.isBlank() || msg.content.length > validation.maxTextLength
+        } -> ApiErrorCode.INVALID_REQUEST
+        // CR-03: белый список ролей в истории — отсекает опечатки / подделки.
+        // Нормализуем перед сравнением, чтобы клиент мог прислать
+        // "USER"/"Assistant"/"MODEL" и получить ожидаемый маппинг.
+        request.history.any { msg -> normalizeRole(msg.role) == null } -> ApiErrorCode.INVALID_REQUEST
+        else -> null
+    }
+
+    /**
+     * CR-03/16: приводит клиентскую роль к каноническому виду
+     * (user/assistant/system). Gemini "model" мапится в assistant, и наоборот.
+     */
+    private fun normalizeRole(raw: String): String? = when (raw.trim().lowercase()) {
+        "user" -> "user"
+        "assistant", "model" -> "assistant"
+        "system" -> "system"
         else -> null
     }
 

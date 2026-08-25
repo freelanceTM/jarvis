@@ -162,9 +162,10 @@ class ChatViewModel @Inject constructor(
                 is Resource.Success -> {
                     when (val exec = result.data) {
                         is PromptExecutionResult.ConfirmationRequired -> {
-                            // Показываем карточку подтверждения вместо простого озвучивания.
-                            // Токен берём из очереди ToolExecutor (пункт аудита #5).
-                            val token = toolExecutor.peekPendingConfirmation()?.confirmationToken
+                            // CR-04: токен берём по callId, а не из головы очереди.
+                            // При параллельных запросах из чата и голоса peek() мог
+                            // вернуть токен ДРУГОЙ записи и подтвердить не тот вызов.
+                            val token = toolExecutor.confirmationTokenFor(exec.toolCall.callId)
                             _uiState.update {
                                 it.copy(
                                     pendingConfirmation = if (token != null) {

@@ -16,6 +16,8 @@ import com.jarvis.server.provider.ProviderManager
 import com.jarvis.server.provider.ProviderRequest
 import com.jarvis.server.provider.ProviderRequirements
 import com.jarvis.server.provider.ProviderSelectionPolicy
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -248,6 +250,45 @@ class ProviderManagerTest {
         assertEquals(0, groq.calls.get())
     }
 
+    /**
+     * CR-16: когда требуется веб-поиск (requiresWeb=true), роутер обязан
+     * выбрать провайдера с supportsWeb=true; провайдеры без такой
+     * возможности должны быть отфильтрованы (в реальной конфигурации это
+     * только Gemini с Google Search grounding).
+     */
+    @Test
+    fun `requiresWeb routes only to web-capable providers`() = runBlocking {
+        val groqNoWeb = FakeAiProvider.ok(ProviderId.GROQ, "groq")
+        val openRouterNoWeb = FakeAiProvider.ok(ProviderId.OPENROUTER, "openrouter")
+        val geminiWeb = FakeAiProvider(
+            id = ProviderId.GEMINI,
+            script = listOf(ProviderResult.Success("gemini-web", "gemini-test", 1, 2, 3)),
+            capabilities = ProviderCapabilities(supportsWeb = true, supportsChat = true)
+        )
+
+        val outcome = manager(listOf(groqNoWeb, openRouterNoWeb, geminiWeb))
+            .execute(request(), ProviderRequirements(requiresWeb = true))
+
+        assertTrue(outcome is ManagerOutcome.Success)
+        assertEquals(ProviderId.GEMINI, (outcome as ManagerOutcome.Success).providerId)
+        assertEquals("gemini-web", outcome.text)
+        assertEquals(0, groqNoWeb.calls.get())
+        assertEquals(0, openRouterNoWeb.calls.get())
+        assertEquals(1, geminiWeb.calls.get())
+    }
+
+    /** CR-16: если ни один провайдер не поддерживает web, возвращается no-candidates failure. */
+    @Test
+    fun `requiresWeb with no web-capable provider returns no-candidates failure`() = runBlocking {
+        val groqNoWeb = FakeAiProvider.ok(ProviderId.GROQ, "groq")
+        val outcome = manager(listOf(groqNoWeb))
+            .execute(request(), ProviderRequirements(requiresWeb = true))
+
+        assertTrue(outcome is ManagerOutcome.Failure)
+        assertTrue((outcome as ManagerOutcome.Failure).noCandidates)
+        assertEquals(0, groqNoWeb.calls.get())
+    }
+
     /** maxProviderAttempts ограничивает длину цепочки fallback. */
     @Test
     fun `fallback chain respects max provider attempts`() = runBlocking {
@@ -265,5 +306,135 @@ class ProviderManagerTest {
 
         assertEquals(2, (outcome as ManagerOutcome.Failure).attempted.size)
         assertEquals(0, providers[2].calls.get())
+    }
+
+    // ------------------------------------------------------------------ CR-06
+
+    /** CR-06: если общий deadline уже истёк — менеджер не запускает провайдеров. */
+    @Test
+    fun `deadline already expired skips provider call`() = runBlocking {
+        val groq = FakeAiProvider.ok(ProviderId.GROQ, "should-never-run")
+        val mgr = manager(listOf(groq))
+        val now = System.currentTimeMillis()
+        val req = request().copy(deadlineEpochMs = now - 1) // истёк 1 мс назад
+
+        val outcome = mgr.execute(req, ProviderRequirements())
+
+        assertTrue(outcome is ManagerOutcome.Failure)
+        assertEquals(ProviderFailureKind.TIMEOUT, (outcome as ManagerOutcome.Failure).lastKind)
+        assertEquals(0, groq.calls.get())
+    }
+
+    /** CR-06: оставшийся budget меньше per-provider timeout — early-out. */
+    @Test
+    fun `remaining budget smaller than provider timeout fails fast without call`() = runBlocking {
+        val groq = FakeAiProvider.ok(ProviderId.GROQ, "should-never-run")
+        val mgr = manager(listOf(groq))
+        // Ставим deadline через 50мс — у провайдера 2000мс timeout, попытка
+        // гарантированно истечёт по общему budget раньше, поэтому early-out.
+        val req = request().copy(deadlineEpochMs = System.currentTimeMillis() + 50)
+
+        val outcome = mgr.execute(req, ProviderRequirements())
+
+        assertTrue(outcome is ManagerOutcome.Failure)
+        assertEquals(ProviderFailureKind.TIMEOUT, (outcome as ManagerOutcome.Failure).lastKind)
+        assertEquals(0, groq.calls.get())
+    }
+
+    /** CR-06: per-provider timeout режется remaining budget (не запускаем
+     *  вызов, который провайдер никогда не успеет закончить). */
+    @Test
+    fun `provider timeout clamped to remaining budget finishes faster than native timeout`() = runBlocking {
+        // Провайдер висит 2000мс, но у нас budget 100мс.
+        val slow = FakeAiProvider(
+            ProviderId.GROQ,
+            listOf(com.jarvis.server.provider.ProviderResult.Success("too-late", "m")),
+            delayMs = 2_000
+        )
+        val mgr = manager(
+            listOf(slow),
+            policy = ExecutionPolicyConfig(maxRetriesPerProvider = 0)
+        )
+        val req = request().copy(deadlineEpochMs = System.currentTimeMillis() + 100)
+
+        val start = System.nanoTime()
+        val outcome = mgr.execute(req, ProviderRequirements())
+        val elapsedMs = (System.nanoTime() - start) / 1_000_000
+
+        assertTrue("expected failure, got $outcome", outcome is ManagerOutcome.Failure)
+        assertEquals(
+            ProviderFailureKind.TIMEOUT,
+            (outcome as ManagerOutcome.Failure).lastKind
+        )
+        // Должен завершиться ~за 100мс (timeout budget), а не за 2000мс.
+        assertTrue(
+            "expected <500ms but took ${elapsedMs}ms",
+            elapsedMs < 500
+        )
+        assertEquals(1, slow.calls.get())
+    }
+
+    /** CR-06: backoff не выполняется, если не влезает в оставшийся budget. */
+    @Test
+    fun `retry backoff skipped if budget insufficient`() = runBlocking {
+        // Провайдер стабильно падает SERVER_ERROR (retriable), budget на весь
+        // запрос — 30мс, backoff 200мс. После первой неудачи менеджер не должен
+        // ждать 200мс — сразу early-out TIMEOUT.
+        val flaky = FakeAiProvider(
+            ProviderId.GROQ,
+            List(5) { com.jarvis.server.provider.ProviderResult.Failure(ProviderFailureKind.SERVER_ERROR, "boom") }
+        )
+        val mgr = manager(
+            listOf(flaky),
+            policy = ExecutionPolicyConfig(maxRetriesPerProvider = 3, retryBackoffMs = 200)
+        )
+        val req = request().copy(deadlineEpochMs = System.currentTimeMillis() + 30)
+
+        val start = System.nanoTime()
+        val outcome = mgr.execute(req, ProviderRequirements())
+        val elapsedMs = (System.nanoTime() - start) / 1_000_000
+
+        assertTrue(outcome is ManagerOutcome.Failure)
+        assertEquals(
+            "должен вернуться TIMEOUT, не дожидаясь backoff",
+            ProviderFailureKind.TIMEOUT,
+            (outcome as ManagerOutcome.Failure).lastKind
+        )
+        assertTrue(
+            "backoff должен быть пропущен; фактически ${elapsedMs}мс",
+            elapsedMs < 150
+        )
+        // Ровно одна попытка — вторая была скипнута.
+        assertEquals(1, flaky.calls.get())
+    }
+
+    /** CR-05: отмена корутины менеджера прерывает in-flight провайдера
+     *  (подвешенный через delay провайдер не висит после cancel). */
+    @Test
+    fun `cancelling manager coroutine cancels hanging provider promptly`() = runBlocking {
+        val hang = FakeAiProvider(
+            ProviderId.GROQ,
+            listOf(com.jarvis.server.provider.ProviderResult.Success("never", "m")),
+            delayMs = 30_000
+        )
+        val mgr = manager(listOf(hang))
+        val req = request()
+
+        val job = launch {
+            mgr.execute(req, ProviderRequirements())
+        }
+        // Даём провайдеру стартовать.
+        delay(50)
+        val start = System.nanoTime()
+        job.cancel()
+        job.join()
+        val elapsedMs = (System.nanoTime() - start) / 1_000_000
+        // Cancellation должна дойти до delay() внутри FakeAiProvider практически
+        // мгновенно (structured concurrency), не за 30 секунд.
+        assertTrue(
+            "cancellation took ${elapsedMs}ms, expected <1000ms",
+            elapsedMs < 1_000
+        )
+        assertEquals(1, hang.calls.get())
     }
 }
