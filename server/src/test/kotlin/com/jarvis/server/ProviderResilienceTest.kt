@@ -109,7 +109,7 @@ class ProviderResilienceTest {
             configs = configs,
             health = health,
             policy = ExecutionPolicyConfig(maxRetriesPerProvider = 0),
-            selectionPolicy = ProviderSelectionPolicy(configs, health),
+            selectionPolicy = DefaultProviderSelectionPolicy(configs, health),
             logger = ConsoleStructuredLogger(sink = {}),
             metrics = Metrics()
         )
@@ -188,7 +188,7 @@ class ProviderResilienceTest {
             configs = configs,
             health = health,
             policy = policy,
-            selectionPolicy = ProviderSelectionPolicy(configs, health),
+            selectionPolicy = DefaultProviderSelectionPolicy(configs, health),
             logger = ConsoleStructuredLogger(sink = {}),
             metrics = Metrics()
         )

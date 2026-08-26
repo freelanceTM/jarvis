@@ -17,21 +17,45 @@ data class ProviderRequirements(
 )
 
 /**
- * Политика отбора провайдеров (пункт 15 ТЗ).
+ * AR-02: политика отбора провайдеров (пункт 15 ТЗ).
  *
- * На этом этапе — `priority + health + capabilities`, как и предписано ТЗ.
- * Никакого ML-роутинга: политика вынесена в отдельный класс, чтобы её можно
- * было усложнить (latency, cost) без правки ProviderManager.
+ * Политика решает, КАКОЙ порядок провайдеров использовать для данного
+ * запроса, опираясь на их [CapabilityProfile], конфигурацию и health.
+ *
+ * Конкретные стратегии:
+ *  - [DefaultProviderSelectionPolicy] — текущая семантика: по здоровью +
+ *    приоритету из конфига, с фильтром по обязательным capabilities
+ *    (web/toolCalling). Это дефолт и единственная стратегия, которая
+ *    используется на проде сегодня;
+ *  - в будущем сюда могут добавиться FastestProviderSelectionPolicy,
+ *    CheapestProviderSelectionPolicy, BalancedProviderSelectionPolicy без
+ *    изменений в [ProviderManager].
+ *
+ * Execution code (ProviderManager) не привязан к конкретной стратегии —
+ * он только вызывает [select].
  */
-class ProviderSelectionPolicy(
-    private val configs: Map<ProviderId, ProviderConfig>,
-    private val health: ProviderHealthTracker
-) {
+interface ProviderSelectionPolicy {
     /**
-     * @return упорядоченный список кандидатов: сначала HEALTHY, затем DEGRADED,
-     *         внутри группы — по возрастанию priority.
+     * @return упорядоченный список кандидатов. Пустой список = нет
+     *         подходящего провайдера для запроса.
      */
     fun select(
+        providers: List<AiProvider>,
+        requirements: ProviderRequirements
+    ): List<AiProvider>
+}
+
+/**
+ * Дефолтная политика отбора: HEALTHY → DEGRADED → по приоритету из конфига.
+ *
+ * Это та самая логика, что жила в ProviderSelectionPolicy-классе до AR-02;
+ * сохранена без изменений семантики.
+ */
+class DefaultProviderSelectionPolicy(
+    private val configs: Map<ProviderId, ProviderConfig>,
+    private val health: ProviderHealthTracker
+) : ProviderSelectionPolicy {
+    override fun select(
         providers: List<AiProvider>,
         requirements: ProviderRequirements
     ): List<AiProvider> = providers
@@ -41,7 +65,6 @@ class ProviderSelectionPolicy(
             cfg != null && cfg.enabled && provider.isConfigured()
         }
         .filter { provider ->
-            // Возможности: если запросу нужен web, провайдер обязан его уметь.
             val caps = provider.capabilities
             (!requirements.requiresWeb || caps.supportsWeb) &&
                 (!requirements.requiresToolCalling || caps.supportsToolCalling)

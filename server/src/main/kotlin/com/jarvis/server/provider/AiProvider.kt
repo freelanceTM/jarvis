@@ -4,18 +4,60 @@ package com.jarvis.server.provider
 enum class ProviderId { GROQ, GEMINI, OPENROUTER }
 
 /**
- * Возможности провайдера (пункт 16 ТЗ).
+ * Оценочная стоимость вызова (опциональная).
  *
- * Реализованы только реально используемые сейчас поля; остальные оставлены
- * как явные false, чтобы политика отбора уже сегодня могла на них опираться.
+ * AR-02: значения приходят из конфигурации, а не выдуманы из головы.
+ * Если стоимость провайдера неизвестна — все поля null, политика отбора
+ * трактует это как «любая цена» и не использует в ranking.
  */
-data class ProviderCapabilities(
+data class CostEstimate(
+    /** USD за 1K input tokens, если известен. */
+    val usdPer1kInput: Double? = null,
+    /** USD за 1K output tokens, если известен. */
+    val usdPer1kOutput: Double? = null
+) {
+    fun estimatedFor(inputTokens: Long, outputTokens: Long): Double? {
+        val i = usdPer1kInput ?: return null
+        val o = usdPer1kOutput ?: return null
+        return i * inputTokens / 1000.0 + o * outputTokens / 1000.0
+    }
+}
+
+/**
+ * Профиль возможностей провайдера (AR-02, п.16 ТЗ).
+ *
+ * Ранее это был `ProviderCapabilities` с 4 булевыми флагами. Расширен до
+ * профиля, в котором помимо supported-флагов присутствуют опциональные
+ * метаданные о latency и стоимости. Политика выбора [ProviderSelectionPolicy]
+ * НЕ жёстко захардкожена в провайдера и может принимать решения на основании
+ * этого профиля.
+ *
+ * Правила:
+ *  - [supportsStreaming] отражает реальную возможность провайдера стримить.
+ *  - [p95LatencyMs] — ОЦЕНКА, только для ranking; если нет измерений — null.
+ *  - [cost] — оценка из конфигурации; null означает «неизвестно».
+ *  - булевы флаги соответствуют сегодняшней реальности провайдеров.
+ */
+data class CapabilityProfile(
     val supportsChat: Boolean = true,
     /** Есть ли у провайдера доступ к актуальным данным из сети. */
     val supportsWeb: Boolean = false,
     val supportsStreaming: Boolean = false,
-    val supportsToolCalling: Boolean = false
+    val supportsToolCalling: Boolean = false,
+    /** P95 end-to-end latency в миллисекундах по последним измерениям, если известна. */
+    val p95LatencyMs: Int? = null,
+    /** Оценка стоимости (может отсутствовать для провайдеров без известной цены). */
+    val cost: CostEstimate? = null,
+    /** Идентификаторы моделей, которые провайдер может обслуживать. Пустой набор = любая. */
+    val supportedModels: Set<String> = emptySet()
 )
+
+/**
+ * Backwards-compatibility alias — на время миграции оставляем typealias,
+ * чтобы существующие тесты и провайдеры не сломались при переименовании.
+ */
+@Deprecated("Renamed to CapabilityProfile (AR-02)", ReplaceWith("CapabilityProfile"))
+typealias ProviderCapabilities = CapabilityProfile
 
 /**
  * Один обмен сообщениями в истории диалога (CR-03).

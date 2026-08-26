@@ -80,7 +80,41 @@ data class AiExecutionRequest(
      *
      * При `history == emptyList()` поведение идентично прежнему.
      */
-    @SerialName("history") val history: List<MessageDto> = emptyList()
+    @SerialName("history") val history: List<MessageDto> = emptyList(),
+
+    /**
+     * AR-04: компактный персональный контекст пользователя.
+     *
+     * Это НЕ полная память и НЕ server-side memory system: клиент присылает
+     * небольшой top-N набор релевантных фактов/предпочтений (до MAX_ITEMS
+     * записей с жёсткими лимитами на размер ключа/значения), чтобы модель
+     * могла учесть, например, имя, предпочтительный способ ответа, аллергии,
+     * часто используемые адреса и т.п.
+     *
+     * Ограничения:
+     *  - N не больше [MAX_MEMORY_ITEMS];
+     *  - key ≤ [MAX_KEY_CHARS];
+     *  - value ≤ [MAX_VALUE_CHARS];
+     *  - элементы сверх лимита отбрасываются валидацией с логом (fail-open);
+     *  - значение НЕ пишется в обычные логи (см. buildSystemPrompt);
+     *  - при null/пустом списке поведение идентично прежнему.
+     *
+     * Сериализуется как `memory_context` в JSON (snake_case для внешнего API).
+     */
+    @SerialName("memory_context") val memoryContext: List<MemoryFactDto>? = null
+) {
+    companion object {
+        const val MAX_MEMORY_ITEMS = 5
+        const val MAX_KEY_CHARS = 64
+        const val MAX_VALUE_CHARS = 500
+    }
+}
+
+/** Один факт/предпочтение в compact memory context. */
+@Serializable
+data class MemoryFactDto(
+    @SerialName("key") val key: String,
+    @SerialName("value") val value: String
 )
 
 /**

@@ -123,18 +123,32 @@ class Metrics {
         failureKinds.computeIfAbsent(kind.name) { AtomicLong(0) }.incrementAndGet()
     }
 
-    fun snapshot(): Map<String, Any> = mapOf(
-        "requests_total" to requestsTotal.get(),
-        "requests_success" to requestsSuccess.get(),
-        "requests_failed" to requestsFailed.get(),
-        "rate_limited_total" to rateLimitedTotal.get(),
-        "unauthorized_total" to unauthorizedTotal.get(),
-        "privacy_blocked_total" to privacyBlockedTotal.get(),
-        "tokens_total" to totalTokens.get(),
-        "provider_success" to providerSuccess.mapKeys { it.key.name }.mapValues { it.value.get() },
-        "provider_failure" to providerFailure.mapKeys { it.key.name }.mapValues { it.value.get() },
-        "provider_latency_sum_ms" to providerLatencySum.mapKeys { it.key.name }
-            .mapValues { it.value.get() },
-        "failure_kinds" to failureKinds.mapValues { it.value.get() }
-    )
+    /**
+     * AR-05: универсальный инкремент именованного счётчика (для трекера usage
+     * и других встроенных метрик, чтобы не раздувать Metrics отдельными
+     * полями на каждый чих). Возвращает новое значение.
+     */
+    private val namedCounters = ConcurrentHashMap<String, AtomicLong>()
+    fun increment(name: String): Long =
+        namedCounters.computeIfAbsent(name) { AtomicLong(0) }.incrementAndGet()
+
+    fun snapshot(): Map<String, Any> = buildMap {
+        put("requests_total", requestsTotal.get())
+        put("requests_success", requestsSuccess.get())
+        put("requests_failed", requestsFailed.get())
+        put("rate_limited_total", rateLimitedTotal.get())
+        put("unauthorized_total", unauthorizedTotal.get())
+        put("privacy_blocked_total", privacyBlockedTotal.get())
+        put("tokens_total", totalTokens.get())
+        put("provider_success", providerSuccess.mapKeys { it.key.name }.mapValues { it.value.get() })
+        put("provider_failure", providerFailure.mapKeys { it.key.name }.mapValues { it.value.get() })
+        put(
+            "provider_latency_sum_ms",
+            providerLatencySum.mapKeys { it.key.name }.mapValues { it.value.get() }
+        )
+        put("failure_kinds", failureKinds.mapValues { it.value.get() })
+        // AR-05: любые именованные счетчики (usage_dropped / usage_recorded /
+        // usage_failed / usage_retry и т.п.) тоже показываем в /metrics.
+        namedCounters.forEach { (k, v) -> put(k, v.get()) }
+    }
 }

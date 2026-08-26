@@ -19,6 +19,8 @@ import com.jarvis.server.privacy.PrivacyContent
 import com.jarvis.server.privacy.PromptPrivacyClassifier
 import com.jarvis.server.privacy.ServerPrivacyClassifier
 import com.jarvis.server.usage.AiUsageRecord
+import com.jarvis.server.usage.AsyncUsageTracker
+import com.jarvis.server.usage.UsageLimitResult
 import com.jarvis.server.usage.UsageRepository
 import java.time.Instant
 
@@ -45,7 +47,8 @@ sealed class RouterResult {
  */
 class AiRouter(
     private val providerManager: ProviderManager,
-    private val usageRepository: UsageRepository,
+    private val usageRepository: UsageRepository? = null,
+    private val usageTracker: AsyncUsageTracker? = null,
     private val validation: ValidationConfig,
     private val privacyPolicy: PrivacyPolicyConfig,
     private val generation: AiGenerationConfig,
@@ -54,6 +57,11 @@ class AiRouter(
     private val privacyClassifier: ServerPrivacyClassifier = PromptPrivacyClassifier,
     private val clock: () -> Long = System::currentTimeMillis
 ) {
+    init {
+        require(usageRepository != null || usageTracker != null) {
+            "AiRouter requires at least one of usageRepository or usageTracker"
+        }
+    }
 
     suspend fun execute(
         request: AiExecutionRequest,
@@ -76,6 +84,26 @@ class AiRouter(
             metrics.recordFailure()
             recordUsage(requestId, client, null, null, clock() - startedAt, null, request, 0, validationError.name)
             return RouterResult.Failure(validationError, requestId)
+        }
+
+        // AR-05: быстрый in-memory precheck лимитов (tokens/cost/requests).
+        // PostgresRateLimiter остаётся authoritative по perMinute/perDay
+        // request-лимиту; эта проверка дополняет его token/cost счётчиками.
+        if (usageTracker != null) {
+            when (val limit = usageTracker.preflight(client.clientId)) {
+                is UsageLimitResult.Limited -> {
+                    logger.warn(
+                        "usage limit exceeded",
+                        "requestId" to requestId,
+                        "clientId" to client.clientId,
+                        "scope" to limit.scope,
+                        "retryAfter" to limit.retryAfterSeconds.toString()
+                    )
+                    recordUsage(requestId, client, null, null, clock() - startedAt, null, request, 0, "USAGE_LIMIT_${limit.scope.uppercase()}")
+                    return RouterResult.Failure(ApiErrorCode.RATE_LIMITED, requestId)
+                }
+                UsageLimitResult.Allowed -> Unit
+            }
         }
 
         // -------------------------------------------------- 2. Privacy policy
@@ -217,9 +245,17 @@ class AiRouter(
             msg.content.isBlank() || msg.content.length > validation.maxTextLength
         } -> ApiErrorCode.INVALID_REQUEST
         // CR-03: белый список ролей в истории — отсекает опечатки / подделки.
-        // Нормализуем перед сравнением, чтобы клиент мог прислать
-        // "USER"/"Assistant"/"MODEL" и получить ожидаемый маппинг.
         request.history.any { msg -> normalizeRole(msg.role) == null } -> ApiErrorCode.INVALID_REQUEST
+        // AR-04: валидация memory_context — bounded размеры и количество.
+        // Слишком большие значения / лишние элементы приводят к INVALID_REQUEST,
+        // а не к тихому усечению: клиент должен знать, что его память обрезана.
+        request.memoryContext != null && request.memoryContext.size > AiExecutionRequest.MAX_MEMORY_ITEMS ->
+            ApiErrorCode.INVALID_REQUEST
+        request.memoryContext?.any { fact ->
+            fact.key.length > AiExecutionRequest.MAX_KEY_CHARS ||
+                fact.value.length > AiExecutionRequest.MAX_VALUE_CHARS ||
+                fact.key.isBlank()
+        } == true -> ApiErrorCode.INVALID_REQUEST
         else -> null
     }
 
@@ -237,14 +273,36 @@ class AiRouter(
     /**
      * Базовый system prompt сервера ДОПОЛНЯЕТСЯ клиентским контекстом,
      * а не заменяется им: правила ассистента остаются под контролем сервера.
+     *
+     * AR-04: сюда же append'ится компактный memory_context. Важно:
+     *  - мы НЕ пишем value-фактов в обычные логи (ни здесь, ни где-либо ещё);
+     *  - факты не интерпретируются как команды и не перекрывают системный prompt;
+     *  - при пустом списке блок отсутствует — поведение идентично прежнему.
      */
     private fun buildSystemPrompt(request: AiExecutionRequest): String {
+        val parts = mutableListOf(generation.systemPrompt)
+
         val clientContext = request.systemContext?.trim()
-        return if (clientContext.isNullOrEmpty()) {
-            generation.systemPrompt
-        } else {
-            generation.systemPrompt + "\n\n" + clientContext
+        if (!clientContext.isNullOrEmpty()) {
+            parts += clientContext
         }
+
+        val memory = request.memoryContext?.take(AiExecutionRequest.MAX_MEMORY_ITEMS).orEmpty()
+        if (memory.isNotEmpty()) {
+            val factsBlock = buildString {
+                appendLine("Ниже — небольшой набор фактов о пользователе; учитывай их при ответе, но не пересказывай без необходимости и не отправляй внешним сервисам без прямого запроса пользователя:")
+                for (fact in memory) {
+                    val k = fact.key.take(AiExecutionRequest.MAX_KEY_CHARS).trim()
+                    val v = fact.value.take(AiExecutionRequest.MAX_VALUE_CHARS).trim()
+                    if (k.isNotEmpty() && v.isNotEmpty()) {
+                        appendLine("- $k: $v")
+                    }
+                }
+            }
+            parts += factsBlock
+        }
+
+        return parts.joinToString("\n\n")
     }
 
     private fun isPrivacyAllowed(
@@ -294,23 +352,29 @@ class AiRouter(
         responseChars: Int,
         errorCode: String?
     ) {
-        usageRepository.record(
-            AiUsageRecord(
-                requestId = requestId,
-                clientId = client.clientId,
-                provider = provider,
-                model = model,
-                latencyMs = latencyMs,
-                inputTokens = tokens?.first,
-                outputTokens = tokens?.second,
-                totalTokens = tokens?.third,
-                success = errorCode == null,
-                errorCode = errorCode,
-                // Сохраняем только размеры, не сам текст (privacy).
-                promptChars = request.text.length,
-                responseChars = responseChars,
-                timestamp = Instant.ofEpochMilli(clock())
-            )
+        val record = AiUsageRecord(
+            requestId = requestId,
+            clientId = client.clientId,
+            provider = provider,
+            model = model,
+            latencyMs = latencyMs,
+            inputTokens = tokens?.first,
+            outputTokens = tokens?.second,
+            totalTokens = tokens?.third,
+            success = errorCode == null,
+            errorCode = errorCode,
+            // Сохраняем только размеры, не сам текст (privacy).
+            promptChars = request.text.length,
+            responseChars = responseChars,
+            timestamp = Instant.ofEpochMilli(clock())
         )
+        // AR-05: предпочитаем асинхронный pipeline; если он не подключён
+        // (тесты/старый wiring), используем синхронный repository.
+        if (usageTracker != null) {
+            usageTracker.record(record)
+        } else {
+            // fallback path (should be avoided in production)
+            usageRepository?.record(record)
+        }
     }
 }

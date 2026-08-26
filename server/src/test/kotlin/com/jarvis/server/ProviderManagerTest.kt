@@ -56,7 +56,7 @@ class ProviderManagerTest {
         configs = configs,
         health = health,
         policy = policy,
-        selectionPolicy = ProviderSelectionPolicy(configs, health),
+        selectionPolicy = DefaultProviderSelectionPolicy(configs, health),
         logger = ConsoleStructuredLogger(sink = {}),
         metrics = Metrics()
     )

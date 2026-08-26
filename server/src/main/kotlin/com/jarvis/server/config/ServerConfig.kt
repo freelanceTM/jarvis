@@ -58,6 +58,38 @@ data class RateLimitConfig(
     }
 }
 
+/**
+ * AR-05: лимиты usage по количеству/токенам/стоимости (дневные).
+ *
+ * Это — мягкий in-process precheck в дополнение к Postgres rate limiter;
+ * они не являются security boundary сами по себе, но сглаживают всплески
+ * между синхронизациями с БД. Значение 0 = лимит отключён.
+ */
+data class UsageLimitConfig(
+    val perDayRequests: Int = 2000,
+    val perDayTokens: Long = 1_000_000L,
+    val perDayCostUsd: Double = 5.0
+) {
+    init {
+        require(perDayRequests >= 0) { "perDayRequests must be non-negative" }
+        require(perDayTokens >= 0) { "perDayTokens must be non-negative" }
+        require(perDayCostUsd >= 0) { "perDayCostUsd must be non-negative" }
+    }
+}
+
+/**
+ * AR-05: фолбэк-стоимость для провайдеров, у которых стоимость не указана
+ * в конфигурации. Используется только для perDayCost лимита.
+ */
+data class TokenCostConfig(
+    /** USD за 1K токенов (input+output average), если у провайдера нет цены. */
+    val fallbackUsdPer1k: Double? = null
+) {
+    init {
+        require(fallbackUsdPer1k == null || fallbackUsdPer1k >= 0) { "fallbackUsdPer1k must be non-negative" }
+    }
+}
+
 /** Политика fallback и retry (пункты 14 и 23 ТЗ). */
 data class ExecutionPolicyConfig(
     /** Максимум провайдеров, которые будут опробованы за один запрос. */
@@ -130,6 +162,8 @@ data class ServerConfig(
     val port: Int,
     val providers: List<ProviderConfig>,
     val rateLimit: RateLimitConfig,
+    val usageLimits: UsageLimitConfig = UsageLimitConfig(),
+    val tokenCosts: TokenCostConfig = TokenCostConfig(),
     val circuitBreaker: CircuitBreakerConfig,
     val executionPolicy: ExecutionPolicyConfig,
     val validation: ValidationConfig,

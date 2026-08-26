@@ -87,7 +87,7 @@ class ApiIntegrationTest {
             configs = configs,
             health = health,
             policy = ExecutionPolicyConfig(maxRetriesPerProvider = 0),
-            selectionPolicy = ProviderSelectionPolicy(configs, health),
+            selectionPolicy = DefaultProviderSelectionPolicy(configs, health),
             logger = logger,
             metrics = metrics
         )

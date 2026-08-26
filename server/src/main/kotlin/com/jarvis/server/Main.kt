@@ -1,7 +1,10 @@
 package com.jarvis.server
 
+import com.jarvis.server.auth.AlwaysGrantedEntitlementChecker
 import com.jarvis.server.auth.ClientTier
 import com.jarvis.server.auth.CompositeAuthenticator
+import com.jarvis.server.auth.EntitlementChecker
+import com.jarvis.server.auth.LicenseEntitlementChecker
 import com.jarvis.server.auth.LicenseTokenAuthenticator
 import com.jarvis.server.auth.TierAuthorizer
 import com.jarvis.server.auth.TokenAuthenticator
@@ -36,6 +39,7 @@ import com.jarvis.server.provider.ProviderManager
 import com.jarvis.server.provider.ProviderSelectionPolicy
 import com.jarvis.server.ratelimit.PostgresRateLimiter
 import com.jarvis.server.router.AiRouter
+import com.jarvis.server.usage.AsyncUsageTracker
 import com.jarvis.server.usage.JdbcUsageRepository
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
@@ -89,7 +93,7 @@ object ServerBootstrap {
         }
 
         val health = ProviderHealthTracker(config.circuitBreaker)
-        val selectionPolicy = ProviderSelectionPolicy(configsById, health)
+        val selectionPolicy = DefaultProviderSelectionPolicy(configsById, health)
 
         val providerManager = ProviderManager(
             providers = providers,
@@ -116,16 +120,22 @@ object ServerBootstrap {
             dataSource.close()
             throw failure
         }
-        Runtime.getRuntime().addShutdownHook(Thread {
-            instanceGuard?.close()
-            dataSource.close()
-        })
 
         val usageRepository = JdbcUsageRepository(dataSource)
+
+        // AR-05: асинхронный пайплайн записи usage с bounded retry и лимитами.
+        val usageTracker = AsyncUsageTracker(
+            repository = usageRepository,
+            limits = config.usageLimits,
+            costs = config.tokenCosts,
+            logger = logger,
+            metrics = metrics
+        ).also { it.start() }
 
         val router = AiRouter(
             providerManager = providerManager,
             usageRepository = usageRepository,
+            usageTracker = usageTracker,
             validation = config.validation,
             privacyPolicy = config.privacy,
             generation = config.generation,
@@ -229,9 +239,14 @@ object ServerBootstrap {
             json = json,
             healthProvider = healthProvider,
             metricsProvider = { renderMetrics(metrics) },
-            entitlementChecker = { client ->
-                client.accountId?.let(licenseService::hasActiveEntitlement) == true
-            },
+            // AR-06: выбор реализации чекера — production-по-умолчанию через
+            // LicenseService, а при dev-режиме — AlwaysGranted (без биллинга).
+            // НЕ допускаем AlwaysGranted в production-окружении: fail-closed.
+            entitlementChecker = buildEntitlementChecker(
+                config = config,
+                licenseService = licenseService,
+                logger = logger
+            )::isEntitled,
             extensionHandler = licenseHttpHandler::handle,
             // Публикуем healthProvider для внешнего kickoff в main().
             healthProviderFunc = healthProvider
@@ -249,6 +264,42 @@ object ServerBootstrap {
         return render(metrics.snapshot())
     }
 }
+
+/**
+ * AR-06: выбор EntitlementChecker на основании DeploymentEnvironment.
+ *
+ * - В PRODUCTION — только [LicenseEntitlementChecker] (обязательно должен
+ *   видеть активную лицензию/подписку). AlwaysGranted в этом окружении
+ *   под запретом: fail-closed (приложение не стартует).
+ * - В staging/development/testing можно включить AlwaysGranted только явно
+ *   через `JARVIS_DEV_SKIP_ENTITLEMENT=true` — это требуется для запуска AI
+ *   пути без поднятой billing/DB-инфраструктуры.
+ */
+private fun buildEntitlementChecker(
+    config: ServerConfig,
+    licenseService: LicenseService,
+    logger: StructuredLogger
+): EntitlementChecker {
+    val devSkipEntitlement = System.getenv("JARVIS_DEV_SKIP_ENTITLEMENT")
+        ?.lowercase()?.let { it == "true" || it == "1" || it == "yes" } == true
+
+    return when {
+        config.deployment.isProduction && devSkipEntitlement -> {
+            throw IllegalStateException(
+                "JARVIS_DEV_SKIP_ENTITLEMENT must NOT be enabled in production"
+            )
+        }
+        !config.deployment.isProduction && devSkipEntitlement -> {
+            logger.warn(
+                "entitlement checks DISABLED (AlwaysGranted); do NOT use in production",
+                "env" to config.deployment.environment.name
+            )
+            AlwaysGrantedEntitlementChecker()
+        }
+        else -> LicenseEntitlementChecker(licenseService)
+    }
+}
+
 
 /**
  * CR-15/CR-06/CR-05: собственно HTTP-обвязка для запроса.
@@ -577,6 +628,9 @@ fun main() {
         // и upstream-вызовы до истечения собственных таймаутов.
         requestScope.cancel()
         healthScope.cancel()
+        // AR-05: останавливаем usage worker и ждём bounded drain с таймаутом
+        // (делаем до закрытия DataSource, чтобы были шансы дописать события).
+        runCatching { usageTracker.shutdown() }
         // server.stop(delay) ждёт delay секунд на завершение in-flight
         // exchange; мы уже отменили все корутины — ставим 0.
         server.stop(0)
@@ -586,6 +640,10 @@ fun main() {
         kickoffExecutor.shutdown()
         runCatching { healthExecutor.awaitTermination(3, TimeUnit.SECONDS) }
         runCatching { kickoffExecutor.awaitTermination(3, TimeUnit.SECONDS) }
+        // В последнюю очередь закрываем DB и single-instance guard
+        // (после того, как все worker'ы завершены).
+        runCatching { instanceGuard?.close() }
+        runCatching { dataSource.close() }
     })
 
     logger.info(
