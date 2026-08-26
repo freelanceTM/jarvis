@@ -1,10 +1,14 @@
 package com.jarvis.assistant.voice.wakeword
 
-import android.annotation.SuppressLint
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
+import androidx.core.content.ContextCompat
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -49,7 +53,9 @@ interface WakeWordDetector {
  *    и из любого состояния (частично инициализированный / уже остановленный).
  */
 @Singleton
-class AlisaStyleWakeWordEngine @Inject constructor() : WakeWordDetector {
+class AlisaStyleWakeWordEngine @Inject constructor(
+    @ApplicationContext private val context: Context,
+) : WakeWordDetector {
 
     private val TAG = "AlisaWakeWord"
 
@@ -112,11 +118,19 @@ class AlisaStyleWakeWordEngine @Inject constructor() : WakeWordDetector {
 
     override fun isRunning(): Boolean = isRecording
 
-    @SuppressLint("MissingPermission")
     @Synchronized
     override fun startListening() {
         if (disposed.get()) return
         if (isRecording) return
+        // N-05: запись аудио требует RECORD_AUDIO. Без разрешения — не стартуем,
+        // не крэшимся (сервис стартует только при наличии разрешения, но между
+        // стартом и этим вызовом пользователь может его отобрать).
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.w(TAG, "startListening: RECORD_AUDIO not granted — skipping")
+            return
+        }
         // Сбросить предыдущий worker (если остался в некорректном состоянии).
         stopListeningInternal()
 
@@ -143,10 +157,18 @@ class AlisaStyleWakeWordEngine @Inject constructor() : WakeWordDetector {
         startListeningInternal()
     }
 
-    @SuppressLint("MissingPermission")
     @Synchronized
     private fun startListeningInternal() {
         if (disposed.get() || isRecording) return
+        // N-05: belt-and-suspenders — повторная проверка прямо перед созданием
+        // AudioRecord (на случай отзыва разрешения между startListening и
+        // cooldown/startInternal).
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.w(TAG, "startListeningInternal: RECORD_AUDIO not granted — skipping")
+            return
+        }
         try {
             val record = AudioRecord(
                 MediaRecorder.AudioSource.VOICE_RECOGNITION,

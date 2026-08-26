@@ -616,8 +616,17 @@ class VoiceInteractionOrchestrator @Inject constructor(
         val isNo = ConfirmationIntent.isNo(response)
 
         when {
-            isYes && pendingToolCall != null -> {
-                val callToExecute = pendingToolCall!!
+            // N-02: захватываем pendingToolCall в локальную val ДО ветвления,
+            // чтобы не использовать !! и не словить NPE между проверкой
+            // `!= null` и smart-cast в многопоточном контексте.
+            isYes -> {
+                val callToExecute = pendingToolCall
+                if (callToExecute == null) {
+                    // Гонка: pending сбросили другим cancellation-path —
+                    // возвращаемся в standby без краша.
+                    startStandbyMode()
+                    return
+                }
                 // Пункт аудита #5: сохраняем токен ДО сброса состояния.
                 val tokenToUse = pendingConfirmationToken
                 pendingToolCall = null

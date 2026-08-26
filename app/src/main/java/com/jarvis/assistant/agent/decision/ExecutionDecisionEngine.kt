@@ -122,10 +122,21 @@ class ExecutionDecisionEngine @Inject constructor(
         // быть «съеден» одиночным офлайн-сценарием (поведение AgentPipeline).
         val plan = agentExecutor.planFor(request)
         if (plan != null) {
-            if (request.effectivePrivacyLevel != PrivacyLevel.NORMAL && plan.steps.any {
-                    toolExecutor.mayDiscloseExternally(it.toolCall.toolId) != false
+            // CR-18: явно различаем три состояния mayDiscloseExternally (Boolean?):
+            //  - true  → инструмент отсылает данные пользователя вовне
+            //  - false → локальный инструмент (без внешней отправки)
+            //  - null  → инструмент не найден в registry (fail-closed:
+            //            считаем external, если мы в приватном режиме)
+            // Fail-closed семантика сохранена: раньше `!= false` означало
+            // "либо true, либо null", что соответствует "block when in doubt".
+            val disclosesExternally = plan.steps.any { step ->
+                when (toolExecutor.mayDiscloseExternally(step.toolCall.toolId)) {
+                    true -> true
+                    false -> false
+                    null -> true // unknown tool — treat as external (fail-closed)
                 }
-            ) {
+            }
+            if (request.effectivePrivacyLevel != PrivacyLevel.NORMAL && disclosesExternally) {
                 return privacyBlocked(DecisionReason.EXTERNAL_TOOL_BLOCKED_BY_PRIVACY)
             }
             logRoute(ExecutionType.AGENT, DecisionReason.COMPLEX_MULTI_STEP, routing.confidence)
@@ -201,9 +212,13 @@ class ExecutionDecisionEngine @Inject constructor(
         routing: CommandRoutingResult.DeviceCommand
     ): ExecutionResult {
         val call = routing.toolCall
-        if (request.effectivePrivacyLevel != PrivacyLevel.NORMAL &&
-            toolExecutor.mayDiscloseExternally(call.toolId) != false
-        ) {
+        // CR-18: то же явное разрешение Boolean? — fail-closed на null.
+        val disclosesExternally = when (toolExecutor.mayDiscloseExternally(call.toolId)) {
+            true -> true
+            false -> false
+            null -> true
+        }
+        if (request.effectivePrivacyLevel != PrivacyLevel.NORMAL && disclosesExternally) {
             return privacyBlocked(DecisionReason.EXTERNAL_TOOL_BLOCKED_BY_PRIVACY)
         }
 

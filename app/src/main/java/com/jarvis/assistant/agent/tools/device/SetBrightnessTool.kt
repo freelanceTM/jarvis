@@ -78,6 +78,8 @@ class SetBrightnessTool @Inject constructor(
         }
 
         // Абсолютное значение или относительное смещение от текущей яркости.
+        // N-01: не используем !! — ранний выход при null (предохраняет от NPE
+        // в случае, если вызов пришёл без обоих аргументов из стороннего path).
         val targetPercent = if (delta != null) {
             val current = currentBrightnessPercent()
             if (current < 0) {
@@ -88,7 +90,12 @@ class SetBrightnessTool @Inject constructor(
             }
             (current + delta).coerceIn(0, 100)
         } else {
-            requested!!.coerceIn(0, 100)
+            val safeRequested = requested
+                ?: return ToolExecutionResult.failure(
+                    summary = "Не указана яркость для установки",
+                    error = "BRIGHTNESS_VALUE_REQUIRED"
+                )
+            safeRequested.coerceIn(0, 100)
         }
 
         // Алгоритм: canWrite() → YES: изменить яркость / NO: системное разрешение.

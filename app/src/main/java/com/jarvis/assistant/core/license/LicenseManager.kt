@@ -4,9 +4,11 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.jarvis.assistant.R
+import com.jarvis.assistant.core.security.AccessTokenPolicy
 import com.jarvis.assistant.core.security.SecurityManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -67,6 +69,7 @@ class LicenseManagerImpl @Inject constructor(
     private val securityManager: SecurityManager
 ) : LicenseManager {
     companion object {
+        private const val TAG = "LicenseManager"
         private const val PREFS_NAME = "jarvis_hardware_license"
         private const val KEY_ACTIVATED = "is_activated"
         private const val KEY_PLAN_ID = "plan_id"
@@ -161,19 +164,33 @@ class LicenseManagerImpl @Inject constructor(
             )
             is LicenseCodeValidator.CodeVerdict.BoxCodeValid -> {
                 val record = verdict.license
-                val token = record.accessToken ?: return ActivationResult.InvalidCode(
-                    context.getString(R.string.nevernyy_kod_aktivacii)
-                )
-                runCatching { securityManager.saveAccessToken(token) }.getOrElse {
-                    return ActivationResult.ServiceUnavailable(
+                val token = record.accessToken
+                // S-04: явная проверка токена ДО сохранения. Invalid token —
+                // ожидаемая невалидация (не сервисная ошибка и не crash).
+                // IllegalArgumentException из isValid быть не должно (isValid
+                // — чистый predicate), но мы на всякий случай отделяем
+                // валидационный фейл от любых runtime/system ошибок при
+                // записи в EncryptedSharedPreferences.
+                if (token == null || !AccessTokenPolicy.isValid(token)) {
+                    return ActivationResult.InvalidCode(
+                        context.getString(R.string.nevernyy_kod_aktivacii)
+                    )
+                }
+                return try {
+                    securityManager.saveAccessToken(token)
+                    val info = persistServerRecord(record, hardwareId)
+                    ActivationResult.Success(
+                        licenseInfo = info,
+                        message = context.getString(R.string.jarvis_uspeshno_aktivirovan)
+                    )
+                } catch (t: Throwable) {
+                    // Не пишем token в логи. Сюда можем попасть только при
+                    // реальной ошибке EncryptedSharedPreferences/MasterKey.
+                    Log.e(TAG, "failed to persist access token after activation", t)
+                    ActivationResult.ServiceUnavailable(
                         context.getString(R.string.server_licenziy_nedostupen)
                     )
                 }
-                val info = persistServerRecord(record, hardwareId)
-                ActivationResult.Success(
-                    licenseInfo = info,
-                    message = context.getString(R.string.jarvis_uspeshno_aktivirovan)
-                )
             }
         }
     }

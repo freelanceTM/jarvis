@@ -150,8 +150,29 @@ object ServerBootstrap {
         )
 
         // ADMIN-права выдаются только явно перечисленным статическим клиентам.
+        // S-02: строгая regex-валидация clientId. Невалидные значения отбрасываются
+        // (fail-closed) и логируются без раскрытия полного значения — достаточно
+        // длины/позиции для диагностики. clientId НЕ является секретом (это
+        // мнемоника из конфига вроде "android-1"), но мы всё равно не логируем
+        // его целиком, т.к. админ мог по ошибке положить туда токен.
+        val adminClientIdRegex = Regex("^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
         val adminClients = (System.getenv("JARVIS_ADMIN_CLIENTS") ?: "")
-            .split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .mapNotNull { candidate ->
+                if (adminClientIdRegex.matches(candidate)) {
+                    candidate
+                } else {
+                    logger.warn(
+                        "ignoring invalid JARVIS_ADMIN_CLIENTS entry",
+                        "length" to candidate.length.toString(),
+                        "reason" to "does not match clientId pattern [A-Za-z0-9][A-Za-z0-9_.-]{0,63}"
+                    )
+                    null
+                }
+            }
+            .toSet()
         val staticAuthenticator = TokenAuthenticator(config.staticClientTokens) { clientId ->
             if (clientId in adminClients) ClientTier.ADMIN else ClientTier.FREE
         }

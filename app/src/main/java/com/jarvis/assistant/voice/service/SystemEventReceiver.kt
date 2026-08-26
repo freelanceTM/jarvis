@@ -16,9 +16,15 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+import java.util.concurrent.atomic.AtomicBoolean
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -30,6 +36,30 @@ class SystemEventReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "SystemEventReceiver"
+
+        /**
+         * S-03: строгий upper-bound на всю асинхронную работу receiver'а.
+         *
+         * goAsync() позволяет BroadcastReceiver-у продолжить работу после
+         * возврата из onReceive, но не даёт ему права висеть бесконечно:
+         * система убьёт приложение ANR-ом через ~10с. Мы ограничиваем
+         * полезную работу 8 секундами, оставляя запас на finish().
+         */
+        private const val DISPATCH_TIMEOUT_MS = 8_000L
+
+        // S-03: один общий supervisor scope на все dispatch'и receiver'а,
+        // с CEH — исключение в одном automation event не гасит остальные.
+        // Receiver живёт как одноразовый объект (система может создать
+        // несколько), поэтому scope является его собственным и
+        // закрывается на последнем finish().
+        private val receiverJob = SupervisorJob()
+        private val receiverExceptionHandler = CoroutineExceptionHandler { _, t ->
+            if (t is CancellationException) throw t
+            Log.e(TAG, "uncaught exception in system event receiver", t)
+        }
+        private val dispatchScope = CoroutineScope(
+            Dispatchers.IO + receiverJob + receiverExceptionHandler
+        )
     }
 
     override fun onReceive(context: Context?, intent: Intent?) {
@@ -82,21 +112,35 @@ class SystemEventReceiver : BroadcastReceiver() {
     }
 
     /**
-     * BroadcastReceiver может быть уничтожен сразу после onReceive. goAsync()
-     * удерживает pending result до завершения Room/tool workflow.
+     * S-03: goAsync + withTimeout(8000) + гарантированный ровно-один finish().
+     *
+     * - pendingResult удерживается до конца работы (успех / exception / timeout);
+     * - AtomicBoolean guards от двойного finish() при гонке timeout vs normal;
+     * - CancellationException не маскируется и не логируется как ошибка;
+     * - при timeout in-flight coroutine отменяется structured-concurrency'ом;
+     * - scope привязан к Companion object и не утекает (один на процесс).
      */
     private fun dispatch(
         automationEngine: PersonalAutomationEngine,
         trigger: AutomationTriggerType
     ) {
         val pendingResult = goAsync()
-        CoroutineScope(Dispatchers.IO).launch {
+        val finished = AtomicBoolean(false)
+        dispatchScope.launch {
             try {
-                automationEngine.onSystemEvent(trigger)
-            } catch (e: Exception) {
-                Log.e(TAG, "Automation failed for $trigger", e)
+                withTimeout(DISPATCH_TIMEOUT_MS) {
+                    automationEngine.onSystemEvent(trigger)
+                }
+            } catch (ce: CancellationException) {
+                // Timeout / scope shutdown — это ожидаемое завершение.
+                Log.w(TAG, "system event dispatch cancelled: $trigger")
+                throw ce
+            } catch (t: Throwable) {
+                Log.e(TAG, "Automation failed for $trigger", t)
             } finally {
-                pendingResult.finish()
+                if (finished.compareAndSet(false, true)) {
+                    pendingResult.finish()
+                }
             }
         }
     }

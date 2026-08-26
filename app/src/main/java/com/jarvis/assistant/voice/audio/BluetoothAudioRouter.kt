@@ -1,7 +1,6 @@
 package com.jarvis.assistant.voice.audio
 
-import com.jarvis.assistant.R
-import android.annotation.SuppressLint
+import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHeadset
@@ -10,10 +9,13 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
 import android.util.Log
+import androidx.core.content.ContextCompat
+import com.jarvis.assistant.R
 import com.jarvis.assistant.agent.automation.engine.PersonalAutomationEngine
 import com.jarvis.assistant.agent.automation.model.AutomationTriggerType
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -75,8 +77,18 @@ class BluetoothAudioRouter @Inject constructor(
     private val _isHeadsetPlugged = MutableStateFlow(false)
     val isHeadsetPlugged: StateFlow<Boolean> = _isHeadsetPlugged.asStateFlow()
 
+    // N-05: явная проверка BLUETOOTH_CONNECT (API 31+) вместо @SuppressLint.
+    // До API 31 разрешение BLUETOOTH_CONNECT не существует — все BT-вызовы
+    // легитимны по BLUETOOTH / BLUETOOTH_ADMIN (normal/permissions до 30).
+    private fun hasBluetoothConnectPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        return ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.BLUETOOTH_CONNECT
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
     private val profileListener = object : BluetoothProfile.ServiceListener {
-        @SuppressLint("MissingPermission")
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile?) {
             if (disposed.get()) {
                 // CR-12: если connect пришёл после dispose — сразу закрываем,
@@ -86,9 +98,16 @@ class BluetoothAudioRouter @Inject constructor(
             }
             if (profile == BluetoothProfile.HEADSET) {
                 bluetoothHeadset = proxy as? BluetoothHeadset
-                val connectedDevices = bluetoothHeadset?.connectedDevices.orEmpty()
+                // N-05: connectedDevices / .name требуют BLUETOOTH_CONNECT на API 31+.
+                val connectedDevices = if (hasBluetoothConnectPermission()) {
+                    bluetoothHeadset?.connectedDevices.orEmpty()
+                } else {
+                    emptyList()
+                }
                 if (connectedDevices.isNotEmpty()) {
-                    val name = connectedDevices.first().name
+                    val name = try {
+                        if (hasBluetoothConnectPermission()) connectedDevices.first().name else null
+                    } catch (_: SecurityException) { null }
                         ?: context.getString(R.string.bluetooth_garnitura)
                     _audioState.value = BluetoothAudioState.Connected(name, isSingleEarbud = true)
                     _isHeadsetPlugged.value = true
@@ -110,17 +129,22 @@ class BluetoothAudioRouter @Inject constructor(
     }
 
     private var connectionReceiver: BroadcastReceiver? = object : BroadcastReceiver() {
-        @SuppressLint("MissingPermission")
         override fun onReceive(context: Context?, intent: Intent?) {
             if (disposed.get()) return
             // CR-13: любая ошибка в onReceive не должна убивать процесс / ресивер.
             runCatching {
                 when (intent?.action) {
                     BluetoothDevice.ACTION_ACL_CONNECTED -> {
-                        val device = intent.getParcelableExtra<BluetoothDevice>(
-                            BluetoothDevice.EXTRA_DEVICE
-                        )
-                        val name = device?.name
+                        val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                        }
+                        // N-05: device?.name требует BLUETOOTH_CONNECT на API 31+.
+                        val name = try {
+                            if (hasBluetoothConnectPermission()) device?.name else null
+                        } catch (_: SecurityException) { null }
                             ?: this@BluetoothAudioRouter.context.getString(R.string.bluetooth_naushnik)
                         _audioState.value = BluetoothAudioState.Connected(name, isSingleEarbud = true)
                         _isHeadsetPlugged.value = true
@@ -166,7 +190,9 @@ class BluetoothAudioRouter @Inject constructor(
         registerSafely()
     }
 
-    @SuppressLint("MissingPermission")
+    // N-05: getProfileProxy / registerReceiver не требуют BLUETOOTH_CONNECT — это
+    // системные вызовы регистрации; вызовы к самому proxy/Device обёрнуты в
+    // hasBluetoothConnectPermission() выше. @SuppressLint снят.
     private fun registerSafely() {
         if (disposed.get()) return
         try {
