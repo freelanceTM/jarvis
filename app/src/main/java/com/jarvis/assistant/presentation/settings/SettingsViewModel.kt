@@ -133,8 +133,15 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(speechPitch = pitch) }
     }
 
-    fun onModelSelected(modelId: String) {
-        _uiState.update { it.copy(selectedModel = modelId) }
+    /**
+     * AR-01: выбор модели больше не поддерживается на клиенте — селектор
+     * был убран из UI (модель управляется сервером). Метод оставлен как
+     * no-op, чтобы не сломать бинарные клиенты ViewModel при выходе из
+     * беты; можно удалить на следующем мажорном релизе.
+     */
+    @Deprecated("Model selection is server-managed; this is now a no-op.", ReplaceWith(""))
+    fun onModelSelected(@Suppress("UNUSED_PARAMETER") modelId: String) {
+        // Intentionally no-op: server manages model selection.
     }
 
     fun onHeadsetOnlyModeChanged(enabled: Boolean) {

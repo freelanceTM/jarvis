@@ -7,8 +7,11 @@ import com.jarvis.assistant.agent.observation.AgentObservationEngine
 import com.jarvis.assistant.agent.observation.NextActionHint
 import com.jarvis.assistant.agent.observation.Observation
 import com.jarvis.assistant.agent.planner.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -41,9 +44,47 @@ class AgentCognitiveLoop @Inject constructor(
 
         /** Абсолютный предел выполненных шагов — страховка от бесконечного цикла. */
         const val MAX_TOTAL_STEPS = 12
+
+        /**
+         * AR-03 Part A: жёсткий upper-bound на весь cognitive loop
+         * (PLAN → EXECUTE → OBSERVE → REPLAN).
+         *
+         * 8 секунд выбраны с запасом до 10-секундного ANR-порога и с учётом того,
+         * что отдельные tool-вызовы уже имеют собственный [JarvisTool.executionTimeoutMs]
+         * (по умолчанию 4 с). При истечении бюджет корутины отменяются
+         * structured-concurrency'ом; новые tool calls не запускаются.
+         */
+        const val LOOP_BUDGET_MS = 8_000L
     }
 
+    /**
+     * AR-03: выполняет [initialPlan] под жёстким wall-clock budget.
+     *
+     * Таймаут ограничивает ВЕСЬ цикл, а не отдельный tool-call — это защищает
+     * от сценариев "по одному быстрому tool call, но 50 шагов подряд", которые
+     * обходят per-tool budget. При истечении бюджета корректно возвращается
+     * частичный результат; CancellationException пробрасывается в Structured
+     * Concurrency и не маскируется как "успех".
+     */
     suspend fun runPlan(initialPlan: ExecutionPlan): PlanExecutionSummary = withContext(Dispatchers.IO) {
+        try {
+            withTimeout(LOOP_BUDGET_MS) {
+                runPlanInternal(initialPlan)
+            }
+        } catch (e: TimeoutCancellationException) {
+            Log.w(TAG, "Cognitive loop budget exceeded (${LOOP_BUDGET_MS}ms); returning partial result.")
+            PlanExecutionSummary(
+                plan = initialPlan,
+                observations = emptyList(),
+                finalVoiceSummary = "Не удалось закончить план вовремя, сэр.",
+                isAllSuccessful = false,
+                pendingConfirmation = null,
+                timedOut = true
+            )
+        }
+    }
+
+    private suspend fun runPlanInternal(initialPlan: ExecutionPlan): PlanExecutionSummary {
         val stepObservations = mutableListOf<StepObservation>()
         val summaries = mutableListOf<String>()
         val blockedNotices = mutableListOf<String>()
@@ -87,7 +128,7 @@ class AgentCognitiveLoop @Inject constructor(
 
             // Подтверждение прерывает цикл: решение за пользователем.
             if (observation.nextActionHint == NextActionHint.AWAIT_CONFIRMATION) {
-                return@withContext PlanExecutionSummary(
+                return PlanExecutionSummary(
                     plan = currentPlan,
                     observations = stepObservations,
                     finalVoiceSummary = observation.summary,

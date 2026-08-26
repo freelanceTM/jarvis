@@ -50,5 +50,11 @@ data class PlanExecutionSummary(
     val observations: List<StepObservation>,
     val finalVoiceSummary: String,
     val isAllSuccessful: Boolean,
-    val pendingConfirmation: Pair<ToolCall, String>? = null
+    val pendingConfirmation: Pair<ToolCall, String>? = null,
+    /**
+     * AR-03: true, когда цикл был прерван по таймауту (LOOP_BUDGET_MS).
+     * В этом случае наблюдения могут быть пустыми / частичными, а
+     * finalVoiceSummary содержит пользовательское сообщение о таймауте.
+     */
+    val timedOut: Boolean = false
 )

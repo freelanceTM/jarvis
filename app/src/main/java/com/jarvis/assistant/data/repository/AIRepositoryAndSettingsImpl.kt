@@ -20,14 +20,10 @@ import javax.inject.Singleton
 /**
  * Облачный AI на Android (Этап 3).
  *
- * Что изменилось: раньше репозиторий сам выбирал модель через TaskRouter
- * и сам обогащал промпт результатами web-поиска. Теперь это ответственность
- * сервера (AI Router + Provider Manager), поэтому клиент только передаёт
- * запрос и контекст инструментов.
- *
- * TaskRouter и WebSearchTool намеренно НЕ удалены из проекта: роутер
- * по-прежнему используется в других местах, а WebSearchTool остаётся обычным
- * JarvisTool, который агент может вызвать явно.
+ * Маршрутизация и выбор модели — ответственность сервера (AI Router + Provider
+ * Manager); клиент только передаёт запрос и контекст инструментов. Локальный
+ * TaskRouter убран (AR-01): его keyword-based эвристики дублировали
+ * ExecutionDecisionEngine и не были подключены в production path.
  */
 @Singleton
 class AIRepositoryImpl @Inject constructor(

@@ -25,6 +25,7 @@ import com.jarvis.assistant.voice.stt.SpeechRecognizerManager
 import com.jarvis.assistant.voice.tts.TextToSpeechManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -64,6 +65,15 @@ class ChatViewModel @Inject constructor(
     private val messageRepository: MessageRepository
 ) : ViewModel() {
 
+    companion object {
+        /**
+         * CR-17: дебаунс для PrivacyClassifier при быстром вводе с клавиатуры.
+         * Меньше 150 мс — дёргает классификатор на каждый слог; больше 400 мс —
+         * индикатор в UI ощущается отставшим. 250 мс — стандартный UX-компромисс.
+         */
+        private const val CLASSIFY_DEBOUNCE_MS = 250L
+    }
+
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
@@ -71,10 +81,49 @@ class ChatViewModel @Inject constructor(
     private var speechPitch = 0.90f
     private var systemPrompt = ""
 
+    /**
+     * CR-17: буфер текста из onInputTextChanged. Вместо запуска PrivacyClassifier
+     * на каждый keystroke, тексты сливаются через [debounce] (250 мс) и последняя
+     * актуальная версия классифицируется ровно один раз. При быстром вводе /
+     * lifecycle destruction старая классификация не применяется к новому тексту.
+     */
+    private val _inputClassificationRequests = MutableSharedFlow<String>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    private var inputClassificationJob: Job? = null
+
     init {
         loadHistory()
         observeSettings()
         observeSpeechRecognizer()
+        startInputClassification()
+    }
+
+    /**
+     * CR-17: один подписчик на поток ввода. Используем collectLatest: новая эмиссия
+     * автоматически отменяет предыдущую classify/задержку, исключая race stale->new.
+     */
+    private fun startInputClassification() {
+        inputClassificationJob?.cancel()
+        inputClassificationJob = viewModelScope.launch {
+            _inputClassificationRequests
+                .debounce(CLASSIFY_DEBOUNCE_MS)
+                .conflate()
+                .collectLatest { text ->
+                    val classification = PrivacyClassifier.classifySafely(PrivacyContent(text))
+                    // atomic CAS: обновляем поле ТОЛЬКО если inputText всё ещё совпадает
+                    // (защита от stale результата на случай, если экран уничтожен между
+                    // классификацией и применением).
+                    _uiState.update { current ->
+                        if (current.inputText == text) current.copy(privacyClassification = classification)
+                        else current
+                    }
+                }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        inputClassificationJob?.cancel()
+        inputClassificationJob = null
     }
 
     private fun loadHistory() {
@@ -100,10 +149,17 @@ class ChatViewModel @Inject constructor(
             speechRecognizerManager.speechState.collectLatest { event ->
                 when (event) {
                     is SpeechRecognitionEvent.PartialResult -> {
-                        _uiState.update { it.copy(inputText = event.partialText) }
+                        // CR-17: голосовой промежуточный текст тоже идёт через debounce
+                        // классификацию (тот же pipeline, что и клавиатурный ввод).
+                        if (_uiState.value.inputText != event.partialText) {
+                            _uiState.update { it.copy(inputText = event.partialText) }
+                            _inputClassificationRequests.tryEmit(event.partialText)
+                        }
                     }
                     is SpeechRecognitionEvent.FinalResult -> {
                         _uiState.update { it.copy(inputText = event.recognizedText, isVoiceDictating = false) }
+                        // sendTextMessage сам классифицирует финальный query — дополнительно
+                        // не дёргаем debounce, чтобы не показать промежуточную метку на пустом поле.
                         sendTextMessage(event.recognizedText)
                     }
                     is SpeechRecognitionEvent.RecognitionError -> {
@@ -116,10 +172,25 @@ class ChatViewModel @Inject constructor(
     }
 
     fun onInputTextChanged(newText: String) {
-        val classification = PrivacyClassifier.classifySafely(PrivacyContent(newText))
+        // CR-17: inputText обновляем немедленно (UI binding), но классификацию
+        // запускаем через debounce поток. Пустой ввод и идентичные фрагменты
+        // short-circuit, чтобы не плодить work.
+        val prev = _uiState.value
+        if (newText == prev.inputText) return
         _uiState.update {
-            it.copy(inputText = newText, privacyClassification = classification)
+            it.copy(
+                inputText = newText,
+                // При пустом вводе нет смысла показывать старую метку — сбрасываем
+                // сразу (это не race: речь про пустую строку).
+                privacyClassification = if (newText.isEmpty()) {
+                    PrivacyClassification.unknown(PrivacyReason.NOT_CLASSIFIED)
+                } else {
+                    it.privacyClassification
+                }
+            )
         }
+        // tryEmit с DROP_OLDEST: в буфере всегда последнее актуальное значение.
+        _inputClassificationRequests.tryEmit(newText)
     }
 
     fun sendTextMessage(textToSend: String = _uiState.value.inputText) {
