@@ -10,9 +10,14 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+import java.util.concurrent.atomic.AtomicBoolean
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -22,6 +27,20 @@ interface AutomationScheduleEntryPoint {
     fun automationDao(): AutomationDao
 }
 
+/**
+ * H-03: receiver для автоматизаций по расписанию и reconcile после
+ * BOOT/TIME_CHANGED/MY_PACKAGE_REPLACED.
+ *
+ * Паттерн асинхронной работы скопирован 1-в-1 с [com.jarvis.assistant.voice.service.SystemEventReceiver]:
+ *   - один SupervisorJob + CEH на Companion scope (не создаём новый
+ *     CoroutineScope на каждый onReceive — это и была причина краша
+ *     "Receiver dropped / scope leaked / uncaught CEH");
+ *   - goAsync() + withTimeout(DISPATCH_TIMEOUT_MS=8000) — строгий upper-bound,
+ *     чтобы не схлопотать ANR (система даёт ~10с);
+ *   - AtomicBoolean finish-guard — ровно один вызов pending.finish() даже
+ *     при гонке timeout vs normal completion;
+ *   - CancellationException не маскируется и не логируется как ошибка.
+ */
 class AutomationScheduleReceiver : BroadcastReceiver() {
     companion object {
         private const val TAG = "AutomationScheduleRx"
@@ -31,31 +50,76 @@ class AutomationScheduleReceiver : BroadcastReceiver() {
         const val EXTRA_SCHEDULED_AT = "scheduled_at"
         const val EXTRA_HOUR = "hour"
         const val EXTRA_MINUTE = "minute"
+
+        /**
+         * H-03: строгий upper-bound на всю асинхронную работу receiver'а.
+         * Система даёт ~10с после goAsync() — мы ограничиваемся 8с,
+         * оставляя запас на finish().
+         */
+        private const val DISPATCH_TIMEOUT_MS = 8_000L
+
+        // Один общий supervisor scope на все dispatch'и receiver'а,
+        // с CEH — исключение в одном automation не гасит остальные.
+        private val receiverJob = SupervisorJob()
+        private val receiverExceptionHandler = CoroutineExceptionHandler { _, t ->
+            if (t is CancellationException) throw t
+            Log.e(TAG, "automation reconcile failed", t)
+        }
+        private val scope = CoroutineScope(
+            Dispatchers.IO + receiverJob + receiverExceptionHandler
+        )
     }
 
     override fun onReceive(context: Context?, intent: Intent?) {
         if (context == null || intent == null) return
+        val action = intent.action ?: return
+        Log.d(TAG, "onReceive action: $action")
+
+        // H-06: BOOT_COMPLETED не должен запускать reconcile прямо в
+        // BroadcastReceiver (система убивает receiver через ~10с и ждёт
+        // тяжёлых IO-операций). Вместо этого ставим уникальную
+        // WorkManager-задачу — она переживёт doze/process-restart и
+        // выполнит reconcile в фоне с нормальными таймаутами.
+        if (action == Intent.ACTION_BOOT_COMPLETED) {
+            AutomationReconcileWorker.enqueueUnique(context.applicationContext)
+            return
+        }
+
+        val entryPoint = try {
+            EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                AutomationScheduleEntryPoint::class.java
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Cannot obtain automation entry point", e)
+            return
+        }
+
         val pending = goAsync()
-        CoroutineScope(Dispatchers.IO).launch {
+        val finished = AtomicBoolean(false)
+        scope.launch {
             try {
-                val entryPoint = EntryPointAccessors.fromApplication(
-                    context.applicationContext,
-                    AutomationScheduleEntryPoint::class.java
-                )
-                val engine = entryPoint.automationEngine()
-                val scheduler = entryPoint.automationScheduleManager()
-                when (intent.action) {
-                    ACTION_TRIGGER -> executeScheduled(intent, engine, scheduler)
-                    ACTION_RECONCILE,
-                    Intent.ACTION_BOOT_COMPLETED,
-                    Intent.ACTION_TIME_CHANGED,
-                    Intent.ACTION_TIMEZONE_CHANGED,
-                    Intent.ACTION_MY_PACKAGE_REPLACED -> reconcile(engine, scheduler)
+                withTimeout(DISPATCH_TIMEOUT_MS) {
+                    val engine = entryPoint.automationEngine()
+                    val scheduler = entryPoint.automationScheduleManager()
+                    when (action) {
+                        ACTION_TRIGGER -> executeScheduled(intent, engine, scheduler)
+                        ACTION_RECONCILE,
+                        Intent.ACTION_TIME_CHANGED,
+                        Intent.ACTION_TIMEZONE_CHANGED,
+                        Intent.ACTION_MY_PACKAGE_REPLACED -> reconcile(engine, scheduler)
+                    }
                 }
-            } catch (failure: Throwable) {
-                Log.e(TAG, "Schedule receiver failed | type=${failure.javaClass.simpleName}")
+            } catch (ce: CancellationException) {
+                // Timeout / scope shutdown — ожидаемое завершение.
+                Log.w(TAG, "automation dispatch cancelled: $action")
+                throw ce
+            } catch (e: Throwable) {
+                Log.e(TAG, "reconcile error | action=$action", e)
             } finally {
-                pending.finish()
+                if (finished.compareAndSet(false, true)) {
+                    pending.finish()
+                }
             }
         }
     }

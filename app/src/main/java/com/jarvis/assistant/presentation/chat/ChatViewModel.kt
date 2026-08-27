@@ -7,6 +7,7 @@ import com.jarvis.assistant.R
 import com.jarvis.assistant.agent.decision.PrivacyClassification
 import com.jarvis.assistant.agent.decision.PrivacyClassifier
 import com.jarvis.assistant.agent.decision.PrivacyContent
+import com.jarvis.assistant.agent.decision.PrivacyLevel
 import com.jarvis.assistant.agent.decision.PrivacyReason
 import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.model.ToolCall
@@ -42,6 +43,24 @@ data class PendingConfirmationUi(
     val confirmationToken: String
 )
 
+/**
+ * C-02: ожидание согласия пользователя на отправку приватного запроса в облако.
+ *
+ * Отличается от [PendingConfirmationUi] тем, что здесь нет ToolCall/токена
+ * подтверждения действия — мы просто запоминаем оригинальный текст запроса,
+ * чтобы при нажатии «Отправить в облако» повторить вызов SendPromptUseCase с
+ * флагом cloudExplicitlyAllowed=true. При «Только локально» — повторяем с
+ * cloudExplicitlyAllowed=false? Нет: «Только локально» означает «не давать
+ * согласие», т.е. запрос должен быть обработан локально (on-device Gemma);
+ * в текущей реализации если локальный путь не может обработать — вернётся
+ * внятная ошибка, а не обход согласия.
+ */
+data class PendingCloudConsentUi(
+    val privacyLevel: PrivacyLevel,
+    val promptMessage: String,
+    val userPrompt: String
+)
+
 data class ChatUiState(
     val messages: List<Message> = emptyList(),
     val inputText: String = "",
@@ -49,7 +68,9 @@ data class ChatUiState(
     val isVoiceDictating: Boolean = false,
     val privacyClassification: PrivacyClassification =
         PrivacyClassification.unknown(PrivacyReason.NOT_CLASSIFIED),
-    val pendingConfirmation: PendingConfirmationUi? = null
+    val pendingConfirmation: PendingConfirmationUi? = null,
+    /** C-02: запрос на отправку приватных данных в облако, ожидающий ответа пользователя. */
+    val pendingCloudConsent: PendingCloudConsentUi? = null
 )
 
 @HiltViewModel
@@ -197,6 +218,18 @@ class ChatViewModel @Inject constructor(
         val query = textToSend.trim()
         if (query.isBlank() || _uiState.value.isSending) return
 
+        // C-02: приоритет №1 — если висит cloud-consent вопрос, «да/нет» — ответ на него.
+        val pendingConsent = _uiState.value.pendingCloudConsent
+        if (pendingConsent != null && ConfirmationIntent.isDefinitive(query)) {
+            _uiState.update { it.copy(inputText = "") }
+            if (ConfirmationIntent.isYes(query)) {
+                confirmCloudConsent(pendingConsent)
+            } else {
+                denyCloudConsent(pendingConsent)
+            }
+            return
+        }
+
         // Если ждём подтверждения действия — текст «да/нет» обрабатывается как ответ.
         val pending = _uiState.value.pendingConfirmation
         if (pending != null && ConfirmationIntent.isDefinitive(query)) {
@@ -209,23 +242,26 @@ class ChatViewModel @Inject constructor(
             return
         }
 
-        val classification = PrivacyClassifier.classifySafely(PrivacyContent(query))
+        // H-02: НЕ пересчитываем классификацию на send. Она 1) уже посчитана
+        // debounce-пайплайном для индикатора (keystroke-level, без истории),
+        // 2) будет ПОЛНОСТЬЮ пересчитана в SendPromptUseCase с контекстом
+        // (systemPrompt + история) — это authoritative classification.
+        // Здесь передаём подсказку (hint) от UI на основании текущей метки;
+        // больше ничего — use case является единственным источником истины.
+        val sendHint = _uiState.value.privacyClassification.level
         _uiState.update {
-            it.copy(inputText = "", isSending = true, privacyClassification = classification)
+            it.copy(
+                inputText = "",
+                isSending = true,
+                // C-02: новый сброс старого consent, если начат новый запрос.
+                pendingCloudConsent = null
+            )
         }
 
         viewModelScope.launch {
-            val history = messageRepository.getRecentMessages(limit = 10)
-            val contextualClassification = PrivacyClassifier.classifySafely(
-                PrivacyContent(
-                    text = query,
-                    relatedContent = listOf(systemPrompt) + history.map(Message::text)
-                )
-            )
-            _uiState.update { it.copy(privacyClassification = contextualClassification) }
             val result = sendPromptUseCase(
                 query,
-                privacyLevel = contextualClassification.level
+                privacyLevel = sendHint
             )
             _uiState.update { it.copy(isSending = false) }
 
@@ -262,7 +298,99 @@ class ChatViewModel @Inject constructor(
                     textToSpeechManager.speak(context.getString(R.string.oshibka, errorMsg), speechRate, speechPitch)
                 }
                 is Resource.Loading -> Unit
+                // C-02: use case сигнализирует, что нужен согласие на облако.
+                is Resource.NeedsConsent -> {
+                    _uiState.update {
+                        it.copy(
+                            pendingCloudConsent = PendingCloudConsentUi(
+                                privacyLevel = result.privacyLevel,
+                                promptMessage = result.prompt,
+                                userPrompt = result.retryOnConsentArgs.userPrompt
+                            )
+                        )
+                    }
+                    // Читаем вопрос вслух, чтобы голосовой пользователь тоже услышал его
+                    // (при диктовке из микрофона чат виден на экране).
+                    textToSpeechManager.speak(result.prompt, speechRate, speechPitch)
+                }
             }
+        }
+    }
+
+    /**
+     * C-02: пользователь согласился отправить приватный запрос в облако.
+     *
+     * Повторяем вызов [SendPromptUseCase] с cloudExplicitlyAllowed=true —
+     * use case на этот раз пройдёт privacy gate и отправит запрос в cloud AI.
+     */
+    fun confirmCloudConsent(consent: PendingCloudConsentUi = _uiState.value.pendingCloudConsent ?: return) {
+        _uiState.update { it.copy(pendingCloudConsent = null, isSending = true) }
+
+        // H-02: НЕ пересчитываем классификацию — use case сам сделает это с полным
+        // контекстом на момент consent-retry. Уровень из consent.privacyLevel — это
+        // effective, который был посчитан use case в момент первого вызова и уже
+        // показан в UI-карточке; его достаточно для hint.
+        viewModelScope.launch {
+            val result = sendPromptUseCase(
+                userPrompt = consent.userPrompt,
+                source = com.jarvis.assistant.agent.decision.RequestSource.CHAT,
+                privacyLevel = consent.privacyLevel,
+                cloudExplicitlyAllowed = true
+            )
+            _uiState.update { it.copy(isSending = false) }
+            when (result) {
+                is Resource.Success -> {
+                    when (val exec = result.data) {
+                        is PromptExecutionResult.ConfirmationRequired -> {
+                            val token = toolExecutor.confirmationTokenFor(exec.toolCall.callId)
+                            _uiState.update {
+                                it.copy(
+                                    pendingConfirmation = if (token != null) PendingConfirmationUi(
+                                        toolCall = exec.toolCall,
+                                        promptMessage = exec.promptMessage,
+                                        confirmationToken = token
+                                    ) else null
+                                )
+                            }
+                            textToSpeechManager.speak(exec.promptMessage, speechRate, speechPitch)
+                        }
+                        is PromptExecutionResult.DirectAnswer -> {
+                            textToSpeechManager.speak(exec.text, speechRate, speechPitch)
+                        }
+                    }
+                }
+                is Resource.Error -> {
+                    val errorMsg = result.message ?: context.getString(R.string.oshibka_vypolneniya_zaprosa)
+                    textToSpeechManager.speak(context.getString(R.string.oshibka, errorMsg), speechRate, speechPitch)
+                }
+                is Resource.Loading -> Unit
+                // Теоретически не может прийти NeedsConsent второй раз — флаг уже true.
+                is Resource.NeedsConsent -> Unit
+            }
+        }
+    }
+
+    /**
+     * C-02: пользователь отказался отправлять запрос в облако.
+     *
+     * В первой версии просто показываем отказ и НЕ делаем запрос в облако.
+     * Полноценный fallback на Local AI (on-device Gemma) с этим флагом — это
+     * отдельная работа Этап 2, когда local executor будет стабилен; сейчас
+     * локальный путь сам сработает в decision engine, если модель доступна
+     * и способна обработать запрос.
+     */
+    fun denyCloudConsent(consent: PendingCloudConsentUi = _uiState.value.pendingCloudConsent ?: return) {
+        _uiState.update { it.copy(pendingCloudConsent = null) }
+        val declineMsg = context.getString(R.string.cloud_consent_declined)
+        viewModelScope.launch {
+            messageRepository.insertMessage(
+                Message(
+                    role = MessageRole.ASSISTANT,
+                    text = declineMsg,
+                    timestamp = System.currentTimeMillis()
+                )
+            )
+            textToSpeechManager.speak(declineMsg, speechRate, speechPitch)
         }
     }
 

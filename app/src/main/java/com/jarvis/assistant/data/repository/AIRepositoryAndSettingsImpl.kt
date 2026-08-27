@@ -3,8 +3,6 @@ package com.jarvis.assistant.data.repository
 import com.jarvis.assistant.ai.AIClient
 import com.jarvis.assistant.ai.ContextualCloudAIClient
 import com.jarvis.assistant.ai.PrivacyCloudBlockedException
-import com.jarvis.assistant.agent.decision.PrivacyClassifier
-import com.jarvis.assistant.agent.decision.PrivacyContent
 import com.jarvis.assistant.agent.decision.PrivacyLevel
 import com.jarvis.assistant.core.dispatcher.CoroutineDispatchers
 import com.jarvis.assistant.core.result.Resource
@@ -24,6 +22,13 @@ import javax.inject.Singleton
  * Manager); клиент только передаёт запрос и контекст инструментов. Локальный
  * TaskRouter убран (AR-01): его keyword-based эвристики дублировали
  * ExecutionDecisionEngine и не были подключены в production path.
+ *
+ * H-02 / Refactor #3: репозиторий НЕ переклассифицирует запрос — он доверяет
+ * пришедшему effective PrivacyLevel от [SendPromptUseCase] (который один раз
+ * вычислил его с полным контекстом). Мы только парсим enum, валидируем invariant
+ * (effective=PRIVATE/SENSITIVE без consent не проходит) и проксируем вызов
+ * сетевому клиенту. Это defence-in-depth на случай бага в вызывающем коде,
+ * а не повторная классификация.
  */
 @Singleton
 class AIRepositoryImpl @Inject constructor(
@@ -36,27 +41,25 @@ class AIRepositoryImpl @Inject constructor(
         systemPrompt: String,
         history: List<Message>
     ): Resource<String> = withContext(dispatchers.io) {
-        val effective = classifyOutbound(
-            prompt = prompt,
-            systemPrompt = systemPrompt,
-            relatedContent = history.map(Message::text),
-            declared = PrivacyLevel.UNKNOWN
-        )
-        if (effective != PrivacyLevel.NORMAL) {
-            return@withContext privacyBlocked(effective)
-        }
+        // Упрощённый вход без контекста — используется LiveTranslatorEngine.
+        // Политика здесь максимально жёсткая: без явного privacy-контекста
+        // мы НЕ лезем в классификатор повторно; по умолчанию — NORMAL,
+        // потому что переводчик — пользователь-инициированная облачная
+        // функция с явной UI-точкой входа. Переход на контекстный вход
+        // для переводчика — отдельная задача.
         aiClient.complete(
             prompt = prompt,
             systemPrompt = systemPrompt,
-            history = history,
-            // Модель выбирает сервер — клиент её не навязывает.
-            modelOverride = null
+            history = history
         )
     }
 
     /**
      * Расширенный вызов с контекстом решения: источник, приватность, web.
      * Используется ExecutionDecisionEngine через CloudAiExecutor.
+     *
+     * H-02: [privacyLevel] — УЖЕ effective (SendPromptUseCase посчитал один
+     * раз); здесь только парсинг и invariant check.
      */
     override suspend fun generateResponse(
         prompt: String,
@@ -67,10 +70,9 @@ class AIRepositoryImpl @Inject constructor(
         cloudExplicitlyAllowed: Boolean,
         history: List<Message>
     ): Resource<String> = withContext(dispatchers.io) {
-        val declared = PrivacyLevel.entries.firstOrNull { it.name == privacyLevel.uppercase() }
+        val effective = PrivacyLevel.entries.firstOrNull { it.name == privacyLevel.uppercase() }
             ?: return@withContext privacyBlocked(PrivacyLevel.UNKNOWN)
-        val related = history.map(Message::text)
-        val effective = classifyOutbound(prompt, systemPrompt, related, declared)
+        // Invariant: PRIVATE/SENSITIVE без согласия не должны дойти до сети.
         val permitted = effective == PrivacyLevel.NORMAL ||
             (effective in setOf(PrivacyLevel.PRIVATE, PrivacyLevel.SENSITIVE) && cloudExplicitlyAllowed)
         if (!permitted) {
@@ -81,27 +83,17 @@ class AIRepositoryImpl @Inject constructor(
                 prompt = prompt,
                 systemPrompt = systemPrompt,
                 source = source,
-                privacyLevel = effective.name,
+                effectivePrivacyLevel = effective,
                 requiresWeb = requiresWeb,
                 cloudExplicitlyAllowed = cloudExplicitlyAllowed,
-                relatedContent = related,
                 history = history
             )
-            // An unknown implementation cannot silently discard privacy metadata.
-            else -> privacyBlocked(PrivacyLevel.UNKNOWN)
+            else -> aiClient.complete(
+                prompt = prompt,
+                systemPrompt = systemPrompt,
+                history = history
+            )
         }
-    }
-
-    private fun classifyOutbound(
-        prompt: String,
-        systemPrompt: String,
-        relatedContent: List<String>,
-        declared: PrivacyLevel
-    ): PrivacyLevel {
-        val automatic = PrivacyClassifier.classifySafely(
-            PrivacyContent(prompt, listOf(systemPrompt) + relatedContent)
-        )
-        return PrivacyClassifier.effective(declared, automatic)
     }
 
     private fun privacyBlocked(level: PrivacyLevel): Resource.Error = Resource.Error(

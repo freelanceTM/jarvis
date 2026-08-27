@@ -15,6 +15,7 @@ import com.jarvis.server.billing.JdbcBillingRepository
 import com.jarvis.server.billing.PaddleBillingProvider
 import com.jarvis.server.billing.PaddleWebhookVerifier
 import com.jarvis.server.config.ServerConfig
+import com.zaxxer.hikari.HikariDataSource
 import com.jarvis.server.http.HttpRequestContext
 import com.jarvis.server.http.HttpResponseContext
 import com.jarvis.server.http.JarvisApiHandler
@@ -54,6 +55,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -68,7 +70,178 @@ import java.util.concurrent.TimeUnit
  */
 object ServerBootstrap {
 
-    fun buildHandler(config: ServerConfig): JarvisApiHandler {
+    /**
+     * C-01 fix: контейнер для ресурсов с временем жизни == время жизни JVM.
+     *
+     * До этого [buildHandler] возвращал только [JarvisApiHandler], а
+     * `dataSource` / `usageTracker` / `instanceGuard` оставались в локальных
+     * переменных — shutdown hook из `main()` не мог до них дотянуться, и
+     * модуль не компилировался.
+     *
+     * Порядок закрытия в [close] важен: сначала останавливаем usage worker
+     * (он пишет в БД и ему нужен живой dataSource), затем снимаем advisory
+     * lock, затем закрываем пул соединений. Все шаги обёрнуты в
+     * `runCatching`, чтобы сбой на одном шаге не помешал закрыть остальные.
+     */
+    data class ServerResources(
+        val handler: JarvisApiHandler,
+        val dataSource: HikariDataSource,
+        val usageTracker: AsyncUsageTracker,
+        val instanceGuard: PostgresSingleInstanceGuard?,
+    ) : AutoCloseable {
+        override fun close() {
+            runCatching { usageTracker.shutdown() }
+            runCatching { instanceGuard?.close() }
+            runCatching { dataSource.close() }
+        }
+    }
+
+    /**
+     * C-01 test helper: handle на запущенный сервер с тем же shutdown-порядком,
+     * что и JVM shutdown hook. Используется интеграционным тестом на старт/
+     * стоп и в будущем — всеми in-process smoke tests.
+     *
+     * Порядок остановки в [close] должен в точности совпадать с порядком в
+     * shutdown hook main(): stop(0) → cancel scope'ы → shutdown executors →
+     * close resources. Любое рассинхронизирование здесь и в main() — это
+     * скрытый баг, поэтому логика написана один раз и переиспользуется.
+     */
+    class RunningServer(
+        val server: HttpServer,
+        private val requestScope: CoroutineScope,
+        private val healthScope: CoroutineScope,
+        private val healthExecutor: ExecutorService,
+        private val kickoffExecutor: ExecutorService,
+        private val resources: ServerResources,
+    ) : AutoCloseable {
+        val localPort: Int get() = server.address.port
+
+        override fun close() {
+            // 1) Прекращаем принимать новые соединения.
+            runCatching { server.stop(0) }
+            // 2) Отменяем in-flight корутины (cancellation стекет в OkHttpTransport).
+            runCatching { requestScope.cancel() }
+            runCatching { healthScope.cancel() }
+            // 3) Закрываем тред-пулы.
+            runCatching { healthExecutor.shutdown() }
+            runCatching { kickoffExecutor.shutdown() }
+            runCatching { healthExecutor.awaitTermination(3, TimeUnit.SECONDS) }
+            runCatching { kickoffExecutor.awaitTermination(3, TimeUnit.SECONDS) }
+            // 4) Закрываем DB / usage tracker / instance guard.
+            runCatching { resources.close() }
+        }
+    }
+
+    /**
+     * Поднимает HttpServer на указанном порту (0 = random port, полезно в
+     * тестах) и регистрирует все обработчики. Возвращает [RunningServer],
+     * который [AutoCloseable] — в тестах используем `.use { ... }`.
+     */
+    fun bindServer(
+        config: ServerConfig,
+        resources: ServerResources,
+        port: Int = config.port,
+    ): RunningServer {
+        val handler = resources.handler
+        val proxySecurity = ProxyRequestSecurity(config.deployment)
+        val logger = ConsoleStructuredLogger()
+
+        val ioDispatcher = Dispatchers.IO
+        val requestScope = CoroutineScope(SupervisorJob() + ioDispatcher)
+
+        val healthExecutor = Executors.newCachedThreadPool { r ->
+            Thread(r, "jarvis-health").apply { isDaemon = true }
+        }
+        val healthScope = CoroutineScope(
+            SupervisorJob() + healthExecutor.asCoroutineDispatcher()
+        )
+        @Volatile var cachedHealth: Pair<Long, String>? = null
+
+        val maxInFlight = Runtime.getRuntime().availableProcessors() * 4
+        val inFlight = Semaphore(maxInFlight)
+        logger.info("server backpressure configured", "maxInFlight" to maxInFlight.toString())
+
+        val server = HttpServer.create(
+            InetSocketAddress(config.deployment.bindHost, port), 64
+        )
+        val kickoffExecutor = Executors.newCachedThreadPool { r ->
+            Thread(r, "jarvis-kickoff").apply { isDaemon = true }
+        }
+        server.executor = kickoffExecutor
+
+        fun respond(exchange: HttpExchange, response: HttpResponseContext) {
+            try {
+                val bytes = response.body.toByteArray(StandardCharsets.UTF_8)
+                exchange.responseHeaders.set("Content-Type", "application/json; charset=utf-8")
+                response.headers.forEach { (k, v) -> exchange.responseHeaders.set(k, v) }
+                if (exchange.requestMethod == "HEAD") {
+                    exchange.sendResponseHeaders(response.status, -1)
+                } else {
+                    exchange.sendResponseHeaders(response.status, bytes.size.toLong())
+                    exchange.responseBody.use { it.write(bytes) }
+                }
+            } catch (t: Throwable) {
+                logger.warn("failed to write response", "error" to t.javaClass.simpleName)
+            } finally {
+                runCatching { exchange.close() }
+            }
+        }
+
+        server.createContext("/v1/health") { exchange ->
+            healthScope.launch {
+                val now = System.currentTimeMillis()
+                val body = cachedHealth?.takeIf { now - it.first < HEALTH_RESPONSE_CACHE_MS }?.second
+                    ?: run {
+                        // handler.healthSnapshot() уже возвращает готовый JSON
+                        // (собирается в buildResources из provider snapshot);
+                        // мы только кэшируем его на 2 секунды, чтобы балансер
+                        // не гонял formatter на каждый ping.
+                        val fresh = handler.healthSnapshot()
+                        cachedHealth = now to fresh
+                        fresh
+                    }
+                runCatching {
+                    val bytes = body.toByteArray(StandardCharsets.UTF_8)
+                    exchange.responseHeaders.set("Content-Type", "application/json; charset=utf-8")
+                    exchange.responseHeaders.set("Cache-Control", "no-cache")
+                    exchange.sendResponseHeaders(200, bytes.size.toLong())
+                    exchange.responseBody.use { it.write(bytes) }
+                }.exceptionOrNull()?.let {
+                    logger.warn("health response failed", "error" to it.javaClass.simpleName)
+                }
+                runCatching { exchange.close() }
+            }
+        }
+
+        server.createContext("/") { exchange: HttpExchange ->
+            requestScope.launch {
+                val acquired = inFlight.tryAcquire()
+                if (!acquired) {
+                    logger.warn("server overloaded: in-flight limit reached", "limit" to maxInFlight.toString())
+                    val body = """{"success":false,"error":{"code":"RATE_LIMITED","message":"Server is overloaded, retry later","requestId":"-"}}"""
+                    respond(
+                        exchange,
+                        HttpResponseContext(
+                            status = 503,
+                            body = body,
+                            headers = mapOf("Retry-After" to "1", "Cache-Control" to "no-store")
+                        )
+                    )
+                    return@launch
+                }
+                try {
+                    handleExchange(exchange, handler, proxySecurity, config, logger)
+                } finally {
+                    inFlight.release()
+                }
+            }
+        }
+
+        server.start()
+        return RunningServer(server, requestScope, healthScope, healthExecutor, kickoffExecutor, resources)
+    }
+
+    fun buildResources(config: ServerConfig): ServerResources {
         val json = Json {
             ignoreUnknownKeys = true
             encodeDefaults = true
@@ -228,7 +401,7 @@ object ServerBootstrap {
             }
         }
 
-        return JarvisApiHandler(
+        val handler = JarvisApiHandler(
             authenticator = authenticator,
             authorizer = authorizer,
             rateLimiter = PostgresRateLimiter(dataSource, "ai_execute", config.rateLimit),
@@ -250,6 +423,12 @@ object ServerBootstrap {
             extensionHandler = licenseHttpHandler::handle,
             // Публикуем healthProvider для внешнего kickoff в main().
             healthProviderFunc = healthProvider
+        )
+        return ServerResources(
+            handler = handler,
+            dataSource = dataSource,
+            usageTracker = usageTracker,
+            instanceGuard = instanceGuard,
         )
     }
 
@@ -487,170 +666,34 @@ fun main() {
         )
     }
 
-    val handler = ServerBootstrap.buildHandler(config)
-    val proxySecurity = ProxyRequestSecurity(config.deployment)
+    // C-01: buildResources() собирает ВСЕ JVM-long ресурсы (handler + DB +
+    // usage tracker + instance guard), чтобы shutdown hook мог их корректно
+    // закрыть. До этого dataSource/usageTracker/instanceGuard оставались
+    // локальными переменными buildHandler() и были недоступны из main().
+    val resources = ServerBootstrap.buildResources(config)
 
-    // CR-15: вместо Executors.newFixedThreadPool(8) + runBlocking используем
-    // coroutine scope на Dispatchers.IO, чтобы запросы обрабатывались
-    // асинхронно, не блокируя acceptor и не плодя неограниченную очередь.
-    val ioDispatcher = Dispatchers.IO
-    val requestScope = CoroutineScope(SupervisorJob() + ioDispatcher)
+    // bindServer() создаёт HttpServer, тред-пулы, скоупы и регистрирует все
+    // контексты (/v1/health + /), вычисляет maxInFlight и пишет лог о нём.
+    // Возвращает AutoCloseable хэндл с тем же shutdown-порядком, что и JVM
+    // shutdown hook — это единый источник истины для остановки
+    // (используется main() и интеграционными тестами).
+    val running = ServerBootstrap.bindServer(config, resources)
 
-    // CR-15: отдельный кэширующий health dispatcher (без базы и без AI-пула)
-    // и простой кэш health body на 2 секунды, чтобы /v1/health можно было
-    // дёргать балансером хоть раз в секунду и не упираться ни в какой лок.
-    val healthExecutor = Executors.newCachedThreadPool { r ->
-        Thread(r, "jarvis-health").apply { isDaemon = true }
-    }
-    val healthScope = CoroutineScope(
-        SupervisorJob() + healthExecutor.asCoroutineDispatcher()
-    )
-    @Volatile var cachedHealth: Pair<Long, String>? = null
-
-    // CR-15: backpressure — не более maxInFlight запросов ОДНОВРЕМЕННО.
-    // При превышении — немедленный 503, а не постановка в бесконечную
-    // очередь (как было на фиксированном пуле с неявной очередью без лимита).
-    val maxInFlight = Runtime.getRuntime().availableProcessors() * 4
-    val inFlight = Semaphore(maxInFlight)
-    logger.info("server backpressure configured", "maxInFlight" to maxInFlight.toString())
-
-    // CR-15: backlog = 64 вместо 0. 0 = реализация-в-приложение-принимает-всё
-    // пока TCP-стек не откажется; с явным backlog ОС держит очередь приёма
-    // соединений ограниченной и честно отбрасывает при перегрузке.
-    // Значение 64 — консервативный выбор: достаточно, чтобы сгладить
-    // burst-ы от балансера/keepalive (обычно 32-128), но недостаточно,
-    // чтобы создать иллюзию доступности при настоящей перегрузке.
-    val server = HttpServer.create(
-        InetSocketAddress(config.deployment.bindHost, config.port), 64
-    )
-    // CR-15: kickoff dispatcher. Это НЕ пул обработчиков — на нём выполняется
-    // только сам HttpServer.accept-loop-диспетчер: он получает вызов
-    // HttpHandler.handle(), в котором мы немедленно launch'им корутину в
-    // requestScope и возвращаемся. Весь реальный work (body parse, auth,
-    // AI call, serialization) живёт в requestScope/healthScope на
-    // Dispatchers.IO и в healthExecutor.
-    val kickoffExecutor = Executors.newCachedThreadPool { r ->
-        Thread(r, "jarvis-kickoff").apply { isDaemon = true }
-    }
-    server.executor = kickoffExecutor
-
-    /**
-     * Отправляет ответ на HttpExchange, закрывая exchange после этого.
-     * Безопасно вызывать из любого потока/корутины.
-     */
-    fun respond(exchange: HttpExchange, response: HttpResponseContext) {
-        try {
-            val bytes = response.body.toByteArray(StandardCharsets.UTF_8)
-            exchange.responseHeaders.set("Content-Type", "application/json; charset=utf-8")
-            response.headers.forEach { (k, v) -> exchange.responseHeaders.set(k, v) }
-            if (exchange.requestMethod == "HEAD") {
-                exchange.sendResponseHeaders(response.status, -1)
-            } else {
-                exchange.sendResponseHeaders(response.status, bytes.size.toLong())
-                exchange.responseBody.use { it.write(bytes) }
-            }
-        } catch (t: Throwable) {
-            logger.warn("failed to write response", "error" to t.javaClass.simpleName)
-        } finally {
-            runCatching { exchange.close() }
-        }
-    }
-
-    // CR-15: health — отдельный context и своя корутина, не берёт inFlight
-    // пермит и не ходит в общий requestScope/DB/AI.
-    server.createContext("/v1/health") { exchange ->
-        healthScope.launch {
-            val now = System.currentTimeMillis()
-            val body = cachedHealth?.takeIf { now - it.first < HEALTH_RESPONSE_CACHE_MS }?.second
-                ?: run {
-                    val snapshot = handler.healthSnapshot()
-                    val fresh = buildString {
-                        append("""{"status":"ok","providers":{""")
-                        append(
-                            snapshot.entries.joinToString(",") { (id, s) ->
-                                """"${id.name}":{"status":"${s.status}","circuit":"${s.circuitState}"}"""
-                            }
-                        )
-                        append("}}")
-                    }
-                    cachedHealth = now to fresh
-                    fresh
-                }
-            runCatching {
-                val bytes = body.toByteArray(StandardCharsets.UTF_8)
-                exchange.responseHeaders.set("Content-Type", "application/json; charset=utf-8")
-                exchange.responseHeaders.set("Cache-Control", "no-cache")
-                exchange.sendResponseHeaders(200, bytes.size.toLong())
-                exchange.responseBody.use { it.write(bytes) }
-            }.exceptionOrNull()?.let {
-                logger.warn("health response failed", "error" to it.javaClass.simpleName)
-            }
-            runCatching { exchange.close() }
-        }
-    }
-
-    // CR-15: общий обработчик на всё остальное.
-    server.createContext("/") { exchange: HttpExchange ->
-        // Методом kickoff в requestScope мы НЕ блокируем acceptor.
-        requestScope.launch {
-            // CR-15: backpressure через семафор — немедленный 503 без постановки
-            // в очередь. acquire не suspend'ится, если есть свободный пермит.
-            val acquired = inFlight.tryAcquire()
-            if (!acquired) {
-                logger.warn("server overloaded: in-flight limit reached", "limit" to maxInFlight.toString())
-                val body = """{"success":false,"error":{"code":"RATE_LIMITED","message":"Server is overloaded, retry later","requestId":"-"}}"""
-                respond(
-                    exchange,
-                    HttpResponseContext(
-                        status = 503,
-                        body = body,
-                        headers = mapOf(
-                            "Retry-After" to "1",
-                            "Cache-Control" to "no-store"
-                        )
-                    )
-                )
-                return@launch
-            }
-            try {
-                handleExchange(exchange, handler, proxySecurity, config, logger)
-            } finally {
-                inFlight.release()
-            }
-        }
-    }
-
+    // JVM shutdown hook делегирует в RunningServer.close() — тот же самый
+    // порядок остановки, что и в тестах. Это исключает рассинхрон, когда
+    // shutdown hook что-то забывает закрыть или делает это в неверном порядке.
     Runtime.getRuntime().addShutdownHook(Thread {
         logger.info("shutting down")
-        // Сначала отменяем корутины — это мгновенно прерывает in-flight
-        // AI/db вызовы через cancellation, иначе server.stop(0) закроет
-        // сокет но работающие в requestScope корутины продолжат жечь CPU
-        // и upstream-вызовы до истечения собственных таймаутов.
-        requestScope.cancel()
-        healthScope.cancel()
-        // AR-05: останавливаем usage worker и ждём bounded drain с таймаутом
-        // (делаем до закрытия DataSource, чтобы были шансы дописать события).
-        runCatching { usageTracker.shutdown() }
-        // server.stop(delay) ждёт delay секунд на завершение in-flight
-        // exchange; мы уже отменили все корутины — ставим 0.
-        server.stop(0)
-        // Теперь завершаем тред-пулы (kickoff/health могут иметь
-        // daemon-треды, но мы закрываем их явно для чистого shutdown).
-        healthExecutor.shutdown()
-        kickoffExecutor.shutdown()
-        runCatching { healthExecutor.awaitTermination(3, TimeUnit.SECONDS) }
-        runCatching { kickoffExecutor.awaitTermination(3, TimeUnit.SECONDS) }
-        // В последнюю очередь закрываем DB и single-instance guard
-        // (после того, как все worker'ы завершены).
-        runCatching { instanceGuard?.close() }
-        runCatching { dataSource.close() }
+        runCatching { running.close() }
     })
 
     logger.info(
         "JARVIS API started",
         "environment" to config.deployment.environment.name,
         "bindHost" to config.deployment.bindHost,
-        "port" to config.port.toString()
+        "port" to running.localPort.toString()
     )
-    server.start()
+    // server.start() уже вызван внутри bindServer(); поток main() паркуется
+    // на ожидании завершения JVM (shutdown hook закроет running).
+    Thread.currentThread().join()
 }

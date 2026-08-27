@@ -41,19 +41,28 @@ class AgentPipeline @Inject constructor(
     private val decisionEngine: ExecutionDecisionEngine
 ) {
 
-    /** Совместимый со старым кодом вход (источник по умолчанию — чат/текст). */
+    /**
+     * Совместимый со старым кодом вход (источник по умолчанию — чат/текст).
+     *
+     * H-02: использует text-only дефолтную классификацию конструктора
+     * [ExecutionRequest] (без systemPrompt/relatedContent). Продукционные
+     * вызовы идут через [SendPromptUseCase], который строит контекстную
+     * классификацию через [ExecutionRequest.withContextualClassification].
+     */
     suspend fun process(
         query: String,
         history: List<Message> = emptyList()
     ): Resource<PromptExecutionResult> = process(
-        ExecutionRequest(
-            text = query,
-            source = RequestSource.CHAT,
-            history = history
-        )
+        ExecutionRequest(text = query, source = RequestSource.CHAT, history = history)
     )
 
-    /** Явный вход с указанием источника и политики приватности. */
+    /**
+     * Явный вход с указанием источника и подсказки о приватности.
+     *
+     * Классификация — text-only (дефолт из конструктора ExecutionRequest,
+     * доступен только текст и история, без systemPrompt). Продукционные
+     * вызовы с полным контекстом идут через [SendPromptUseCase].
+     */
     suspend fun process(
         query: String,
         history: List<Message>,

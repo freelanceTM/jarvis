@@ -373,6 +373,9 @@ dependencies {
 
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.security.crypto)
+    // H-06: WorkManager для гарантированного reconcile автоматизаций после
+    // BOOT_COMPLETED (вместо sendBroadcast на каждый холодный старт процесса).
+    implementation(libs.androidx.work.runtime.ktx)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

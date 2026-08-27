@@ -14,6 +14,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -101,6 +102,50 @@ class AsyncUsageTracker(
                         metrics.increment("usage_failed")
                     }
             }
+        }
+        // M-02: periodic cleanup устаревших daily-bucket'ов.
+        // В ConcurrentHashMap накапливаются мёртвые клиенты (разовый
+        // тестовый ключ, ротация клиентов, миграция лицензий). Без
+        // очистки карта монотонно растёт за всё время жизни процесса.
+        // Раз в час проходим по трём картам и удаляем те записи, у
+        // которых счётчик = 0 И bucket отстаёт от сегодняшнего.
+        // Активные клиенты (даже с count=0 в текущем дне) не трогаем.
+        scope.launch {
+            while (isActive) {
+                delay(CLEANUP_INTERVAL_MS)
+                runCatching { pruneStaleEntries() }
+                    .onFailure {
+                        if (it is CancellationException) throw it
+                        logger.warn(
+                            "usage tracker prune failed",
+                            "type" to it.javaClass.simpleName
+                        )
+                    }
+            }
+        }
+    }
+
+    /**
+     * M-02: удаляет из in-memory карт записи с протухшим bucket'ом и
+     * нулевым счётчиком. Разовые клиенты/ротированные лицензии не должны
+     * накапливаться в ConcurrentHashMap за всё время жизни процесса.
+     */
+    private fun pruneStaleEntries() {
+        val today = todayBucket(clock.instant())
+        val reqIter = dailyRequests.entries.iterator()
+        while (reqIter.hasNext()) {
+            val v = reqIter.next().value
+            if (v.bucket != today && v.count.get() == 0L) reqIter.remove()
+        }
+        val tokIter = dailyTokens.entries.iterator()
+        while (tokIter.hasNext()) {
+            val v = tokIter.next().value
+            if (v.bucket != today && v.count.get() == 0L) tokIter.remove()
+        }
+        val costIter = dailyCostUsd.entries.iterator()
+        while (costIter.hasNext()) {
+            val v = costIter.next().value
+            if (v.bucket != today && v.cents.get() == 0L) costIter.remove()
         }
     }
 
@@ -291,6 +336,13 @@ class AsyncUsageTracker(
         const val RETRY_INITIAL_BACKOFF_MS = 100L
         const val RETRY_MAX_BACKOFF_MS = 2_000L
         const val SHUTDOWN_DRAIN_MS = 4_000L
+
+        /**
+         * M-02: интервал очистки in-memory счётчиков.
+         * Раз в час достаточно агрессивно для leak-prevention и достаточно
+         * редко, чтобы не создавать contention с hot-path accountFor().
+         */
+        const val CLEANUP_INTERVAL_MS = 60L * 60L * 1000L
     }
 }
 

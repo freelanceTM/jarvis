@@ -8,7 +8,9 @@ import com.jarvis.assistant.domain.models.Message
  *
  * Этап 3: единственная реализация — [JarvisApiAiClient], которая обращается
  * ТОЛЬКО к JARVIS API. Клиент не знает, какой провайдер (Groq/Gemini/
- * OpenRouter) выполнит запрос, и не хранит их ключи.
+ * OpenRouter) выполнит запрос, и не хранит их ключи. Выбор модели —
+ * исключительно server-side (пункт 29 ТЗ), поэтому в контракте НЕТ
+ * параметра выбора модели клиентом.
  *
  * ```
  * AIClient → JARVIS API → AI Router → Provider Manager → Provider
@@ -21,7 +23,6 @@ interface AIClient {
     suspend fun complete(
         prompt: String,
         systemPrompt: String,
-        history: List<Message>,
-        modelOverride: String? = null
+        history: List<Message>
     ): Resource<String>
 }

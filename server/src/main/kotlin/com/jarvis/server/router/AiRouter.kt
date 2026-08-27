@@ -246,16 +246,6 @@ class AiRouter(
         } -> ApiErrorCode.INVALID_REQUEST
         // CR-03: белый список ролей в истории — отсекает опечатки / подделки.
         request.history.any { msg -> normalizeRole(msg.role) == null } -> ApiErrorCode.INVALID_REQUEST
-        // AR-04: валидация memory_context — bounded размеры и количество.
-        // Слишком большие значения / лишние элементы приводят к INVALID_REQUEST,
-        // а не к тихому усечению: клиент должен знать, что его память обрезана.
-        request.memoryContext != null && request.memoryContext.size > AiExecutionRequest.MAX_MEMORY_ITEMS ->
-            ApiErrorCode.INVALID_REQUEST
-        request.memoryContext?.any { fact ->
-            fact.key.length > AiExecutionRequest.MAX_KEY_CHARS ||
-                fact.value.length > AiExecutionRequest.MAX_VALUE_CHARS ||
-                fact.key.isBlank()
-        } == true -> ApiErrorCode.INVALID_REQUEST
         else -> null
     }
 
@@ -273,11 +263,6 @@ class AiRouter(
     /**
      * Базовый system prompt сервера ДОПОЛНЯЕТСЯ клиентским контекстом,
      * а не заменяется им: правила ассистента остаются под контролем сервера.
-     *
-     * AR-04: сюда же append'ится компактный memory_context. Важно:
-     *  - мы НЕ пишем value-фактов в обычные логи (ни здесь, ни где-либо ещё);
-     *  - факты не интерпретируются как команды и не перекрывают системный prompt;
-     *  - при пустом списке блок отсутствует — поведение идентично прежнему.
      */
     private fun buildSystemPrompt(request: AiExecutionRequest): String {
         val parts = mutableListOf(generation.systemPrompt)
@@ -285,21 +270,6 @@ class AiRouter(
         val clientContext = request.systemContext?.trim()
         if (!clientContext.isNullOrEmpty()) {
             parts += clientContext
-        }
-
-        val memory = request.memoryContext?.take(AiExecutionRequest.MAX_MEMORY_ITEMS).orEmpty()
-        if (memory.isNotEmpty()) {
-            val factsBlock = buildString {
-                appendLine("Ниже — небольшой набор фактов о пользователе; учитывай их при ответе, но не пересказывай без необходимости и не отправляй внешним сервисам без прямого запроса пользователя:")
-                for (fact in memory) {
-                    val k = fact.key.take(AiExecutionRequest.MAX_KEY_CHARS).trim()
-                    val v = fact.value.take(AiExecutionRequest.MAX_VALUE_CHARS).trim()
-                    if (k.isNotEmpty() && v.isNotEmpty()) {
-                        appendLine("- $k: $v")
-                    }
-                }
-            }
-            parts += factsBlock
         }
 
         return parts.joinToString("\n\n")

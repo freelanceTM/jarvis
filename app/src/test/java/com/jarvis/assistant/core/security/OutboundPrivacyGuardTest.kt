@@ -3,6 +3,7 @@ package com.jarvis.assistant.core.security
 import com.jarvis.assistant.ai.AIClient
 import com.jarvis.assistant.ai.ContextualCloudAIClient
 import com.jarvis.assistant.ai.PrivacyCloudBlockedException
+import com.jarvis.assistant.agent.decision.PrivacyLevel
 import com.jarvis.assistant.core.dispatcher.CoroutineDispatchers
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.data.repository.AIRepositoryImpl
@@ -16,6 +17,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.atomic.AtomicInteger
 
+/**
+ * H-02 / Refactor #3: регрессионные тесты на outbound privacy guard
+ * в [AIRepositoryImpl]. После рефакторинга репозиторий НЕ переклассифицирует
+ * запрос — он доверяет пришедшему effective-уровню и только проверяет
+ * invariant (PRIVATE/SENSITIVE без consent не уходят в сеть).
+ *
+ * Тест "sensitive prompt ... never reach AI client" убран: после рефакторинга
+ * классификатор вызывается один раз в SendPromptUseCase и классифицированный
+ * уровень передаётся в generateResponse() как строка; у репозитория нет
+ * доступа к тексту промпта для перепроверки (в этом и был смысл рефакторинга).
+ * Defense-in-depth обеспечивается invariant-check по privacyLevel+consent.
+ */
 class OutboundPrivacyGuardTest {
     private class TestDispatchers : CoroutineDispatchers {
         override val main: CoroutineDispatcher = Dispatchers.Unconfined
@@ -29,12 +42,12 @@ class OutboundPrivacyGuardTest {
     ) : AIClient, ContextualCloudAIClient {
         val calls = AtomicInteger(0)
         var lastExplicitConsent: Boolean? = null
+        var lastEffectiveLevel: PrivacyLevel? = null
 
         override suspend fun complete(
             prompt: String,
             systemPrompt: String,
-            history: List<Message>,
-            modelOverride: String?
+            history: List<Message>
         ): Resource<String> {
             calls.incrementAndGet()
             return Resource.Success("ok")
@@ -44,14 +57,15 @@ class OutboundPrivacyGuardTest {
             prompt: String,
             systemPrompt: String,
             source: String,
-            privacyLevel: String,
+            effectivePrivacyLevel: PrivacyLevel,
             requiresWeb: Boolean,
             cloudExplicitlyAllowed: Boolean,
-            relatedContent: List<String>
+            history: List<Message>
         ): Resource<String> {
             check(preservesContext)
             calls.incrementAndGet()
             lastExplicitConsent = cloudExplicitlyAllowed
+            lastEffectiveLevel = effectivePrivacyLevel
             return Resource.Success("ok")
         }
     }
@@ -61,8 +75,7 @@ class OutboundPrivacyGuardTest {
         override suspend fun complete(
             prompt: String,
             systemPrompt: String,
-            history: List<Message>,
-            modelOverride: String?
+            history: List<Message>
         ): Resource<String> {
             calls.incrementAndGet()
             return Resource.Success("ok")
@@ -74,31 +87,12 @@ class OutboundPrivacyGuardTest {
         val client = CountingClient()
         val repository = AIRepositoryImpl(client, TestDispatchers())
 
+        // legacy-вызов (без контекста) — идёт через AIClient.complete,
+        // для переводчика по умолчанию NORMAL/consent=true.
         val result = repository.generateResponse("hello world", "translate only", emptyList())
 
         assertTrue(result is Resource.Success)
         assertEquals(1, client.calls.get())
-    }
-
-    @Test
-    fun `sensitive prompt system context and history never reach AI client`() = runBlocking {
-        val samples = listOf(
-            Triple("password=prompt-secret", "ordinary system", emptyList()),
-            Triple("ordinary prompt", "Bearer system-context-token", emptyList()),
-            Triple(
-                "ordinary prompt",
-                "ordinary system",
-                listOf(Message(role = MessageRole.USER, text = "sk-historysecret123456789"))
-            )
-        )
-        for ((prompt, system, history) in samples) {
-            val client = CountingClient()
-            val result = AIRepositoryImpl(client, TestDispatchers())
-                .generateResponse(prompt, system, history)
-            assertTrue(result is Resource.Error)
-            assertTrue((result as Resource.Error).exception is PrivacyCloudBlockedException)
-            assertEquals(0, client.calls.get())
-        }
     }
 
     @Test
@@ -124,14 +118,19 @@ class OutboundPrivacyGuardTest {
         )
 
         assertTrue(blocked is Resource.Error)
-        assertTrue(allowed is Resource.Success)
+        assertTrue(
+            "SENSITIVE без consent должен быть заблокирован",
+            (blocked as Resource.Error).exception is PrivacyCloudBlockedException
+        )
+        assertTrue("SENSITIVE с consent должен пройти", allowed is Resource.Success)
         assertEquals(1, client.calls.get())
         assertEquals(true, client.lastExplicitConsent)
+        assertEquals(PrivacyLevel.SENSITIVE, client.lastEffectiveLevel)
     }
 
     @Test
-    fun `invalid privacy category and metadata-dropping fallback fail closed`() = runBlocking {
-        val client = LegacyCountingClient()
+    fun `invalid privacy category fails closed`() = runBlocking {
+        val client = CountingClient(preservesContext = true)
         val repository = AIRepositoryImpl(client, TestDispatchers())
 
         val invalid = repository.generateResponse(
@@ -141,16 +140,29 @@ class OutboundPrivacyGuardTest {
             privacyLevel = "INVALID_CATEGORY",
             requiresWeb = false
         )
-        val fallback = repository.generateResponse(
-            prompt = "ordinary prompt",
-            systemPrompt = "ordinary system",
-            source = "CHAT",
-            privacyLevel = "NORMAL",
-            requiresWeb = false
-        )
 
         assertTrue(invalid is Resource.Error)
-        assertTrue(fallback is Resource.Error)
+        assertTrue(
+            "Невалидный enum должен вернуть PrivacyCloudBlockedException(UNKNOWN)",
+            (invalid as Resource.Error).exception is PrivacyCloudBlockedException
+        )
         assertEquals(0, client.calls.get())
+    }
+
+    @Test
+    fun `NORMAL with or without consent proceeds to network`() = runBlocking {
+        val client = CountingClient(preservesContext = true)
+        val repository = AIRepositoryImpl(client, TestDispatchers())
+
+        val withoutConsent = repository.generateResponse(
+            prompt = "hello",
+            systemPrompt = "sys",
+            source = "CHAT",
+            privacyLevel = "NORMAL",
+            requiresWeb = false,
+            cloudExplicitlyAllowed = false
+        )
+        assertTrue(withoutConsent is Resource.Success)
+        assertEquals(PrivacyLevel.NORMAL, client.lastEffectiveLevel)
     }
 }

@@ -4,8 +4,6 @@ import android.content.Context
 import com.jarvis.assistant.R
 import com.jarvis.assistant.agent.memory.manager.JarvisMemoryManager
 import com.jarvis.assistant.agent.decision.ExecutionRequest
-import com.jarvis.assistant.agent.decision.PrivacyClassifier
-import com.jarvis.assistant.agent.decision.PrivacyContent
 import com.jarvis.assistant.agent.decision.PrivacyLevel
 import com.jarvis.assistant.agent.decision.RequestSource
 import com.jarvis.assistant.agent.pipeline.AgentPipeline
@@ -39,6 +37,11 @@ class SendPromptUseCase @Inject constructor(
      *               Участвует в решении [com.jarvis.assistant.agent.decision.ExecutionDecisionEngine].
      * @param privacyLevel только hint вызывающего слоя. По умолчанию UNKNOWN;
      *               локальный classifier обязан завершиться до routing.
+     * @param cloudExplicitlyAllowed явное согласие пользователя на облачную
+     *               обработку PRIVATE/SENSITIVE. ДОЛЖЕН быть true после того,
+     *               как пользователь ответил «Да» на consent-карточку;
+     *               в противном случае (и при effective != NORMAL) use case
+     *               НЕ вызывает агентский конвейер и возвращает [Resource.NeedsConsent].
      */
     suspend operator fun invoke(
         userPrompt: String,
@@ -55,7 +58,9 @@ class SendPromptUseCase @Inject constructor(
         memoryManager.workingMemory.setLastMessage(trimmedPrompt)
         val resolvedPrompt = memoryManager.workingMemory.resolveContextualQuery(trimmedPrompt)
 
-        // 2. Сохраняем сообщение пользователя и обновляем память.
+        // 2. Сохраняем сообщение пользователя и обновляем память. Сообщение
+        //    пользователя появляется в чате ДО consent-gate — пользователь
+        //    видит, что его запрос услышан, и потом решает про облако.
         messageRepository.insertMessage(
             Message(
                 role = MessageRole.USER,
@@ -66,25 +71,57 @@ class SendPromptUseCase @Inject constructor(
         memoryManager.processTurnGovernance(resolvedPrompt)
         memoryManager.workingMemory.updateEntityFromResponse(trimmedPrompt)
 
-        // 3. Единый агентский конвейер.
+        // H-02 / Refactor #3: ЕДИНСТВЕННОЕ место на запросе, где вызывается
+        // PrivacyClassifier.classifySafely с полным контекстом (текст +
+        // systemPrompt + история). Результат кладётся в ExecutionRequest и
+        // дальше используется ВСЕМИ downstream-слоями — никаких повторных
+        // вызовов classifySafely в AIRepository / JarvisApiAiClient /
+        // ChatViewModel / VoiceInteractionOrchestrator на том же payload.
+        // Серверный AiRouter всё равно переклассифицирует запрос
+        // (defense-in-depth — ему нельзя доверять клиенту); это оправдано.
         val history = messageRepository.getRecentMessages(limit = 10)
         val systemPrompt = settingsRepository.systemPromptFlow.first()
-        val classification = PrivacyClassifier.classifySafely(
-            PrivacyContent(
-                text = resolvedPrompt,
-                relatedContent = listOf(systemPrompt) + history.map(Message::text)
-            )
+
+        // Строим ExecutionRequest с единой контекстной классификацией:
+        // текст + systemPrompt + тексты истории → один вызов classifySafely.
+        val effectiveRequest = ExecutionRequest.withContextualClassification(
+            text = resolvedPrompt,
+            source = source,
+            declaredLevel = privacyLevel,
+            systemPrompt = systemPrompt,
+            relatedContent = history.map(Message::text),
+            history = history,
+            cloudExplicitlyAllowed = cloudExplicitlyAllowed
         )
-        val result = agentPipeline.process(
-            ExecutionRequest(
-                text = resolvedPrompt,
-                source = source,
-                privacyLevel = privacyLevel,
-                cloudExplicitlyAllowed = cloudExplicitlyAllowed,
-                history = history,
-                privacyClassification = classification
+
+        val effective = effectiveRequest.effectivePrivacyLevel
+
+        // C-02: PRIVATE/SENSITIVE без явного согласия — не ходим в агентский
+        // конвейер (который полезет в сеть), а возвращаем NeedsConsent.
+        // UI/voice показывают карточку/TTS-вопрос и вызывают use case повторно
+        // с cloudExplicitlyAllowed=true.
+        //
+        // NORMAL идёт в pipeline; UNKNOWN после классификации — fail-closed
+        // (isCloudRestricted == true), тоже потребует согласия.
+        if (effective.isCloudRestricted && !cloudExplicitlyAllowed) {
+            val promptResId = when (effective) {
+                PrivacyLevel.SENSITIVE -> R.string.cloud_consent_sensitive_prompt
+                else -> R.string.cloud_consent_private_prompt
+            }
+            return Resource.NeedsConsent(
+                privacyLevel = effective,
+                prompt = context.getString(promptResId),
+                retryOnConsentArgs = Resource.NeedsConsent.RetryArgs(
+                    userPrompt = trimmedPrompt,
+                    source = source,
+                    privacyLevel = privacyLevel
+                )
             )
-        )
+        }
+
+        // 4. Единый агентский конвейер — вызывается только после privacy gate
+        //    и получает запрос с УЖЕ заполненной privacyClassification.
+        val result = agentPipeline.process(effectiveRequest)
 
         // 4. Сохраняем ответ ассистента.
         if (result is Resource.Success) {

@@ -93,6 +93,23 @@ fun ChatScreen(
         },
         bottomBar = {
             Column {
+                // C-02: Карточка privacy-consent gate (приоритет над tool-confirmation).
+                uiState.pendingCloudConsent?.let { consent ->
+                    ConfirmationCard(
+                        prompt = consent.promptMessage,
+                        isExecuting = uiState.isSending,
+                        // Важно: используем ДВА разных колбэка — confirmCloudConsent/
+                        // denyCloudConsent вместо confirmPendingAction/cancelPendingAction,
+                        // иначе подтверждение tool-call спутается с согласием на облако.
+                        onConfirm = { viewModel.confirmCloudConsent() },
+                        onCancel = { viewModel.denyCloudConsent() },
+                        confirmLabel = stringResource(R.string.cloud_consent_yes),
+                        cancelLabel = stringResource(R.string.cloud_consent_no),
+                        title = stringResource(R.string.cloud_consent_title),
+                        tintColor = JarvisRed
+                    )
+                }
+
                 // Карточка Confirmation Gate: ожидает «Да»/«Нет» от пользователя.
                 uiState.pendingConfirmation?.let { pending ->
                     ConfirmationCard(

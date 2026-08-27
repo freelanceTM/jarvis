@@ -34,8 +34,7 @@ class TranslationPrivacyTest {
         override suspend fun complete(
             prompt: String,
             systemPrompt: String,
-            history: List<Message>,
-            modelOverride: String?
+            history: List<Message>
         ): Resource<String> {
             calls.incrementAndGet()
             return Resource.Success("translated")

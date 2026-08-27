@@ -9,6 +9,45 @@ on:
   workflow_dispatch:
 
 jobs:
+  # C-01 gate: обязательная быстрая проверка, что оба модуля КОМПИЛИРУЮТСЯ.
+  # Запускается ПЕРВЫМ и без Postgres/Android-эмулятора, чтобы любая P0
+  # сборко-ломающая правка (как Main.kt shutdown hook с невидимыми локалами)
+  # фейпила CI за ~2 минуты, а не через 20 минут после всех тестов/сборок.
+  # Branch-protection должен помечать этот job как required.
+  compileKotlin:
+    name: "compile-gate (server + app debug)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle 8.7
+        uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+        with:
+          gradle-version: '8.7'
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+
+      # ТОЛЬКО компиляция, без тестов, без lint, без детект, без Docker.
+      # :server:compileKotlin   — JVM-сервер
+      # :app:compileDevDebugKotlin — Android debug (compileDebugKotlin-variant с flavor dev)
+      # Compile failure = red job = PR blocked.
+      - name: Compile all production Kotlin
+        shell: bash
+        run: |
+          bash ./gradlew \
+            :server:compileKotlin \
+            :app:compileDevDebugKotlin \
+            --stacktrace --no-daemon
+
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -73,6 +112,10 @@ jobs:
       - name: Lint Android dev
         shell: bash
         run: bash ./scripts/run-ci-android-lint.sh
+
+      - name: Architectural invariants (H-02..H-06/M-01/M-02/M-10)
+        shell: bash
+        run: bash ./scripts/verify-architectural-invariants.sh
 
       - name: Build Android dev app and instrumentation APKs
         shell: bash

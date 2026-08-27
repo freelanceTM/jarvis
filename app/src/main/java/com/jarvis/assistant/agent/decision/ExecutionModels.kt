@@ -60,9 +60,32 @@ data class ExecutionRequest(
     val privacyLevel: PrivacyLevel = PrivacyLevel.UNKNOWN,
     val cloudExplicitlyAllowed: Boolean = false,
     val history: List<Message> = emptyList(),
-    val privacyClassification: PrivacyClassification = PrivacyClassifier.classifySafely(
-        PrivacyContent.from(text, history)
-    )
+    /**
+     * Privacy classification result that accompanies this request.
+     *
+     * H-02 / Refactor #3: this is the SINGLE source of truth for privacy
+     * classification on the outbound request path. [SendPromptUseCase] is
+     * the only production entry-point that computes it (via
+     * [withContextualClassification], passing the full context: user
+     * prompt + systemPrompt + recent history). Downstream layers
+     * ([ExecutionDecisionEngine], adapters, repositories, network client)
+     * read [effectivePrivacyLevel] directly and MUST NOT re-run
+     * [PrivacyClassifier.classifySafely] on the same payload — that caused
+     * 3–5 duplicate classifications per request and opened the door to
+     * drift between layers.
+     *
+     * Default is a cheap text-only classification (no systemPrompt / no
+     * history). This is used by tests, internal convenience overloads
+     * (see [AgentPipeline.process(String)]), and direct construction.
+     * Production requests MUST go through [withContextualClassification]
+     * (or supply an explicit classification) so that systemPrompt and
+     * chat history participate in the decision.
+     *
+     * The server still re-classifies in `AiRouter` (trust-boundary /
+     * defense-in-depth); that is intentional and out of scope here.
+     */
+    val privacyClassification: PrivacyClassification =
+        PrivacyClassifier.classifySafely(PrivacyContent(text))
 ) {
     /** Автоматически обнаруженный уровень, вычисленный до логирования/роутинга. */
     val detectedPrivacyLevel: PrivacyLevel = privacyClassification.level
@@ -82,6 +105,70 @@ data class ExecutionRequest(
     /** Prompt plaintext никогда не нужен в routing logs, даже при NORMAL. */
     val loggableText: String
         get() = "<redacted:${text.length} chars>"
+
+    companion object {
+        /**
+         * Build an [ExecutionRequest] with a context-aware privacy
+         * classification (user text + system prompt + related/history
+         * content). This is the single production entry point — use it
+         * from [SendPromptUseCase] (and any future non-chat entry points)
+         * to guarantee one, consistent classification per request.
+         */
+        fun withContextualClassification(
+            text: String,
+            source: RequestSource,
+            declaredLevel: PrivacyLevel = PrivacyLevel.UNKNOWN,
+            systemPrompt: String = "",
+            relatedContent: List<String> = emptyList(),
+            history: List<Message> = emptyList(),
+            requiresWeb: Boolean = false,
+            requiresDeviceControl: Boolean = false,
+            cloudExplicitlyAllowed: Boolean = false
+        ): ExecutionRequest {
+            val classification = PrivacyClassifier.classifySafely(
+                PrivacyContent(
+                    text = text,
+                    relatedContent = listOf(systemPrompt) + relatedContent
+                )
+            )
+            return ExecutionRequest(
+                text = text,
+                source = source,
+                requiresWeb = requiresWeb,
+                requiresDeviceControl = requiresDeviceControl,
+                privacyLevel = declaredLevel,
+                cloudExplicitlyAllowed = cloudExplicitlyAllowed,
+                history = history,
+                privacyClassification = classification
+            )
+        }
+
+        /**
+         * Build a request with a cheap text-only classification (no
+         * related content / history). Used by convenience overloads,
+         * tests, and internal call sites that don't have the full
+         * context. The [SendPromptUseCase]-produced request (built by
+         * [withContextualClassification]) is the authoritative one.
+         */
+        fun withTextOnlyClassification(
+            text: String,
+            source: RequestSource,
+            declaredLevel: PrivacyLevel = PrivacyLevel.UNKNOWN,
+            requiresWeb: Boolean = false,
+            requiresDeviceControl: Boolean = false,
+            cloudExplicitlyAllowed: Boolean = false,
+            history: List<Message> = emptyList()
+        ): ExecutionRequest = ExecutionRequest(
+            text = text,
+            source = source,
+            requiresWeb = requiresWeb,
+            requiresDeviceControl = requiresDeviceControl,
+            privacyLevel = declaredLevel,
+            cloudExplicitlyAllowed = cloudExplicitlyAllowed,
+            history = history,
+            privacyClassification = PrivacyClassifier.classifySafely(PrivacyContent(text))
+        )
+    }
 }
 
 /**

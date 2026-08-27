@@ -209,4 +209,15 @@
     <string name="privacy_normal_cloud_possible">Приватность: обычный запрос — облако разрешено</string>
     <string name="privacy_private_local_only">Приватность: приватный запрос — только локально</string>
     <string name="privacy_sensitive_local_only">Приватность: чувствительные данные — только локально</string>
+
+    <!-- C-02: privacy consent UI -->
+    <string name="cloud_consent_title">Отправить запрос в облако?</string>
+    <string name="cloud_consent_private_prompt">Запрос содержит приватные данные (email/телефон/адрес и т.п.). Без вашего разрешения JARVIS не отправит его в облачную модель и попробует ответить локально. Отправить в облако для более точного ответа?</string>
+    <string name="cloud_consent_sensitive_prompt">Запрос содержит чувствительные данные (пароли, паспортные данные, платёжную информацию). Без вашего разрешения JARVIS не отправит его в облачную модель и попробует ответить локально. Отправить в облако для более точного ответа?</string>
+    <string name="cloud_consent_yes">Отправить в облако</string>
+    <string name="cloud_consent_no">Только локально</string>
+    <string name="cloud_consent_voice_private">Запрос содержит приватные данные. Отправить его в облако для более точного ответа? Скажите да или нет.</string>
+    <string name="cloud_consent_voice_sensitive">Запрос содержит чувствительные данные. Отправить его в облако для более точного ответа? Скажите да или нет.</string>
+    <string name="cloud_consent_declined">Понял, обрабатываю локально, сэр.</string>
+    <string name="cloud_consent_timeout">Время ожидания истекло, обрабатываю локально.</string>
 </resources>

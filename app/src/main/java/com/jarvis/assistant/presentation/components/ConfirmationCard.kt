@@ -53,7 +53,13 @@ fun ConfirmationCard(
     isExecuting: Boolean,
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    title: String = stringResource(R.string.podtverzhdenie_deystviya),
+    confirmLabel: String = stringResource(R.string.podtverdit),
+    cancelLabel: String = stringResource(R.string.otmena),
+    tintColor: Color = JarvisAmber,
+    confirmContainerColor: Color = JarvisGreen,
+    confirmContentColor: Color = Color(0xFF05280F)
 ) {
     Column(
         modifier = modifier
@@ -61,7 +67,7 @@ fun ConfirmationCard(
             .padding(horizontal = 12.dp, vertical = 8.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(JarvisCardBackground)
-            .border(1.dp, JarvisAmber.copy(alpha = 0.55f), RoundedCornerShape(16.dp))
+            .border(1.dp, tintColor.copy(alpha = 0.55f), RoundedCornerShape(16.dp))
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -69,14 +75,14 @@ fun ConfirmationCard(
             Icon(
                 imageVector = Icons.Default.Warning,
                 contentDescription = null,
-                tint = JarvisAmber,
+                tint = tintColor,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = stringResource(R.string.podtverzhdenie_deystviya),
+                text = title,
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = JarvisAmber
+                color = tintColor
             )
         }
 
@@ -112,14 +118,14 @@ fun ConfirmationCard(
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary)
                 ) {
-                    Text(stringResource(R.string.otmena), fontSize = 14.sp)
+                    Text(cancelLabel, fontSize = 14.sp)
                 }
                 Button(
                     onClick = onConfirm,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = JarvisGreen,
-                        contentColor = Color(0xFF05280F)
+                        containerColor = confirmContainerColor,
+                        contentColor = confirmContentColor
                     )
                 ) {
                     Icon(
@@ -128,7 +134,7 @@ fun ConfirmationCard(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(stringResource(R.string.podtverdit), fontSize = 14.sp)
+                    Text(confirmLabel, fontSize = 14.sp)
                 }
             }
         }

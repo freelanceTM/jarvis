@@ -15,9 +15,8 @@ import com.jarvis.server.ratelimit.RateLimiter
 import com.jarvis.server.router.AiRouter
 import com.jarvis.server.router.RouterResult
 import kotlinx.serialization.json.Json
-import java.nio.charset.StandardCharsets
+import kotlin.text.Charsets
 import java.util.UUID
-
 /** Входящий HTTP-запрос, независимый от конкретного HTTP-сервера. */
 data class HttpRequestContext(
     val method: String,
@@ -97,41 +96,69 @@ class JarvisApiHandler(
     }
 
     suspend fun handle(request: HttpRequestContext): HttpResponseContext {
-        // requestId сквозной: клиентский, либо свой (пункт 20 ТЗ).
-        val requestId = extractRequestId(request)
+        // Порядок middleware тот же, но для POST /v1/ai/execute парсим
+        // тело ровно один раз (M-01): requestId берём из уже
+        // распарсенного объекта, size-check идёт по body.length (строка
+        // уже в памяти, вторая конвертация в ByteArray бессмысленна).
+        val path = request.path
+        val method = request.method
 
         return when {
-            request.path == PATH_HEALTH && request.method == "GET" ->
+            path == PATH_HEALTH && method == "GET" ->
                 HttpResponseContext(200, healthProvider())
 
-            request.path == PATH_ADMIN_METRICS && request.method == "GET" ->
-                handleAdminMetrics(request, requestId)
+            path == PATH_ADMIN_METRICS && method == "GET" ->
+                handleAdminMetrics(request, newRequestId())
 
-            request.path == PATH_EXECUTE && request.method == "POST" ->
-                handleExecute(request, requestId)
+            path == PATH_EXECUTE && method == "POST" ->
+                handleExecute(request)
 
-            request.path == PATH_EXECUTE ||
-                request.path == PATH_ADMIN_METRICS ||
-                request.path == PATH_HEALTH ->
-                error(ApiErrorCode.INVALID_REQUEST, requestId, 405)
+            path == PATH_EXECUTE ||
+                path == PATH_ADMIN_METRICS ||
+                path == PATH_HEALTH ->
+                error(ApiErrorCode.INVALID_REQUEST, newRequestId(), 405)
 
             else -> extensionHandler(request)
-                ?: error(ApiErrorCode.INVALID_REQUEST, requestId, 404)
+                ?: error(ApiErrorCode.INVALID_REQUEST, newRequestId(), 404)
         }
     }
 
     private suspend fun handleExecute(
-        request: HttpRequestContext,
-        requestId: String
+        request: HttpRequestContext
     ): HttpResponseContext {
         // ------------------------------------------------- 0. Размер тела
+        // M-01: content-length доверяем как upper-bound. Реальную проверку
+        // делаем по UTF-8 байтам — String.length считает UTF-16 code units
+        // (для CJK/кириллицы занижает размер в 2-3 раза), поэтому для
+        // accurate size-check нужна разовая конвертация в UTF-8 byte count.
+        // ByteArray создаётся один раз и отпускается; парсинг идёт
+        // напрямую из строки без повторного выделения.
+        val bodySize = request.body.toByteArray(Charsets.UTF_8).size.toLong()
         if (request.contentLength > validation.maxBodyBytes ||
-            request.body.toByteArray(StandardCharsets.UTF_8).size > validation.maxBodyBytes
+            bodySize > validation.maxBodyBytes
         ) {
-            return error(ApiErrorCode.PAYLOAD_TOO_LARGE, requestId)
+            return error(ApiErrorCode.PAYLOAD_TOO_LARGE, newRequestId())
         }
 
-        // ------------------------------------------------- 1. Authentication
+        // ------------------------------------------------- 1. Парсинг тела (M-01: ОДИН раз)
+        val parsed = try {
+            json.decodeFromString(AiExecutionRequest.serializer(), request.body)
+        } catch (e: Exception) {
+            val rid = newRequestId()
+            logger.warn(
+                "malformed request body",
+                "requestId" to rid,
+                "error" to e.javaClass.simpleName
+            )
+            return error(ApiErrorCode.INVALID_REQUEST, rid)
+        }
+
+        // Сквозной requestId: клиентский (если валидный), либо свой.
+        val requestId = parsed.requestId
+            ?.takeIf { it.isNotBlank() && it.length <= 64 }
+            ?: newRequestId()
+
+        // ------------------------------------------------- 2. Authentication
         val client = when (val auth = authenticator.authenticate(request.authorizationHeader)) {
             is AuthResult.Success -> auth.client
             AuthResult.MissingCredentials, AuthResult.InvalidCredentials -> {
@@ -141,7 +168,7 @@ class JarvisApiHandler(
             }
         }
 
-        // ------------------------------------------------- 2. Authorization
+        // ------------------------------------------------- 3. Authorization
         if (!authorizer.isAllowed(client, Permission.EXECUTE_AI)) {
             logger.warn(
                 "forbidden request",
@@ -161,7 +188,7 @@ class JarvisApiHandler(
             return error(ApiErrorCode.PAYMENT_REQUIRED, requestId)
         }
 
-        // ------------------------------------------------- 3. Rate limit
+        // ------------------------------------------------- 4. Rate limit
         when (val decision = rateLimiter.check(client.clientId)) {
             is RateLimitDecision.Limited -> {
                 metrics.recordRateLimited()
@@ -178,20 +205,6 @@ class JarvisApiHandler(
                 )
             }
             RateLimitDecision.Allowed -> Unit
-        }
-
-        // ------------------------------------------------- 4. Парсинг тела
-        val parsed = try {
-            json.decodeFromString(AiExecutionRequest.serializer(), request.body)
-        } catch (e: Exception) {
-            // Детали парсинга — только в лог, наружу общий код.
-            logger.warn(
-                "malformed request body",
-                "requestId" to requestId,
-                "clientId" to client.clientId,
-                "error" to e.javaClass.simpleName
-            )
-            return error(ApiErrorCode.INVALID_REQUEST, requestId)
         }
 
         // ------------------------------------------------- 5. AI Router
@@ -229,17 +242,7 @@ class JarvisApiHandler(
         return HttpResponseContext(200, metricsProvider())
     }
 
-    private fun extractRequestId(request: HttpRequestContext): String {
-        // Пытаемся достать requestId из тела, не падая на некорректном JSON.
-        return try {
-            json.decodeFromString(AiExecutionRequest.serializer(), request.body)
-                .requestId
-                ?.takeIf { it.isNotBlank() && it.length <= 64 }
-                ?: UUID.randomUUID().toString()
-        } catch (e: Exception) {
-            UUID.randomUUID().toString()
-        }
-    }
+    private fun newRequestId(): String = UUID.randomUUID().toString()
 
     private fun error(
         code: ApiErrorCode,

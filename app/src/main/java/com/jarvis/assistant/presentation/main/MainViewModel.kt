@@ -117,7 +117,19 @@ class MainViewModel @Inject constructor(
                     viewModelScope.launch { _effectChannel.send(MainUiEffect.NavigateToSettings) }
                     return
                 }
-                orchestrator.startServicePipeline()
+                // H-04: ручной триггер — тот же путь, что и toggleService():
+                // через JarvisVoiceService.start(), который поднимает
+                // foreground service с проверкой разрешений и защитой
+                // от RuntimeException (на некоторых OEM startForeground
+                // кидает даже при выданном разрешении). НЕ зовём
+                // orchestrator напрямую — это обходило lifecycle сервиса.
+                if (JarvisVoiceService.start(context)) {
+                    _uiState.update { it.copy(isBackgroundServiceActive = true) }
+                } else {
+                    viewModelScope.launch {
+                        _effectChannel.send(MainUiEffect.ShowToast("Не удалось запустить микрофонный сервис"))
+                    }
+                }
             }
             is MainUiEvent.StopCurrentAction -> {
                 orchestrator.stopAll()

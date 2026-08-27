@@ -9,6 +9,7 @@ import com.jarvis.assistant.agent.decision.PrivacyClassification
 import com.jarvis.assistant.agent.decision.PrivacyClassifier
 import com.jarvis.assistant.agent.decision.PrivacyContent
 import com.jarvis.assistant.agent.decision.PrivacyReason
+import com.jarvis.assistant.agent.decision.PrivacyLevel
 import com.jarvis.assistant.agent.decision.RequestSource
 import com.jarvis.assistant.agent.executor.ConfirmationOwner
 import com.jarvis.assistant.agent.executor.ToolExecutor
@@ -44,7 +45,8 @@ enum class OrchestratorMode {
     CONTINUOUS_CONVERSATION,  // Диалоговое окно (без повтора «Джарвис»)
     AI_THINKING,              // Запрос AI / Fast Router
     TTS_SPEAKING,             // Озвучивание ответа
-    AWAITING_CONFIRMATION,    // Ожидание голосового подтверждения (Да/Нет)
+    AWAITING_CONFIRMATION,    // Ожидание голосового подтверждения действия (Да/Нет)
+    AWAITING_PRIVACY_CONSENT, // C-02: ожидание согласия на отправку приватного запроса в облако
     LIVE_EAR_INTERPRETER,     // Непрерывный синхронный перевод речи собеседника прямо в ухо
     PAUSED_CALL_OR_SLEEP      // Пауза
 }
@@ -82,6 +84,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
             OrchestratorMode.LISTENING_USER_QUERY,
             OrchestratorMode.CONTINUOUS_CONVERSATION,
             OrchestratorMode.AWAITING_CONFIRMATION,
+            OrchestratorMode.AWAITING_PRIVACY_CONSENT, // C-02: ловим «да/нет» в ответ на cloud-consent
             OrchestratorMode.LIVE_EAR_INTERPRETER
         )
     }
@@ -136,6 +139,16 @@ class VoiceInteractionOrchestrator @Inject constructor(
     /** Одноразовый токен подтверждения (пункт аудита #5). */
     private var pendingConfirmationToken: String? = null
 
+    /**
+     * C-02: ожидание голосового ответа на privacy-consent вопрос
+     * («отправить в облако?»). Отдельное поле, а не часть pendingToolCall —
+     * в этом состоянии голосовой оркестратор НЕ вызывает ToolExecutor,
+     * а должен повторно вызвать sendPromptUseCase с cloudExplicitlyAllowed=true.
+     */
+    private var pendingCloudConsentQuery: String? = null
+    private var pendingCloudConsentLevel: PrivacyLevel = PrivacyLevel.UNKNOWN
+    private var pendingCloudConsentCaptureEpoch: Int = 0
+
     private var speechRate = 1.05f
     private var speechPitch = 0.90f
     private var systemPrompt = ""
@@ -165,6 +178,14 @@ class VoiceInteractionOrchestrator @Inject constructor(
     }
 
     fun startServicePipeline() {
+        // H-04: защита от двойного/повторного старта при прямом вызове
+        // (например из ManualWakeWordTrigger до того, как сервис поднялся,
+        // или при race между resumeAfterPhoneCall и onServiceConnected).
+        if (isServiceActive) {
+            Log.d(TAG, "startServicePipeline: already active — skip")
+            return
+        }
+
         if (!orchestratorJob.isActive) {
             orchestratorJob = SupervisorJob()
             scope = CoroutineScope(Dispatchers.Main.immediate + orchestratorJob)
@@ -265,6 +286,10 @@ class VoiceInteractionOrchestrator @Inject constructor(
         pendingToolCall = null
         pendingConfirmationToken = null
         pendingConfirmationPrompt = ""
+        // C-02: при уходе в standby сбрасываем и privacy-consent.
+        pendingCloudConsentQuery = null
+        pendingCloudConsentLevel = PrivacyLevel.UNKNOWN
+        pendingCloudConsentCaptureEpoch = 0
         toolExecutor.clearPendingConfirmation()
         isProcessingQuery.set(false)
 
@@ -413,6 +438,11 @@ class VoiceInteractionOrchestrator @Inject constructor(
                             return@collectLatest
                         }
 
+                        if (_currentMode.value == OrchestratorMode.AWAITING_PRIVACY_CONSENT) {
+                            handlePrivacyConsentResponse(text)
+                            return@collectLatest
+                        }
+
                         if (_currentMode.value == OrchestratorMode.AWAITING_CONFIRMATION) {
                             handleConfirmationResponse(text)
                             return@collectLatest
@@ -476,7 +506,11 @@ class VoiceInteractionOrchestrator @Inject constructor(
             startStandbyMode()
             return
         }
-        _privacyClassification.value = PrivacyClassifier.classifySafely(PrivacyContent(clean))
+        // H-02: text-only быстрая метка для UI/логов (без systemPrompt/истории).
+        // Полная контекстная классификация (prompt+systemPrompt+history) будет
+        // сделана ровно один раз в SendPromptUseCase — мы не дублируем её здесь.
+        val quickClassification = PrivacyClassifier.classifySafely(PrivacyContent(clean))
+        _privacyClassification.value = quickClassification
 
         // Команда активации режима синхронного переводчика
         if (clean.lowercase().contains("переводчик") || clean.lowercase().contains("синхронный перевод") || clean.lowercase().contains("переводи собеседника")) {
@@ -488,7 +522,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
             Log.d(
                 TAG,
                 "Query already processing; duplicate skipped | chars=${clean.length} | " +
-                    "privacy=${_privacyClassification.value.level}"
+                    "privacy=${quickClassification.level}"
             )
             return
         }
@@ -506,12 +540,6 @@ class VoiceInteractionOrchestrator @Inject constructor(
         aiJob = scope.launch {
             try {
                 val history = messageRepository.getRecentMessages(limit = 10)
-                val contextualClassification = PrivacyClassifier.classifySafely(
-                    PrivacyContent(
-                        text = clean,
-                        relatedContent = listOf(systemPrompt) + history.map { it.text }
-                    )
-                )
 
                 // CR-07: если за время получения истории пользователь успел перейти в standby,
                 // результат отбрасываем.
@@ -520,12 +548,13 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     return@launch
                 }
 
-                _privacyClassification.value = contextualClassification
-                // Этап 1: источник и effective privacy передаются в decision engine.
+                // H-02: передаём quick-уровень как hint — authoritative classification
+                // сделает SendPromptUseCase (с контекстом systemPrompt+history) и вернёт
+                // NeedsConsent при необходимости; мы не дублируем classifySafely здесь.
                 val result = sendPromptUseCase(
                     clean,
                     source = RequestSource.VOICE,
-                    privacyLevel = contextualClassification.level
+                    privacyLevel = quickClassification.level
                 )
 
                 // CR-07: вторая точка проверки эпохи — после сетевого/AI-вызова.
@@ -581,6 +610,41 @@ class VoiceInteractionOrchestrator @Inject constructor(
                                 _currentMode.value = OrchestratorMode.TTS_SPEAKING
                                 _assistantState.value = VoiceAssistantState.Speaking(answer)
                                 textToSpeechManager.speak(answer, speechRate, speechPitch)
+                            }
+                        }
+                    }
+                    // C-02: use case просит согласия на облачную отправку —
+                    // переключаемся в режим ожидания голосового «да/нет».
+                    is Resource.NeedsConsent -> {
+                        pendingCloudConsentQuery = clean
+                        pendingCloudConsentLevel = result.privacyLevel
+                        pendingCloudConsentCaptureEpoch = captureEpoch
+
+                        val voicePrompt = when (result.privacyLevel) {
+                            PrivacyLevel.SENSITIVE -> context.getString(R.string.cloud_consent_voice_sensitive)
+                            else -> context.getString(R.string.cloud_consent_voice_private)
+                        }
+                        _lastAnswer.value = voicePrompt
+                        _currentMode.value = OrchestratorMode.AWAITING_PRIVACY_CONSENT
+                        _assistantState.value = VoiceAssistantState.Speaking(voicePrompt)
+
+                        textToSpeechManager.speak(voicePrompt, speechRate, speechPitch)
+
+                        // Таймаут — как у tool-confirmation: N секунд и авто-отказ.
+                        confirmationTimeoutJob?.cancel()
+                        confirmationTimeoutJob = scope.launch {
+                            delay(CONFIRMATION_TIMEOUT_MS)
+                            if (sessionEpoch.get() != captureEpoch) return@launch
+                            if (_currentMode.value == OrchestratorMode.AWAITING_PRIVACY_CONSENT) {
+                                val timeoutMsg = context.getString(R.string.cloud_consent_timeout)
+                                _lastAnswer.value = timeoutMsg
+                                _assistantState.value = VoiceAssistantState.Speaking(timeoutMsg)
+                                textToSpeechManager.speak(timeoutMsg, speechRate, speechPitch)
+                                pendingCloudConsentQuery = null
+                                pendingCloudConsentLevel = PrivacyLevel.UNKNOWN
+                                pendingCloudConsentCaptureEpoch = 0
+                                delay(2000)
+                                startStandbyMode()
                             }
                         }
                     }
@@ -706,6 +770,137 @@ class VoiceInteractionOrchestrator @Inject constructor(
         }
     }
 
+    /**
+     * C-02: обработка голосового ответа «да/нет» на вопрос об отправке приватного
+     * запроса в облако. Аналогично [handleConfirmationResponse], но вместо вызова
+     * инструмента делает повторный вызов [SendPromptUseCase] с флагом
+     * cloudExplicitlyAllowed=true.
+     */
+    private fun handlePrivacyConsentResponse(response: String) {
+        confirmationTimeoutJob?.cancel()
+
+        val isYes = ConfirmationIntent.isYes(response)
+        val isNo = ConfirmationIntent.isNo(response)
+        val consentQuery = pendingCloudConsentQuery
+        val consentCaptureEpoch = pendingCloudConsentCaptureEpoch
+
+        when {
+            isYes -> {
+                if (consentQuery == null) {
+                    // Гонка — consent уже сброшен (таймаут / отмена / новая сессия).
+                    startStandbyMode()
+                    return
+                }
+                // Запоминаем уровень с пришедшего consent, чтобы не
+                // пересчитывать классификатор на повторе (H-02), и сбрасываем
+                // pending СРАЗУ перед запуском aiJob — чтобы гонка с новым
+                // запросом не подхватила чужое состояние.
+                val consentLevel = pendingCloudConsentLevel
+                pendingCloudConsentQuery = null
+                pendingCloudConsentLevel = PrivacyLevel.UNKNOWN
+                pendingCloudConsentCaptureEpoch = 0
+
+                _currentMode.value = OrchestratorMode.AI_THINKING
+                _assistantState.value = VoiceAssistantState.Thinking
+
+                aiJob?.cancel()
+
+                aiJob = scope.launch {
+                    // Важно: после «да» контекст/эпоха должны совпадать с той,
+                    // в которой мы задавали вопрос. Если пользователь уже ушёл
+                    // в standby — не выполняем ничего.
+                    if (sessionEpoch.get() != consentCaptureEpoch) return@launch
+
+                    // H-02: передаём сохранённый уровень как hint; authoritative
+                    // classification с учётом systemPrompt+history будет сделана
+                    // один раз в SendPromptUseCase.
+                    val result = sendPromptUseCase(
+                        userPrompt = consentQuery,
+                        source = RequestSource.VOICE,
+                        privacyLevel = consentLevel,
+                        cloudExplicitlyAllowed = true
+                    )
+                    if (sessionEpoch.get() != consentCaptureEpoch) return@launch
+
+                    when (result) {
+                        is Resource.Success -> {
+                            when (val execution = result.data) {
+                                is PromptExecutionResult.ConfirmationRequired -> {
+                                    // Может потребоваться подтверждение действия (звонок/SMS)
+                                    // — делегируем в существующий confirmation-flow.
+                                    pendingToolCall = execution.toolCall
+                                    pendingConfirmationPrompt = execution.promptMessage
+                                    toolExecutor.claimPendingConfirmation(
+                                        execution.toolCall.callId,
+                                        ConfirmationOwner.VOICE
+                                    )
+                                    pendingConfirmationToken =
+                                        toolExecutor.confirmationTokenFor(execution.toolCall.callId)
+                                    _lastAnswer.value = pendingConfirmationPrompt
+                                    _currentMode.value = OrchestratorMode.AWAITING_CONFIRMATION
+                                    _assistantState.value = VoiceAssistantState.Speaking(pendingConfirmationPrompt)
+                                    textToSpeechManager.speak(pendingConfirmationPrompt, speechRate, speechPitch)
+                                }
+                                is PromptExecutionResult.DirectAnswer -> {
+                                    _lastAnswer.value = execution.text
+                                    _currentMode.value = OrchestratorMode.TTS_SPEAKING
+                                    _assistantState.value = VoiceAssistantState.Speaking(execution.text)
+                                    textToSpeechManager.speak(execution.text, speechRate, speechPitch)
+                                }
+                            }
+                        }
+                        is Resource.NeedsConsent -> {
+                            // Не должно случиться (cloudExplicitlyAllowed=true),
+                            // но fail-safe — возвращаемся в standby.
+                            startStandbyMode()
+                        }
+                        is Resource.Error -> {
+                            val err = result.message ?: context.getString(R.string.oshibka_svyazi_s_ai)
+                            _lastAnswer.value = "Ошибка: $err"
+                            _assistantState.value = VoiceAssistantState.Error(err)
+                            textToSpeechManager.speak("Ошибка: $err", speechRate, speechPitch)
+                            delay(2500)
+                            startStandbyMode()
+                        }
+                        is Resource.Loading -> Unit
+                    }
+                }
+            }
+            isNo -> {
+                pendingCloudConsentQuery = null
+                pendingCloudConsentLevel = PrivacyLevel.UNKNOWN
+                pendingCloudConsentCaptureEpoch = 0
+                val declineMsg = context.getString(R.string.cloud_consent_declined)
+                _lastAnswer.value = declineMsg
+                _currentMode.value = OrchestratorMode.TTS_SPEAKING
+                _assistantState.value = VoiceAssistantState.Speaking(declineMsg)
+                textToSpeechManager.speak(declineMsg, speechRate, speechPitch)
+            }
+            else -> {
+                val retryMsg = context.getString(R.string.ne_ponyal_skazhite_da_ili_net)
+                _assistantState.value = VoiceAssistantState.Speaking(retryMsg)
+                textToSpeechManager.speak(retryMsg, speechRate, speechPitch)
+
+                confirmationTimeoutJob?.cancel()
+                confirmationTimeoutJob = scope.launch {
+                    delay(CONFIRMATION_TIMEOUT_MS)
+                    if (sessionEpoch.get() != consentCaptureEpoch) return@launch
+                    if (_currentMode.value == OrchestratorMode.AWAITING_PRIVACY_CONSENT) {
+                        val timeoutMsg = context.getString(R.string.cloud_consent_timeout)
+                        _lastAnswer.value = timeoutMsg
+                        _assistantState.value = VoiceAssistantState.Speaking(timeoutMsg)
+                        textToSpeechManager.speak(timeoutMsg, speechRate, speechPitch)
+                        pendingCloudConsentQuery = null
+                        pendingCloudConsentLevel = PrivacyLevel.UNKNOWN
+                        pendingCloudConsentCaptureEpoch = 0
+                        delay(2000)
+                        startStandbyMode()
+                    }
+                }
+            }
+        }
+    }
+
     private fun observeTtsEngine() {
         scope.launch {
             textToSpeechManager.ttsState.collectLatest { ttsState ->
@@ -716,6 +911,11 @@ class VoiceInteractionOrchestrator @Inject constructor(
                                 openContinuousConversationWindow()
                             }
                             OrchestratorMode.AWAITING_CONFIRMATION -> {
+                                wakeWordDetector.stopListening()
+                                speechRecognizerManager.startListening()
+                            }
+                            // C-02: после фразы «отправить в облако?» начинаем слушать ответ.
+                            OrchestratorMode.AWAITING_PRIVACY_CONSENT -> {
                                 wakeWordDetector.stopListening()
                                 speechRecognizerManager.startListening()
                             }

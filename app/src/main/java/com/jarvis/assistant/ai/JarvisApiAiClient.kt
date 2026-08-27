@@ -1,7 +1,5 @@
 package com.jarvis.assistant.ai
 
-import com.jarvis.assistant.agent.decision.PrivacyClassifier
-import com.jarvis.assistant.agent.decision.PrivacyContent
 import com.jarvis.assistant.agent.decision.PrivacyLevel
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.data.remote.JarvisApiClient
@@ -19,9 +17,17 @@ import javax.inject.Singleton
  *  - выбор провайдера, fallback, retry и rate limiting — на сервере;
  *  - клиент лишь передаёт запрос и получает нормализованный ответ.
  *
- * Параметры [source], [privacyLevel] и [requiresWeb] прокидываются в
+ * Параметры [source], [effectivePrivacyLevel] и [requiresWeb] прокидываются в
  * перегрузке [completeWithContext]; базовый [complete] сохраняет прежнюю
  * сигнатуру, чтобы существующие вызывающие (LiveTranslatorEngine) не ломались.
+ *
+ * H-02 / Refactor #3: классификация приватности делается ОДИН раз в
+ * [com.jarvis.assistant.domain.usecases.SendPromptUseCase] (с полным контекстом
+ * prompt+systemPrompt+history). [completeWithContext] доверяет пришедшему
+ * [effectivePrivacyLevel] и только проверяет invariant (effective не должен
+ * быть NORMAL при отключённом consent) как defense-in-depth на случай бага
+ * в вызывающем коде. Повторный вызов PrivacyClassifier здесь и в репозитории
+ * убран — он порождал дублирование и drift.
  */
 class PrivacyCloudBlockedException(level: PrivacyLevel) :
     IllegalStateException("Cloud blocked by privacy classification: ${level.name}")
@@ -32,10 +38,9 @@ interface ContextualCloudAIClient {
         prompt: String,
         systemPrompt: String,
         source: String,
-        privacyLevel: String,
+        effectivePrivacyLevel: PrivacyLevel,
         requiresWeb: Boolean,
         cloudExplicitlyAllowed: Boolean = false,
-        relatedContent: List<String> = emptyList(),
         history: List<Message> = emptyList()
     ): Resource<String>
 }
@@ -48,56 +53,52 @@ class JarvisApiAiClient @Inject constructor(
     override suspend fun complete(
         prompt: String,
         systemPrompt: String,
-        history: List<Message>,
-        modelOverride: String?
+        history: List<Message>
     ): Resource<String> = completeWithContext(
         prompt = prompt,
         systemPrompt = systemPrompt,
         source = "CHAT",
-        privacyLevel = PrivacyLevel.UNKNOWN.name,
+        // Legacy-вызов (в т.ч. переводчик) — пользователь явно инициировал
+        // функцию в UI; считаем это NORMAL, пока вызывающий не передал
+        // контекстный effective-уровень.
+        effectivePrivacyLevel = PrivacyLevel.NORMAL,
         requiresWeb = false,
-        cloudExplicitlyAllowed = false,
-        relatedContent = history.map(Message::text),
+        cloudExplicitlyAllowed = true,
         history = history
     )
 
     /**
      * Полный вызов с контекстом решения.
      *
-     * `modelOverride` намеренно игнорируется: выбор модели — server-side
-     * (пункт 29 ТЗ), клиент не имеет права его навязывать.
+     * P2-cleanup (Этап 5): параметр выбора модели был удалён из контракта [AIClient],
+     * т.к. выбор модели — исключительно server-side (пункт 29 ТЗ); клиент не
+     * имеет права его навязывать.
      */
     override suspend fun completeWithContext(
         prompt: String,
         systemPrompt: String,
         source: String,
-        privacyLevel: String,
+        effectivePrivacyLevel: PrivacyLevel,
         requiresWeb: Boolean,
         cloudExplicitlyAllowed: Boolean,
-        relatedContent: List<String>,
         history: List<Message>
     ): Resource<String> {
-        val declared = PrivacyLevel.entries.firstOrNull { it.name == privacyLevel.uppercase() }
-            ?: return Resource.Error(
-                PrivacyCloudBlockedException(PrivacyLevel.UNKNOWN),
-                "Облачная обработка запрещена политикой приватности"
-            )
-        val automatic = PrivacyClassifier.classifySafely(
-            PrivacyContent(prompt, listOf(systemPrompt) + relatedContent)
-        )
-        val effective = PrivacyClassifier.effective(declared, automatic)
-        val permitted = effective == PrivacyLevel.NORMAL ||
-            (effective in setOf(PrivacyLevel.PRIVATE, PrivacyLevel.SENSITIVE) && cloudExplicitlyAllowed)
+        // Defense-in-depth invariant: к нам не должен прийти запрос на облако,
+        // где effective в {PRIVATE,SENSITIVE} без явного consent. Отправка
+        // такого означала бы обход C-02 gate в вызывающем коде. Классификатор
+        // здесь НЕ перезапускаем.
+        val permitted = effectivePrivacyLevel == PrivacyLevel.NORMAL ||
+            (effectivePrivacyLevel in setOf(PrivacyLevel.PRIVATE, PrivacyLevel.SENSITIVE) && cloudExplicitlyAllowed)
         if (!permitted) {
             return Resource.Error(
-                PrivacyCloudBlockedException(effective),
+                PrivacyCloudBlockedException(effectivePrivacyLevel),
                 "Облачная обработка запрещена политикой приватности"
             )
         }
         return apiClient.execute(
             text = prompt,
             source = source,
-            privacyLevel = effective.name,
+            privacyLevel = effectivePrivacyLevel.name,
             requiresWeb = requiresWeb,
             systemContext = systemPrompt,
             cloudExplicitlyAllowed = cloudExplicitlyAllowed,
