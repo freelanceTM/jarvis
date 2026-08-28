@@ -11,7 +11,8 @@ import org.junit.Test
  */
 class PrivacyClassifierRegressionTest {
 
-    private val classifier = PrivacyClassifier()
+    // PrivacyClassifier — object (singleton), инстанцировать не нужно.
+    private val classifier = PrivacyClassifier
 
     @Test
     fun `ordinary safe text is classified NORMAL`() {
