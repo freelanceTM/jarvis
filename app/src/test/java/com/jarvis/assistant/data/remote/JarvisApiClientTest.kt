@@ -18,6 +18,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -199,11 +200,15 @@ class JarvisApiClientTest {
      */
     @Test
     fun `cancelling caller coroutine cancels underlying OkHttp call promptly`() {
-        // Задерживаем ответ на 10 секунд — клиент должен завершиться раньше.
-        server.enqueue(MockResponse().setBodyDelay(10, TimeUnit.SECONDS).setResponseCode(200).setBody("{}"))
+        // Сервер принимает запрос и молчит (NO_RESPONSE): клиент обязан ждать
+        // ответа до самой отмены. BodyDelay здесь не годится — отложенная запись
+        // держит неинтерраптибельную задачу MockWebServer всё время задержки и
+        // роняет её же shutdown() в tearDown (square/okhttp#3497). При
+        // NO_RESPONSE закрытие сокета после call.cancel() разблокирует задачу
+        // сервера чтением EOF, и shutdown() проходит чисто.
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
 
         val testScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val requestReceived = CountDownLatch(1)
         lateinit var job: Job
         job = testScope.launch {
             client.execute("q", "CHAT", "NORMAL", false)
@@ -219,7 +224,7 @@ class JarvisApiClientTest {
         assertTrue("server did not receive request in time", gotRequest.await(5, TimeUnit.SECONDS))
 
         // Отменяем корутину и ждём завершения job'а — это должно произойти
-        // << чем за 10 секунд (body delay на сервере).
+        // много раньше, чем OkHttp отвалит по собственным таймаутам.
         testScope.cancel()
         val finishedAt = System.nanoTime()
         runBlocking { job.join() }

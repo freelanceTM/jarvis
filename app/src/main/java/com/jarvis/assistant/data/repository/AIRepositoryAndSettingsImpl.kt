@@ -3,7 +3,10 @@ package com.jarvis.assistant.data.repository
 import com.jarvis.assistant.ai.AIClient
 import com.jarvis.assistant.ai.ContextualCloudAIClient
 import com.jarvis.assistant.ai.PrivacyCloudBlockedException
+import com.jarvis.assistant.agent.decision.PrivacyClassifier
+import com.jarvis.assistant.agent.decision.PrivacyContent
 import com.jarvis.assistant.agent.decision.PrivacyLevel
+import com.jarvis.assistant.agent.decision.RequestSource
 import com.jarvis.assistant.core.dispatcher.CoroutineDispatchers
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.domain.models.Message
@@ -42,11 +45,29 @@ class AIRepositoryImpl @Inject constructor(
         history: List<Message>
     ): Resource<String> = withContext(dispatchers.io) {
         // Упрощённый вход без контекста — используется LiveTranslatorEngine.
-        // Политика здесь максимально жёсткая: без явного privacy-контекста
-        // мы НЕ лезем в классификатор повторно; по умолчанию — NORMAL,
-        // потому что переводчик — пользователь-инициированная облачная
-        // функция с явной UI-точкой входа. Переход на контекстный вход
-        // для переводчика — отдельная задача.
+        // C-02: этот путь не проходит через SendPromptUseCase, поэтому payload
+        // здесь ещё никто не классифицировал — классифицируем сами (prompt +
+        // history) и не пускаем PRIVATE/SENSITIVE в сеть. Переводчик не умеет
+        // показывать consent-карточку, поэтому [LlmTranslationProvider]
+        // честно маппит NeedsConsent в ошибку для пользователя.
+        val classification = PrivacyClassifier.classifySafely(
+            PrivacyContent(text = prompt, relatedContent = history.map(Message::text))
+        )
+        when (PrivacyClassifier.effective(PrivacyLevel.UNKNOWN, classification)) {
+            PrivacyLevel.PRIVATE, PrivacyLevel.SENSITIVE ->
+                return@withContext Resource.NeedsConsent(
+                    privacyLevel = classification.level,
+                    prompt = prompt,
+                    retryOnConsentArgs = Resource.NeedsConsent.RetryArgs(
+                        userPrompt = prompt,
+                        source = RequestSource.CHAT,
+                        privacyLevel = classification.level
+                    )
+                )
+            PrivacyLevel.UNKNOWN ->
+                return@withContext privacyBlocked(PrivacyLevel.UNKNOWN)
+            PrivacyLevel.NORMAL -> Unit
+        }
         aiClient.complete(
             prompt = prompt,
             systemPrompt = systemPrompt,

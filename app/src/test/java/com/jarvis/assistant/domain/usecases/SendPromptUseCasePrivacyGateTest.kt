@@ -45,7 +45,7 @@ class SendPromptUseCasePrivacyGateTest {
 
         messageRepo = mockk(relaxed = true)
         coEvery { messageRepo.getRecentMessages(any()) } returns emptyList()
-        coEvery { messageRepo.insertMessage(any()) } just awaits
+        coEvery { messageRepo.insertMessage(any()) } returns Unit
 
         settingsRepo = mockk(relaxed = true)
         every { settingsRepo.systemPromptFlow } returns flowOf("")

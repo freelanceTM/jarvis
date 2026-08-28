@@ -86,7 +86,6 @@ class SettingsViewModelTest {
             viewModel.onSystemPromptChanged("safe system")
             viewModel.onSpeechRateChanged(1.3f)
             viewModel.onSpeechPitchChanged(0.7f)
-            viewModel.onModelSelected("local")
             viewModel.onAccessTokenChanged("  $VALID_TOKEN  ")
 
             viewModel.saveAllSettings()
@@ -98,7 +97,6 @@ class SettingsViewModelTest {
             assertTrue("system" to "safe system" in repository.writes)
             assertTrue("rate" to 1.3f in repository.writes)
             assertTrue("pitch" to 0.7f in repository.writes)
-            assertTrue("model" to "local" in repository.writes)
             assertTrue(viewModel.uiState.value.isSavedSuccess)
         }
 

@@ -192,7 +192,7 @@ class ChatViewModelPrivacyConsentTest {
                 )
             )
         }
-        coEvery { messageRepository.insertMessage(any()) } just awaits
+        coEvery { messageRepository.insertMessage(any()) } returns Unit
 
         vm.sendTextMessage("мой пароль hh29sk")
         testDispatcher.scheduler.advanceUntilIdle()
