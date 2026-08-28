@@ -367,6 +367,8 @@ fun WakeWordStatusBanner(mode: OrchestratorMode, isHeadsetConnected: Boolean) {
         OrchestratorMode.AI_THINKING -> stringResource(R.string.vypolnenie_komandy) to JarvisCyanSecondary
         OrchestratorMode.TTS_SPEAKING -> stringResource(R.string.ozvuchivanie_skazhite_stop_dlya_otmeny) to JarvisCyanPrimary
         OrchestratorMode.AWAITING_CONFIRMATION -> stringResource(R.string.ozhidanie_podtverzhdeniya_skazhite_da_ili_net) to JarvisAmber
+        // C-02: ожидание согласия на отправку приватного запроса в облако.
+        OrchestratorMode.AWAITING_PRIVACY_CONSENT -> stringResource(R.string.cloud_consent_title) to JarvisAmber
         OrchestratorMode.LIVE_EAR_INTERPRETER -> stringResource(R.string.sinhronnyy_perevodchik_v_uhe_slushayu_sobesednika) to JarvisCyanPrimary
         OrchestratorMode.PAUSED_CALL_OR_SLEEP -> {
             if (!isHeadsetConnected) stringResource(R.string.naushniki_otklyucheny_pauza) to JarvisAmber

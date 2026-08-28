@@ -347,6 +347,8 @@ class JarvisVoiceService : Service() {
                     OrchestratorMode.AI_THINKING -> "Выполнение команды..."
                     OrchestratorMode.TTS_SPEAKING -> getString(R.string.ozvuchivanie_otveta)
                     OrchestratorMode.AWAITING_CONFIRMATION -> getString(R.string.ozhidanie_podtverzhdeniya)
+                    // C-02: ждём голосовое/экранное «да» на cloud-consent.
+                    OrchestratorMode.AWAITING_PRIVACY_CONSENT -> "Ожидаю подтверждения отправки в облако..."
                     OrchestratorMode.LIVE_EAR_INTERPRETER -> "🎧 Синхронный переводчик в ухе активен..."
                     OrchestratorMode.PAUSED_CALL_OR_SLEEP -> "Наушники отключены / Пауза"
                 }

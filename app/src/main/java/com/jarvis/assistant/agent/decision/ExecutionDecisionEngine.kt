@@ -365,6 +365,12 @@ class ExecutionDecisionEngine @Inject constructor(
                 message = GENERIC_ERROR_MESSAGE,
                 reason = DecisionReason.CLOUD_FAILED
             )
+
+            // C-02: executor отказался отправлять приватный запрос без
+            // согласия. Decision engine сам не показывает consent-карточку —
+            // это ответственность уровня use case / UI; здесь честно
+            // останавливаемся как privacy-blocked.
+            is Resource.NeedsConsent -> privacyBlocked(DecisionReason.CLOUD_BLOCKED_BY_PRIVACY)
         }
     }
 

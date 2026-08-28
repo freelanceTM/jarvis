@@ -73,6 +73,10 @@ class LlmTranslationProvider @Inject constructor(
             }
             is Resource.Error -> TranslationResult.Error(result.message ?: "Ошибка перевода")
             is Resource.Loading -> TranslationResult.Error("Перевод не завершён")
+            // C-02: приватный запрос не уходит в облако без согласия.
+            // Синхронный переводчик не умеет показывать consent-карточку,
+            // поэтому честно сообщаем о блокировке.
+            is Resource.NeedsConsent -> TranslationResult.Error("Требуется подтверждение отправки перевода в облако")
         }
     }
 }

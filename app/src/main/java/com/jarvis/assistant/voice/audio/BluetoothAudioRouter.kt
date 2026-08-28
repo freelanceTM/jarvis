@@ -20,6 +20,7 @@ import com.jarvis.assistant.agent.automation.engine.PersonalAutomationEngine
 import com.jarvis.assistant.agent.automation.model.AutomationTriggerType
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableJob
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -66,7 +67,9 @@ class BluetoothAudioRouter @Inject constructor(
         if (throwable is CancellationException) throw throwable
         Log.e(TAG, "uncaught exception in bluetooth router scope", throwable)
     }
-    private var routerJob: SupervisorJob? = SupervisorJob()
+    // SupervisorJob — это фабричная функция (возвращает CompletableJob),
+    // поэтому тип поля — CompletableJob.
+    private var routerJob: CompletableJob? = SupervisorJob()
     private var scope: CoroutineScope? = CoroutineScope(
         requireNotNull(routerJob) + Dispatchers.IO + exceptionHandler
     )
@@ -180,6 +183,10 @@ class BluetoothAudioRouter @Inject constructor(
                         }
                     }
                 }
+                // when используется как statement: без этого он становился бы
+                // последним выражением лямбды runCatching и требовал
+                // исчерпывающих ветвей (else) и if-цепочек с else.
+                Unit
             }.onFailure {
                 Log.e(TAG, "connectionReceiver: ошибка обработки broadcast", it)
             }
@@ -330,24 +337,21 @@ class BluetoothAudioRouter @Inject constructor(
             safeCloseProxy(proxy)
             bluetoothHeadset = null
         }
-        runCatching {
-            bluetoothAdapter?.closeProfileProxy(BluetoothProfile.HEADSET, profileListener)
-        }
         bluetoothAdapter = null
 
         _audioState.value = BluetoothAudioState.Disconnected
         _isHeadsetPlugged.value = false
     }
 
+    /**
+     * CR-12: proxy освобождается единственным официальным API —
+     * [BluetoothAdapter.closeProfileProxy]. BluetoothHeadset не имеет
+     * собственного close(), а stopVoiceRecognition() требует конкретное
+     * устройство и нигде в приложении не парен с startVoiceRecognition.
+     */
     private fun safeCloseProxy(proxy: BluetoothHeadset) {
         runCatching {
-            runCatching { proxy.stopVoiceRecognition() }
-            // BluetoothProfile.close() доступен с API 31 (Upside Down / S+).
-            // На старых версиях достаточно closeProfileProxy на адаптере,
-            // который мы вызываем отдельно после этого.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                proxy.close()
-            }
+            bluetoothAdapter?.closeProfileProxy(BluetoothProfile.HEADSET, proxy)
         }.onFailure { Log.w(TAG, "safeCloseProxy: не удалось закрыть proxy", it) }
     }
 }

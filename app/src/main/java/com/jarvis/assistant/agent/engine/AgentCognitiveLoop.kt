@@ -234,7 +234,9 @@ class AgentCognitiveLoop @Inject constructor(
             }
         }
 
-        PlanExecutionSummary(
+        // Явный `return` (а не последняя-выражение): у функции с block body
+        // компилятор в этом контексте требовал return-выражение.
+        return PlanExecutionSummary(
             plan = currentPlan,
             observations = stepObservations,
             finalVoiceSummary = buildVoiceSummary(summaries, blockedNotices, isAllSuccessful),
