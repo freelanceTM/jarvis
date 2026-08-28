@@ -16,7 +16,6 @@ val JarvisBlueAccent = Color(0xFF2979FF)
 val JarvisPurpleAccent = Color(0xFF7C4DFF)
 
 val JarvisGreen = Color(0xFF00E676)
-val JarvisGreenGlow = Color(0x3300E676)
 val JarvisRed = Color(0xFFFF5252)
 val JarvisAmber = Color(0xFFFFD740)
 

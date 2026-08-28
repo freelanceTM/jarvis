@@ -30,7 +30,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.jarvis.assistant.domain.models.VoiceAssistantState
 import com.jarvis.assistant.R
 import com.jarvis.assistant.agent.decision.PrivacyLevel
 import com.jarvis.assistant.presentation.components.JarvisOrbVisualizer

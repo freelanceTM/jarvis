@@ -5,7 +5,6 @@ import android.content.Context
 import android.location.Geocoder
 import android.location.Location
 import android.location.LocationManager
-import android.os.Build
 import com.jarvis.assistant.agent.capability.DeviceCapability
 import com.jarvis.assistant.agent.capability.DeviceCapabilityRegistry
 import dagger.hilt.android.qualifiers.ApplicationContext

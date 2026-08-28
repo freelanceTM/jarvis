@@ -1,7 +1,6 @@
 package com.jarvis.server
 
 import com.jarvis.server.config.ProviderConfig
-import com.jarvis.server.provider.AiProvider
 import com.jarvis.server.provider.GeminiProvider
 import com.jarvis.server.provider.GroqProvider
 import com.jarvis.server.provider.OkHttpTransport

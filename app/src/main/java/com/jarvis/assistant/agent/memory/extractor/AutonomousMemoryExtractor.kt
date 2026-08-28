@@ -1,7 +1,6 @@
 package com.jarvis.assistant.agent.memory.extractor
 
 import com.jarvis.assistant.agent.memory.model.ExtractedMemory
-import com.jarvis.assistant.agent.memory.model.GovernanceAction
 import javax.inject.Inject
 import javax.inject.Singleton
 

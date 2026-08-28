@@ -37,7 +37,6 @@ import com.jarvis.server.provider.OkHttpTransport
 import com.jarvis.server.provider.OpenRouterProvider
 import com.jarvis.server.provider.ProviderHealthTracker
 import com.jarvis.server.provider.ProviderManager
-import com.jarvis.server.provider.ProviderSelectionPolicy
 import com.jarvis.server.ratelimit.PostgresRateLimiter
 import com.jarvis.server.router.AiRouter
 import com.jarvis.server.usage.AsyncUsageTracker

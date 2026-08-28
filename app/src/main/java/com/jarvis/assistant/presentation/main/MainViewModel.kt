@@ -8,7 +8,6 @@ import com.jarvis.assistant.core.security.SecurityManager
 import com.jarvis.assistant.domain.models.VoiceAssistantState
 import com.jarvis.assistant.voice.audio.BluetoothAudioRouter
 import com.jarvis.assistant.voice.audio.BluetoothAudioState
-import com.jarvis.assistant.voice.orchestrator.OrchestratorMode
 import com.jarvis.assistant.voice.orchestrator.VoiceInteractionOrchestrator
 import com.jarvis.assistant.voice.service.JarvisVoiceService
 import dagger.hilt.android.lifecycle.HiltViewModel

@@ -30,8 +30,6 @@ data class PlanStep(
     val verifyScreenContains: String? = null
 )
 
-typealias ExecutionStep = PlanStep
-
 data class ExecutionPlan(
     val planId: String = UUID.randomUUID().toString(),
     val goal: String,

@@ -2,7 +2,6 @@ package com.jarvis.assistant.agent.discovery
 
 import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.memory.semantic.SemanticTextMatcher
-import com.jarvis.assistant.agent.model.ToolDefinition
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.ln

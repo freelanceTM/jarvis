@@ -1,6 +1,5 @@
 package com.jarvis.assistant.agent.model
 
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import java.util.UUID
 

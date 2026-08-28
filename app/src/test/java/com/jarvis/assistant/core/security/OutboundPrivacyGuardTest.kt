@@ -8,7 +8,6 @@ import com.jarvis.assistant.core.dispatcher.CoroutineDispatchers
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.data.repository.AIRepositoryImpl
 import com.jarvis.assistant.domain.models.Message
-import com.jarvis.assistant.domain.models.MessageRole
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking

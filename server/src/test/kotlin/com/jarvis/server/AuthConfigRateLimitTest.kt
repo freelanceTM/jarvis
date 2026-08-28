@@ -17,7 +17,6 @@ import com.jarvis.server.provider.ProviderId
 import com.jarvis.server.ratelimit.RateLimitDecision
 import com.jarvis.server.ratelimit.SlidingWindowRateLimiter
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.Callable
