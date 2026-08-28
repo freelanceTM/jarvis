@@ -163,7 +163,14 @@ class AiRouter(
             systemPrompt = buildSystemPrompt(request),
             history = request.history
                 .filter { it.content.isNotBlank() }
-                .map { com.jarvis.server.provider.ProviderMessage(role = normalizeRole(it.role), content = it.content) },
+                // validate() уже отклонил запрос с неизвестной ролью
+                // (INVALID_REQUEST), поэтому здесь normalizeRole не может
+                // вернуть null; mapNotNull сохраняет это без !!.
+                .mapNotNull { msg ->
+                    normalizeRole(msg.role)?.let { role ->
+                        com.jarvis.server.provider.ProviderMessage(role = role, content = msg.content)
+                    }
+                },
             requiresWeb = request.requiresWeb,
             maxTokens = generation.maxTokens,
             temperature = generation.temperature,

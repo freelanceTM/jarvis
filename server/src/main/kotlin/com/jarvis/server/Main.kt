@@ -27,10 +27,12 @@ import com.jarvis.server.license.JdbcLicenseRepository
 import com.jarvis.server.license.LicenseCrypto
 import com.jarvis.server.license.LicenseService
 import com.jarvis.server.observability.ConsoleStructuredLogger
+import com.jarvis.server.observability.StructuredLogger
 import com.jarvis.server.persistence.DatabaseFactory
 import com.jarvis.server.persistence.DatabaseMigrator
 import com.jarvis.server.persistence.PostgresSingleInstanceGuard
 import com.jarvis.server.observability.Metrics
+import com.jarvis.server.provider.DefaultProviderSelectionPolicy
 import com.jarvis.server.provider.GeminiProvider
 import com.jarvis.server.provider.GroqProvider
 import com.jarvis.server.provider.OkHttpTransport
@@ -57,6 +59,7 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Composition root JARVIS API.
@@ -154,7 +157,9 @@ object ServerBootstrap {
         val healthScope = CoroutineScope(
             SupervisorJob() + healthExecutor.asCoroutineDispatcher()
         )
-        @Volatile var cachedHealth: Pair<Long, String>? = null
+        // @Volatile неприменим к локальным переменным Kotlin; кэш health-ответа
+        // защищается AtomicReference (чтение/запись из корутин healthScope).
+        val cachedHealth = AtomicReference<Pair<Long, String>?>(null)
 
         val maxInFlight = Runtime.getRuntime().availableProcessors() * 4
         val inFlight = Semaphore(maxInFlight)
@@ -189,14 +194,14 @@ object ServerBootstrap {
         server.createContext("/v1/health") { exchange ->
             healthScope.launch {
                 val now = System.currentTimeMillis()
-                val body = cachedHealth?.takeIf { now - it.first < HEALTH_RESPONSE_CACHE_MS }?.second
+                val body = cachedHealth.get()?.takeIf { now - it.first < HEALTH_RESPONSE_CACHE_MS }?.second
                     ?: run {
                         // handler.healthSnapshot() уже возвращает готовый JSON
                         // (собирается в buildResources из provider snapshot);
                         // мы только кэшируем его на 2 секунды, чтобы балансер
                         // не гонял formatter на каждый ping.
                         val fresh = handler.healthSnapshot()
-                        cachedHealth = now to fresh
+                        cachedHealth.set(now to fresh)
                         fresh
                     }
                 runCatching {

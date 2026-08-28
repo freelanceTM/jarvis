@@ -97,7 +97,7 @@ private data class GemDynamicRetrievalConfig(
 
 @Serializable
 private data class GemGoogleSearchRetrieval(
-    @SerialName("google_search_retrieval") val googleSearchRetrieval: GemDynamicRetrieval
+    @SerialName("google_search_retrieval") val googleSearchRetrieval: GemDynamicRetrievalConfig
 )
 
 @Serializable
@@ -230,8 +230,11 @@ abstract class BaseHttpProvider(
      * CR-03: собирает messages для OpenAI-совместимого провайдера в каноничном
      * порядке: system, *trimmedHistory, user(current prompt). История режется
      * с НАЧАЛА (старые сообщения выпадают), чтобы влезть в бюджет 32 KB.
+     *
+     * private (не protected): метод используется только внутри BaseHttpProvider;
+     * protected-видимость нелегально экспонировала бы file-private [OaiMessage].
      */
-    protected fun buildOpenAiMessages(request: ProviderRequest): List<OaiMessage> {
+    private fun buildOpenAiMessages(request: ProviderRequest): List<OaiMessage> {
         val historyMsgs = request.history.map { OaiMessage(it.role, it.content) }
         val trimmed = trimHistoryForBudget(historyMsgs)
         return buildList {
