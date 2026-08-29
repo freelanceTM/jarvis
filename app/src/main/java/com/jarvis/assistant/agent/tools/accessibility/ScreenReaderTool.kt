@@ -67,37 +67,85 @@ class ScreenReaderTool @Inject constructor(
         }
 
         return try {
-            val screenContent = JarvisAccessibilityService.getScreenContent()
-            
-            if (screenContent.isNotBlank() && screenContent != "На экране нет текстового содержимого.") {
-                // Ограничиваем длину для голосового ответа
-                val truncated = if (screenContent.length > 800) {
-                    screenContent.take(800) + "..."
-                } else {
-                    screenContent
+            when (val readResult = JarvisAccessibilityService.getScreenContent()) {
+                is AccessibilityReadResult.PrivacyBlocked -> {
+                    // Честный отказ: контент НЕ извлечён и НЕ уйдёт в AI.
+                    ToolExecutionResult.failure(
+                        summary = privacyBlockedSummary(readResult.decision),
+                        error = "SCREEN_BLOCKED_BY_PRIVACY_POLICY",
+                        data = buildJsonObject {
+                            put("blocked_reason", readResult.decision.reason.name)
+                            readResult.decision.packageName?.let { put("package", it) }
+                        }
+                    )
                 }
-                
-                ToolExecutionResult.success(
-                    summary = truncated,
-                    data = buildJsonObject {
-                        put("full_content", screenContent)
-                        put("truncated", screenContent.length > 800)
+
+                is AccessibilityReadResult.Content -> {
+                    // Ограничиваем длину для голосового ответа
+                    val screenContent = readResult.text
+                    val truncated = if (screenContent.length > 800) {
+                        screenContent.take(800) + "..."
+                    } else {
+                        screenContent
                     }
-                )
-            } else {
-                ToolExecutionResult.success(
-                    summary = "На текущем экране нет текстового содержимого или экран заблокирован.",
-                    data = buildJsonObject {
-                        put("full_content", "")
-                        put("is_empty", true)
-                    }
-                )
+
+                    ToolExecutionResult.success(
+                        summary = truncated,
+                        data = buildJsonObject {
+                            put("full_content", screenContent)
+                            put("truncated", screenContent.length > 800)
+                            if (readResult.passwordFieldsSkipped > 0) {
+                                put("password_fields_skipped", readResult.passwordFieldsSkipped)
+                            }
+                        }
+                    )
+                }
+
+                is AccessibilityReadResult.Empty ->
+                    ToolExecutionResult.success(
+                        summary = buildString {
+                            append("На текущем экране нет текстового содержимого")
+                            if (readResult.passwordFieldsSkipped > 0) {
+                                append(" (пропущено парольных полей: ${readResult.passwordFieldsSkipped})")
+                            } else {
+                                append(" или экран заблокирован")
+                            }
+                            append(".")
+                        },
+                        data = buildJsonObject {
+                            put("full_content", "")
+                            put("is_empty", true)
+                            if (readResult.passwordFieldsSkipped > 0) {
+                                put("password_fields_skipped", readResult.passwordFieldsSkipped)
+                            }
+                        }
+                    )
+
+                AccessibilityReadResult.Unavailable ->
+                    ToolExecutionResult.success(
+                        summary = "Экран недоступен или заблокирован.",
+                        data = buildJsonObject { put("full_content", ""); put("is_empty", true) }
+                    )
             }
         } catch (e: Exception) {
             ToolExecutionResult.failure(
                 summary = "Ошибка при чтении экрана: ${e.localizedMessage}",
                 error = "SCREEN_READ_ERROR"
             )
+        }
+    }
+
+    private fun privacyBlockedSummary(decision: PolicyDecision.Blocked): String {
+        val app = decision.packageName?.let { " (приложение: $it)" } ?: ""
+        return when (decision.reason) {
+            BlockedReason.SYSTEM_UI_LOCK_SCREEN ->
+                "Системный экран (локскрин/настройки/платёжные сервисы)$app защищён privacy-политикой — чтение запрещено."
+            BlockedReason.SENSITIVE_CATEGORY ->
+                "Приложение$app выглядит как чувствительное (банк/кошелёк/пароль-менеджер) и защищено privacy-политикой. Его можно разрешить явно в настройках приватности."
+            BlockedReason.USER_BLOCKED ->
+                "Приложение$app заблокировано в privacy-настройках — чтение запрещено."
+            BlockedReason.NOT_IN_ALLOW_LIST ->
+                "Включён режим allow-листа: приложение$app не входит в список разрешённых — чтение запрещено."
         }
     }
 }

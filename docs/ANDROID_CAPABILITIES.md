@@ -297,6 +297,34 @@ SUCCESS?
 специальных возможностей выключена — `USER_ACTION_REQUIRED`; поля на экране
 нет — `FAILURE (NO_EDITABLE_FIELD)`.
 
+## Privacy boundary accessibility (P1-2, 2026-08-29)
+
+Accessibility — самая привилегированная поверхность, поэтому все операции
+(чтение экрана, ввод, клики, скролл) проходят через **privacy-границу**
+(`AccessibilityPrivacyPolicy`):
+
+```text
+Обычные приложения        → доступны
+Чувствительные (банк / кошелёк / пароль-менеджер / аутентификатор —
+  по эвристике имени пакета) → заблокированы; явный allow пользователя перекрывает
+Пользовательский block-лист → заблокированы всегда
+Режим allow-листа          → разрешено только явно разрешённое
+Lock screen / Settings / Play / GMS → заблокированы, НИКОГДА не перекрываются
+Парольные поля (isPassword) → не читаются и не заполняются никогда
+```
+
+Честные результаты инструментов:
+
+- `SCREEN_BLOCKED_BY_PRIVACY_POLICY` (screen_reader) — контент не извлечён,
+  в AI не уходит;
+- `APP_BLOCKED_BY_PRIVACY_POLICY` (ui_click / type_text) — действие не выполнено;
+- `PASSWORD_FIELD_USER_INPUT_REQUIRED` (type_text) — пароль, продиктованный
+  голосом, остался бы в логах STT, поэтому ввод только вручную.
+
+Audit-логирует только пакет + действие + решение — без содержимого экрана
+и вводимого текста. Пользовательское управление — `AccessibilityPrivacyStore`
+(SharedPreferences `jarvis_accessibility_privacy`: режим, block/allow-списки).
+
 ## AutomationEngine (Event → RuleMatcher → List<AutomationRule> → execute all)
 
 Архитектура v0.2 вместо «одно событие → одно правило»:

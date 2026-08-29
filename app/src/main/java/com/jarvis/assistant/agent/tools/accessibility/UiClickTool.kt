@@ -86,34 +86,61 @@ class UiClickTool @Inject constructor(
         }
 
         return try {
-            val performed = when (action) {
+            val performed: AccessibilityActionResult = when (action) {
                 "click" -> JarvisAccessibilityService.clickByText(targetText)
                 "scroll_down" -> JarvisAccessibilityService.scrollDown()
                 "scroll_up" -> JarvisAccessibilityService.scrollUp()
-                else -> false
+                else -> AccessibilityActionResult.Failed
             }
-            if (performed) {
-                ToolExecutionResult.success(
-                    summary = when (action) {
-                        "click" -> "Нажал на '$targetText'"
-                        "scroll_down" -> "Прокрутил экран вниз"
-                        else -> "Прокрутил экран вверх"
-                    },
-                    data = buildJsonObject {
-                        put("action", action)
-                        if (targetText.isNotEmpty()) put("target", targetText)
-                        put("performed", true)
-                    }
-                )
-            } else {
-                ToolExecutionResult.failure(
-                    summary = if (action == "click") {
-                        "Элемент '$targetText' не найден на экране."
-                    } else {
-                        "На экране нет доступной области для прокрутки."
-                    },
-                    error = if (action == "click") "ELEMENT_NOT_FOUND" else "SCROLL_TARGET_NOT_FOUND"
-                )
+            when (performed) {
+                is AccessibilityActionResult.Performed ->
+                    ToolExecutionResult.success(
+                        summary = when (action) {
+                            "click" -> "Нажал на '$targetText'"
+                            "scroll_down" -> "Прокрутил экран вниз"
+                            else -> "Прокрутил экран вверх"
+                        },
+                        data = buildJsonObject {
+                            put("action", action)
+                            if (targetText.isNotEmpty()) put("target", targetText)
+                            put("performed", true)
+                        }
+                    )
+
+                is AccessibilityActionResult.PrivacyBlocked ->
+                    ToolExecutionResult.failure(
+                        summary = "Приложение ${performed.decision.packageName ?: "на экране"} защищено privacy-политикой — UI-действие запрещено.",
+                        error = "APP_BLOCKED_BY_PRIVACY_POLICY",
+                        data = buildJsonObject { put("blocked_reason", performed.decision.reason.name) }
+                    )
+
+                AccessibilityActionResult.NotFound ->
+                    ToolExecutionResult.failure(
+                        summary = if (action == "click") {
+                            "Элемент '$targetText' не найден на экране."
+                        } else {
+                            "На экране нет доступной области для прокрутки."
+                        },
+                        error = if (action == "click") "ELEMENT_NOT_FOUND" else "SCROLL_TARGET_NOT_FOUND"
+                    )
+
+                AccessibilityActionResult.PasswordFieldBlocked ->
+                    ToolExecutionResult.failure(
+                        summary = "Действие с парольным полем запрещено privacy-политикой.",
+                        error = "PASSWORD_FIELD_PROTECTED"
+                    )
+
+                AccessibilityActionResult.Unavailable ->
+                    ToolExecutionResult.failure(
+                        summary = "Активное окно недоступно — действие не выполнено.",
+                        error = "NO_ACTIVE_WINDOW"
+                    )
+
+                AccessibilityActionResult.Failed ->
+                    ToolExecutionResult.failure(
+                        summary = "Система не выполнила UI-действие.",
+                        error = "UI_ACTION_REJECTED"
+                    )
             }
         } catch (e: Exception) {
             ToolExecutionResult.failure(

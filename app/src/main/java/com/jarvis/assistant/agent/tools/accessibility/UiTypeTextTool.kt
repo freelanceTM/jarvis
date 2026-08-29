@@ -96,22 +96,51 @@ class UiTypeTextTool @Inject constructor(
         }
 
         return try {
-            val typed = JarvisAccessibilityService.typeText(text)
-            if (typed) {
-                ToolExecutionResult.success(
-                    // Не дублируем потенциальный пароль/токен в observation,
-                    // TTS и последующих cloud-промптах.
-                    summary = "Ввёл текст в поле ввода",
-                    data = buildJsonObject {
-                        put("text_length", text.length)
-                        put("typed", true)
-                    }
-                )
-            } else {
-                ToolExecutionResult.failure(
-                    summary = "Не нашёл редактируемого поля на экране — текст не введён",
-                    error = "NO_EDITABLE_FIELD"
-                )
+            when (val result = JarvisAccessibilityService.typeText(text)) {
+                is AccessibilityActionResult.Performed ->
+                    ToolExecutionResult.success(
+                        // Не дублируем потенциальный пароль/токен в observation,
+                        // TTS и последующих cloud-промптах.
+                        summary = "Ввёл текст в поле ввода",
+                        data = buildJsonObject {
+                            put("text_length", text.length)
+                            put("typed", true)
+                        }
+                    )
+
+                AccessibilityActionResult.PasswordFieldBlocked ->
+                    // Пароль, продиктованный голосом, остался бы в логах STT —
+                    // вводим только руками пользователя.
+                    ToolExecutionResult.userActionRequired(
+                        summary = "Это поле пароля — ввод через ассистента запрещён. Введите пароль вручную.",
+                        reason = "PASSWORD_FIELD_USER_INPUT_REQUIRED",
+                        data = buildJsonObject { put("typed", false) }
+                    )
+
+                is AccessibilityActionResult.PrivacyBlocked ->
+                    ToolExecutionResult.failure(
+                        summary = "Приложение ${result.decision.packageName ?: "на экране"} защищено privacy-политикой — ввод текста запрещён.",
+                        error = "APP_BLOCKED_BY_PRIVACY_POLICY",
+                        data = buildJsonObject { put("blocked_reason", result.decision.reason.name) }
+                    )
+
+                AccessibilityActionResult.NotFound ->
+                    ToolExecutionResult.failure(
+                        summary = "Не нашёл редактируемого поля на экране — текст не введён",
+                        error = "NO_EDITABLE_FIELD"
+                    )
+
+                AccessibilityActionResult.Failed ->
+                    ToolExecutionResult.failure(
+                        summary = "Система не выполнила ввод текста в поле",
+                        error = "TYPE_TEXT_REJECTED"
+                    )
+
+                AccessibilityActionResult.Unavailable ->
+                    ToolExecutionResult.failure(
+                        summary = "Активное окно недоступно — текст не введён",
+                        error = "NO_ACTIVE_WINDOW"
+                    )
             }
         } catch (e: Exception) {
             ToolExecutionResult.failure(
