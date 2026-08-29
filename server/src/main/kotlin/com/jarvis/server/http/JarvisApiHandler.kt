@@ -141,20 +141,20 @@ class JarvisApiHandler(
         }
 
         // ------------------------------------------------- 1. Парсинг тела (M-01: ОДИН раз)
-        val parsed = try {
+        // Anti-DoS: parse выполняется сразу, но 400 возвращается только ПОСЛЕ
+        // rate limit — malformed-запросы расходуют бюджет клиента, а не
+        // бесплатный parse-flood (тест: malformed requests consume rate
+        // budget but never reach provider).
+        var parseError: String? = null
+        val parsed: AiExecutionRequest? = try {
             json.decodeFromString(AiExecutionRequest.serializer(), request.body)
         } catch (e: Exception) {
-            val rid = newRequestId()
-            logger.warn(
-                "malformed request body",
-                "requestId" to rid,
-                "error" to e.javaClass.simpleName
-            )
-            return error(ApiErrorCode.INVALID_REQUEST, rid)
+            parseError = e.javaClass.simpleName
+            null
         }
 
         // Сквозной requestId: клиентский (если валидный), либо свой.
-        val requestId = parsed.requestId
+        val requestId = parsed?.requestId
             ?.takeIf { it.isNotBlank() && it.length <= 64 }
             ?: newRequestId()
 
@@ -205,6 +205,16 @@ class JarvisApiHandler(
                 )
             }
             RateLimitDecision.Allowed -> Unit
+        }
+
+        // 400 отдаём только после rate limit (см. комментарий к парсингу выше).
+        if (parsed == null) {
+            logger.warn(
+                "malformed request body",
+                "requestId" to requestId,
+                "error" to (parseError ?: "unknown")
+            )
+            return error(ApiErrorCode.INVALID_REQUEST, requestId)
         }
 
         // ------------------------------------------------- 5. AI Router

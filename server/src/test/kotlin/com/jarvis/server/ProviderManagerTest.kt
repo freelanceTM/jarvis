@@ -121,7 +121,14 @@ class ProviderManagerTest {
             FakeAiProvider.failing(ProviderId.OPENROUTER, ProviderFailureKind.TIMEOUT)
         )
 
-        val outcome = manager(providers).execute(request(), ProviderRequirements())
+        // Явно разрешаем опробовать всех троих: дефолт maxProviderAttempts=2
+        // (бюджетная защита) проверяется отдельным тестом
+        // `fallback chain respects max provider attempts`.
+        val mgr = manager(
+            providers,
+            policy = ExecutionPolicyConfig(maxProviderAttempts = 3, maxRetriesPerProvider = 0)
+        )
+        val outcome = mgr.execute(request(), ProviderRequirements())
 
         assertTrue(outcome is ManagerOutcome.Failure)
         assertEquals(3, (outcome as ManagerOutcome.Failure).attempted.size)
@@ -346,7 +353,9 @@ class ProviderManagerTest {
      *  вызов, который провайдер никогда не успеет закончить). */
     @Test
     fun `provider timeout clamped to remaining budget finishes faster than native timeout`() = runBlocking {
-        // Провайдер висит 2000мс, но у нас budget 100мс.
+        // Провайдер висит 2000мс; per-provider timeout 100мс, budget 200мс —
+        // попытка запускается (budget >= timeout), но withTimeout снимает её
+        // за ~100мс, а не ждём нативные 2000мс.
         val slow = FakeAiProvider(
             ProviderId.GROQ,
             listOf(com.jarvis.server.provider.ProviderResult.Success("too-late", "m")),
@@ -354,9 +363,12 @@ class ProviderManagerTest {
         )
         val mgr = manager(
             listOf(slow),
-            policy = ExecutionPolicyConfig(maxRetriesPerProvider = 0)
+            policy = ExecutionPolicyConfig(maxRetriesPerProvider = 0),
+            configs = mapOf(
+                ProviderId.GROQ to cfg(ProviderId.GROQ, 1).copy(requestTimeoutMs = 100)
+            )
         )
-        val req = request().copy(deadlineEpochMs = System.currentTimeMillis() + 100)
+        val req = request().copy(deadlineEpochMs = System.currentTimeMillis() + 200)
 
         val start = System.nanoTime()
         val outcome = mgr.execute(req, ProviderRequirements())
@@ -378,18 +390,23 @@ class ProviderManagerTest {
     /** CR-06: backoff не выполняется, если не влезает в оставшийся budget. */
     @Test
     fun `retry backoff skipped if budget insufficient`() = runBlocking {
-        // Провайдер стабильно падает SERVER_ERROR (retriable), budget на весь
-        // запрос — 30мс, backoff 200мс. После первой неудачи менеджер не должен
-        // ждать 200мс — сразу early-out TIMEOUT.
+        // Провайдер стабильно падает SERVER_ERROR (retriable); per-provider
+        // timeout 20мс, budget 200мс (>= timeout, значит первая попытка
+        // запускается), backoff 200мс. После первой неудачи остатка budget
+        // (<= backoff + 100мс) не хватает на backoff — менеджер не должен
+        // ждать 200мс, а сразу вернуть TIMEOUT.
         val flaky = FakeAiProvider(
             ProviderId.GROQ,
             List(5) { com.jarvis.server.provider.ProviderResult.Failure(ProviderFailureKind.SERVER_ERROR, "boom") }
         )
         val mgr = manager(
             listOf(flaky),
-            policy = ExecutionPolicyConfig(maxRetriesPerProvider = 3, retryBackoffMs = 200)
+            policy = ExecutionPolicyConfig(maxRetriesPerProvider = 3, retryBackoffMs = 200),
+            configs = mapOf(
+                ProviderId.GROQ to cfg(ProviderId.GROQ, 1).copy(requestTimeoutMs = 20)
+            )
         )
-        val req = request().copy(deadlineEpochMs = System.currentTimeMillis() + 30)
+        val req = request().copy(deadlineEpochMs = System.currentTimeMillis() + 200)
 
         val start = System.nanoTime()
         val outcome = mgr.execute(req, ProviderRequirements())
