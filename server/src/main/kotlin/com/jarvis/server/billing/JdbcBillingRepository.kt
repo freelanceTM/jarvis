@@ -238,11 +238,15 @@ class JdbcBillingRepository(private val dataSource: DataSource) {
             it.executeQuery().use { result ->
                 val orders = mutableListOf<StaleReconciliationOrder>()
                 while (result.next()) {
+                    // updated_at объявлен NOT NULL в схеме; null здесь возможен
+                    // только при рассинхронизации схемы — такой заказ пропускаем,
+                    // а не роняем воркер видимости.
+                    val updatedAt = result.getInstant("updated_at") ?: continue
                     orders += StaleReconciliationOrder(
                         orderId = result.getObject("id", UUID::class.java),
                         provider = BillingProviderId.valueOf(result.getString("provider")),
                         providerOrderId = result.getString("provider_order_id"),
-                        updatedAt = result.getInstant("updated_at")
+                        updatedAt = updatedAt
                     )
                 }
                 orders
