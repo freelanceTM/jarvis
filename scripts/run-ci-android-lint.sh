@@ -16,6 +16,16 @@ if [[ $status -eq 0 ]]; then
   exit 0
 fi
 
+# Консоль Gradle при провале lint печатает только «First failure».
+# Полный список ошибок лежит в текстовом отчёте — выводим его в лог,
+# чтобы провал можно было починить за один виток CI.
+report="app/build/reports/lint-results-devDebug.txt"
+if [[ -f "$report" ]]; then
+  echo "--- full lint report ($report) ---"
+  cat "$report"
+  echo "--- end of lint report ---"
+fi
+
 summary=$(grep -E \
   'Lint found|First failure:|Error:|FAILURE:|What went wrong|Execution failed' \
   "$LOG_FILE" | tail -n 30 || true)
