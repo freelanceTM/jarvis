@@ -7,6 +7,7 @@ import com.jarvis.server.observability.ConsoleStructuredLogger
 import com.jarvis.server.observability.Metrics
 import com.jarvis.server.provider.AiProvider
 import com.jarvis.server.provider.CircuitState
+import com.jarvis.server.provider.DefaultProviderSelectionPolicy
 import com.jarvis.server.provider.ManagerOutcome
 import com.jarvis.server.provider.ProviderCapabilities
 import com.jarvis.server.provider.ProviderFailureKind

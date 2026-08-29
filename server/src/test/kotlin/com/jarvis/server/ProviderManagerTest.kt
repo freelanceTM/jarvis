@@ -6,6 +6,7 @@ import com.jarvis.server.config.ProviderConfig
 import com.jarvis.server.observability.ConsoleStructuredLogger
 import com.jarvis.server.observability.Metrics
 import com.jarvis.server.provider.CircuitState
+import com.jarvis.server.provider.DefaultProviderSelectionPolicy
 import com.jarvis.server.provider.HealthStatus
 import com.jarvis.server.provider.ManagerOutcome
 import com.jarvis.server.provider.ProviderCapabilities
@@ -15,6 +16,7 @@ import com.jarvis.server.provider.ProviderId
 import com.jarvis.server.provider.ProviderManager
 import com.jarvis.server.provider.ProviderRequest
 import com.jarvis.server.provider.ProviderRequirements
+import com.jarvis.server.provider.ProviderResult
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking

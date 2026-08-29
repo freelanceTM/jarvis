@@ -14,9 +14,8 @@ import io.mockk.verify
 import org.junit.Test
 import java.net.HttpURLConnection
 import java.net.URL
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 
 /**
  * C-01 (P0) build-break regression test.
@@ -84,8 +83,8 @@ class ServerLifecycleTest {
             conn.readTimeout = 2000
             val code = conn.responseCode
             val body = conn.inputStream.bufferedReader().use { it.readText() }
-            assertEquals(200, code, "health must respond 200 while running")
-            assertContains(body, "\"status\":\"ok\"")
+            assertEquals("health must respond 200 while running", 200, code)
+            assertTrue("body must contain status ok, was: $body", body.contains("\"status\":\"ok\""))
             conn.disconnect()
         } finally {
             // 2) close() не должен бросать — даже если моки ресурсов с relaxed=true
@@ -119,7 +118,7 @@ class ServerLifecycleTest {
                 break
             }
         }
-        assertTrue(portIsClosed, "server must stop accepting connections after close()")
+        assertTrue("server must stop accepting connections after close()", portIsClosed)
     }
 
     @Test

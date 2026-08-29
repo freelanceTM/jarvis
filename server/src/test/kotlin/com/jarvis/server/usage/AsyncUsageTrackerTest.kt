@@ -27,7 +27,7 @@ class AsyncUsageTrackerTest {
     private val logger = ConsoleStructuredLogger()
     private val metrics = Metrics()
 
-    private fun recordingRepo(): Pair<FakeUsageRepository, MutableList<AiUsageRecord>> {
+    private fun recordingRepo(): Pair<UsageRepository, MutableList<AiUsageRecord>> {
         val records = mutableListOf<AiUsageRecord>()
         return object : UsageRepository {
             override suspend fun record(usage: AiUsageRecord) {
