@@ -20,7 +20,7 @@ workKtx = "2.9.1"
 # security-crypto: финальный stable-релиз 1.1.0 вышел (ранее был alpha06).
 # API (MasterKey / EncryptedSharedPreferences) совместим; следить за новыми
 # релизами: https://developer.android.com/jetpack/androidx/releases/security
-coroutines = "1.8.1"
+coroutines = "1.11.0"
 # MediaPipe LLM Inference (Этап 2 — Local AI). Native libs ~26 МБ на arm64.
 mediapipeGenai = "0.10.35"
 materialIconsExtended = "1.6.8"
