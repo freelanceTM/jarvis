@@ -69,18 +69,6 @@ class OutboundPrivacyGuardTest {
         }
     }
 
-    private class LegacyCountingClient : AIClient {
-        val calls = AtomicInteger(0)
-        override suspend fun complete(
-            prompt: String,
-            systemPrompt: String,
-            history: List<Message>
-        ): Resource<String> {
-            calls.incrementAndGet()
-            return Resource.Success("ok")
-        }
-    }
-
     @Test
     fun `normal legacy translation path can reach guarded client`() = runBlocking {
         val client = CountingClient()

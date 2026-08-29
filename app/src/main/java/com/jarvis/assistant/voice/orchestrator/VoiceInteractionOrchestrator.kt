@@ -19,7 +19,6 @@ import com.jarvis.assistant.core.confirmation.ConfirmationIntent
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.domain.models.PromptExecutionResult
 import com.jarvis.assistant.domain.models.VoiceAssistantState
-import com.jarvis.assistant.domain.repository.MessageRepository
 import com.jarvis.assistant.domain.usecases.GetSettingsUseCase
 import com.jarvis.assistant.domain.usecases.SendPromptUseCase
 import com.jarvis.assistant.voice.audio.BluetoothAudioRouter
@@ -61,8 +60,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private val sendPromptUseCase: SendPromptUseCase,
     private val getSettingsUseCase: GetSettingsUseCase,
     private val toolExecutor: ToolExecutor,
-    private val translatorEngine: LiveTranslatorEngine,
-    private val messageRepository: MessageRepository
+    private val translatorEngine: LiveTranslatorEngine
 ) {
     companion object {
         private const val TAG = "VoiceOrchestrator"
@@ -539,10 +537,8 @@ class VoiceInteractionOrchestrator @Inject constructor(
         val captureEpoch = sessionEpoch.get()
         aiJob = scope.launch {
             try {
-                val history = messageRepository.getRecentMessages(limit = 10)
-
-                // CR-07: если за время получения истории пользователь успел перейти в standby,
-                // результат отбрасываем.
+                // CR-07: если пользователь успел перейти в standby до отправки запроса,
+                // выходим, не тратя ресурсы на AI-вызов.
                 if (sessionEpoch.get() != captureEpoch) {
                     Log.d(TAG, "Discarding late AI result (epoch mismatch: $captureEpoch vs ${sessionEpoch.get()})")
                     return@launch
