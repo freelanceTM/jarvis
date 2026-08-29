@@ -1,4 +1,5 @@
 import java.net.URI
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -62,7 +63,7 @@ require(stagingApiUrl != productionApiUrl) { "Staging and production API origins
 // обязан провалиться в этом случае. Локальные smoke-сборки при этом не ломаются.
 // Keystore НИКОГДА не коммитится (*.jks/*.keystore в .gitignore).
 // ============================================================================
-val keystoreProperties = java.util.Properties().apply {
+val keystoreProperties = Properties().apply {
     val file = rootProject.file("keystore.properties")
     if (file.exists()) file.inputStream().use { load(it) }
 }
