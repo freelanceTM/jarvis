@@ -151,4 +151,65 @@ class Metrics {
         // usage_failed / usage_retry и т.п.) тоже показываем в /metrics.
         namedCounters.forEach { (k, v) -> put(k, v.get()) }
     }
+
+    /**
+     * Prometheus text format (P1-1) для GET /v1/admin/metrics/prometheus.
+     *
+     * Имена метрик стабильны (используются в алертах — см. docs/RUNBOOK.md);
+     * менять их можно только вместе с ранбуком. Формат:
+     * `# HELP/# TYPE` + строки `name{labels} value`. Значения — только
+     * счётчики и суммы; гистограммы латентности появятся отдельным ADR,
+     * чтобы не менять контракт мониторинга незаметно.
+     */
+    fun prometheus(): String = buildString {
+        fun counter(name: String, help: String, value: Long) {
+            append("# HELP $name $help\n")
+            append("# TYPE $name counter\n")
+            append("$name $value\n")
+        }
+
+        counter("jarvis_requests_total", "Total AI execute requests received.", requestsTotal.get())
+        counter("jarvis_requests_success_total", "AI execute requests answered successfully.", requestsSuccess.get())
+        counter("jarvis_requests_failed_total", "AI execute requests that failed.", requestsFailed.get())
+        counter("jarvis_requests_rate_limited_total", "Requests rejected by rate limiting.", rateLimitedTotal.get())
+        counter("jarvis_requests_unauthorized_total", "Requests rejected by authentication.", unauthorizedTotal.get())
+        counter("jarvis_requests_privacy_blocked_total", "Requests blocked by the privacy classifier.", privacyBlockedTotal.get())
+        counter("jarvis_tokens_total", "Total tokens reported by providers.", totalTokens.get())
+
+        val providerIds = (providerSuccess.keys + providerFailure.keys).sortedBy { it.name }
+        if (providerIds.isNotEmpty()) {
+            append("# HELP jarvis_provider_success_total Successful provider calls.\n")
+            append("# TYPE jarvis_provider_success_total counter\n")
+            for (id in providerIds) {
+                append("jarvis_provider_success_total{provider=\"${id.name}\"} ${counter(providerSuccess, id).get()}\n")
+            }
+            append("# HELP jarvis_provider_failure_total Failed provider calls.\n")
+            append("# TYPE jarvis_provider_failure_total counter\n")
+            for (id in providerIds) {
+                append("jarvis_provider_failure_total{provider=\"${id.name}\"} ${counter(providerFailure, id).get()}\n")
+            }
+            append("# HELP jarvis_provider_latency_ms_sum Cumulative provider latency in milliseconds.\n")
+            append("# TYPE jarvis_provider_latency_ms_sum counter\n")
+            for (id in providerIds) {
+                append("jarvis_provider_latency_ms_sum{provider=\"${id.name}\"} ${counter(providerLatencySum, id).get()}\n")
+            }
+        }
+
+        if (failureKinds.isNotEmpty()) {
+            append("# HELP jarvis_provider_failure_kind_total Provider failures by kind.\n")
+            append("# TYPE jarvis_provider_failure_kind_total counter\n")
+            for ((kind, value) in failureKinds.entries.sortedBy { it.key }) {
+                append("jarvis_provider_failure_kind_total{kind=\"$kind\"} ${value.get()}\n")
+            }
+        }
+
+        // AR-05: именованные счётчики (usage_* и др.) — префиксованные.
+        for ((name, value) in namedCounters.entries.sortedBy { it.key }) {
+            counter(
+                "jarvis_named_$name",
+                "Named internal counter ($name).",
+                value.get()
+            )
+        }
+    }
 }

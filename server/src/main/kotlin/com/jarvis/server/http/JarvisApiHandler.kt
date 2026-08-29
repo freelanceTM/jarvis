@@ -77,6 +77,8 @@ class JarvisApiHandler(
     private val json: Json,
     private val healthProvider: () -> String = { "{}" },
     private val metricsProvider: () -> String = { "{}" },
+    /** P1-1: Prometheus text format для PATH_ADMIN_METRICS_PROMETHEUS. */
+    private val prometheusMetricsProvider: () -> String = { "" },
     private val entitlementChecker: (com.jarvis.server.auth.AuthenticatedClient) -> Boolean = { true },
     private val extensionHandler: suspend (HttpRequestContext) -> HttpResponseContext? = { null },
     /**
@@ -93,6 +95,7 @@ class JarvisApiHandler(
         const val PATH_EXECUTE = "/v1/ai/execute"
         const val PATH_HEALTH = "/v1/health"
         const val PATH_ADMIN_METRICS = "/v1/admin/metrics"
+        const val PATH_ADMIN_METRICS_PROMETHEUS = "/v1/admin/metrics/prometheus"
     }
 
     suspend fun handle(request: HttpRequestContext): HttpResponseContext {
@@ -110,11 +113,15 @@ class JarvisApiHandler(
             path == PATH_ADMIN_METRICS && method == "GET" ->
                 handleAdminMetrics(request, newRequestId())
 
+            path == PATH_ADMIN_METRICS_PROMETHEUS && method == "GET" ->
+                handleAdminMetricsPrometheus(request)
+
             path == PATH_EXECUTE && method == "POST" ->
                 handleExecute(request)
 
             path == PATH_EXECUTE ||
                 path == PATH_ADMIN_METRICS ||
+                path == PATH_ADMIN_METRICS_PROMETHEUS ||
                 path == PATH_HEALTH ->
                 error(ApiErrorCode.INVALID_REQUEST, newRequestId(), 405)
 
@@ -250,6 +257,36 @@ class JarvisApiHandler(
         }
 
         return HttpResponseContext(200, metricsProvider())
+    }
+
+    /**
+     * P1-1: метрики в Prometheus text format. Тот же уровень защиты, что и
+     * JSON-вариант: Bearer + VIEW_ADMIN. Content-Type задаётся явно —
+     * Prometheus-парсер требует text/plain; version=0.0.4.
+     */
+    private fun handleAdminMetricsPrometheus(
+        request: HttpRequestContext
+    ): HttpResponseContext {
+        val client = when (val auth = authenticator.authenticate(request.authorizationHeader)) {
+            is AuthResult.Success -> auth.client
+            else -> {
+                metrics.recordUnauthorized()
+                return error(ApiErrorCode.UNAUTHORIZED, newRequestId())
+            }
+        }
+
+        if (!authorizer.isAllowed(client, Permission.VIEW_ADMIN)) {
+            return error(ApiErrorCode.FORBIDDEN, newRequestId())
+        }
+
+        return HttpResponseContext(
+            200,
+            prometheusMetricsProvider(),
+            headers = mapOf(
+                "Cache-Control" to "no-store",
+                "Content-Type" to "text/plain; version=0.0.4; charset=utf-8"
+            )
+        )
     }
 
     private fun newRequestId(): String = UUID.randomUUID().toString()

@@ -1,0 +1,28 @@
+{
+  "id": "chatcmpl-9f3a1b2c4d5e6f708192837465",
+  "object": "chat.completion",
+  "created": 1756489200,
+  "model": "llama-3.3-70b-versatile",
+  "system_fingerprint": "fp_3f3a1b2c",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Квантовая запутанность — это квантовомеханическое явление, при котором состояния двух или более частиц оказываются взаимозависимыми."
+      },
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 148,
+    "completion_tokens": 64,
+    "total_tokens": 212,
+    "prompt_time": 0.031,
+    "completion_time": 0.128,
+    "total_time": 0.159
+  },
+  "system_fingerprint_2": null,
+  "x_groq": {"id": "req_01J8Z"}
+}
