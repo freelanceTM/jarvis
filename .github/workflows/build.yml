@@ -123,6 +123,16 @@ jobs:
           bash ./gradlew :app:assembleDevDebug :app:assembleDevDebugAndroidTest \
             --stacktrace --no-daemon --no-parallel --max-workers=2
 
+      # R8/ProGuard-смоук: minifyEnabled release-вариант собирается на каждый PR,
+      # чтобы ошибка шринкинга (missing class и т.п.) падала в CI, а не при
+      # первом релизе. Подпись здесь не требуется: release-workflow отвечает
+      # за подписанные сборки (см. .github/workflows/release.yml).
+      - name: R8 release smoke (staging, unsigned)
+        shell: bash
+        run: |
+          bash ./gradlew :app:assembleStagingRelease \
+            --stacktrace --no-daemon --no-parallel --max-workers=2
+
       - name: JARVIS benchmark regression
         shell: bash
         run: |

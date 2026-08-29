@@ -1,0 +1,131 @@
+name: Release JARVIS (signed)
+
+# Release-пайплайн подписанного релиза (P0-1).
+#
+# Запускается ТОЛЬКО вручную (workflow_dispatch) с явным выбором окружения.
+# Требует secrets (см. docs/RELEASE.md):
+#   JARVIS_RELEASE_KEYSTORE_B64     — base64 от release-keystore (.jks)
+#   JARVIS_SIGNING_STORE_PASSWORD   — пароль keystore
+#   JARVIS_SIGNING_KEY_ALIAS        — alias ключа
+#   JARVIS_SIGNING_KEY_PASSWORD     — пароль ключа
+#
+# Гарантии:
+#  - prodRelease собирается ТОЛЬКО подписанным (JARVIS_REQUIRE_SIGNED_RELEASE=true
+#    проваливает сборку без secrets вместо тихой unsigned-сборки);
+#  - подпись проверяется apksigner после сборки (verify + print-certs);
+#  - артефакты (AAB + APK) выгружаются с retention 90 дней.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Release environment"
+        type: choice
+        options:
+          - staging
+          - prod
+        default: staging
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  signed-release:
+    name: "Signed release (${{ inputs.environment }})"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle 8.7
+        uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+        with:
+          gradle-version: '8.7'
+
+      - name: Fail fast if signing secrets are absent
+        shell: bash
+        env:
+          HAS_KEYSTORE: ${{ secrets.JARVIS_RELEASE_KEYSTORE_B64 != '' }}
+          HAS_STORE_PASSWORD: ${{ secrets.JARVIS_SIGNING_STORE_PASSWORD != '' }}
+          HAS_KEY_ALIAS: ${{ secrets.JARVIS_SIGNING_KEY_ALIAS != '' }}
+          HAS_KEY_PASSWORD: ${{ secrets.JARVIS_SIGNING_KEY_PASSWORD != '' }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ "$HAS_KEYSTORE" == "true" ]] || missing+=(JARVIS_RELEASE_KEYSTORE_B64)
+          [[ "$HAS_STORE_PASSWORD" == "true" ]] || missing+=(JARVIS_SIGNING_STORE_PASSWORD)
+          [[ "$HAS_KEY_ALIAS" == "true" ]] || missing+=(JARVIS_SIGNING_KEY_ALIAS)
+          [[ "$HAS_KEY_PASSWORD" == "true" ]] || missing+=(JARVIS_SIGNING_KEY_PASSWORD)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Отсутствуют secrets: ${missing[*]}. См. docs/RELEASE.md."
+            exit 1
+          fi
+
+      - name: Restore keystore and signing properties
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p signing
+          echo "${{ secrets.JARVIS_RELEASE_KEYSTORE_B64 }}" | base64 -d > signing/jarvis-release.jks
+          cat > keystore.properties <<EOF
+          storeFile=${{ github.workspace }}/signing/jarvis-release.jks
+          storePassword=${{ secrets.JARVIS_SIGNING_STORE_PASSWORD }}
+          keyAlias=${{ secrets.JARVIS_SIGNING_KEY_ALIAS }}
+          keyPassword=${{ secrets.JARVIS_SIGNING_KEY_PASSWORD }}
+          EOF
+
+      - name: Verify dependency locks and checksums
+        shell: bash
+        run: |
+          bash ./gradlew :app:dependencies --write-locks --no-daemon
+          git diff --exit-code -- '**/gradle.lockfile' 'gradle/verification-metadata.xml'
+
+      - name: Build signed ${{ inputs.environment }} release
+        shell: bash
+        env:
+          JARVIS_REQUIRE_SIGNED_RELEASE: 'true'
+        run: |
+          if [ "${{ inputs.environment }}" = "prod" ]; then
+            bash ./gradlew :app:bundleProdRelease :app:assembleProdRelease \
+              --stacktrace --no-daemon
+          else
+            bash ./gradlew :app:bundleStagingRelease :app:assembleStagingRelease \
+              --stacktrace --no-daemon
+          fi
+
+      - name: Verify signature (apksigner)
+        shell: bash
+        run: |
+          set -euo pipefail
+          APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
+          APK=$(find app/build/outputs/apk -name '*release*.apk' | head -n 1)
+          if [ -z "$APK" ]; then
+            echo "::error::release APK не найден"; exit 1
+          fi
+          "$APKSIGNER" verify --print-certs "$APK"
+          echo "Signed APK verified: $APK"
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: JARVIS-${{ inputs.environment }}-release-${{ github.sha }}
+          path: |
+            app/build/outputs/bundle/*Release/*.aab
+            app/build/outputs/apk/*/**/*release*.apk
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Cleanup signing material
+        if: ${{ always() }}
+        shell: bash
+        run: rm -rf signing keystore.properties
