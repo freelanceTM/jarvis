@@ -106,11 +106,9 @@ class JarvisVoiceService : Service() {
                 action = ACTION_START
             }
             return try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(intent)
-                } else {
-                    context.startService(intent)
-                }
+                // startForegroundService доступен с API 26, minSdk = 29 —
+                // проверка версии избыточна (lint: ObsoleteSdkInt).
+                context.startForegroundService(intent)
                 true
             } catch (failure: RuntimeException) {
                 Log.e(

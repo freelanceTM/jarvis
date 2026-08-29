@@ -593,7 +593,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                                         textToSpeechManager.speak(timeoutMsg, speechRate, speechPitch)
                                         val timedOut = pendingToolCall
                                         pendingToolCall = null
-        pendingConfirmationToken = null
+                                        pendingConfirmationToken = null
                                         if (timedOut != null) toolExecutor.removePendingConfirmation(timedOut)
                                         delay(2000)
                                         startStandbyMode()
@@ -733,7 +733,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
             isNo -> {
                 val cancelled = pendingToolCall
                 pendingToolCall = null
-        pendingConfirmationToken = null
+                pendingConfirmationToken = null
                 if (cancelled != null) toolExecutor.removePendingConfirmation(cancelled)
                 val cancelMsg = context.getString(R.string.operaciya_otmenena_sir)
                 _lastAnswer.value = cancelMsg
@@ -756,7 +756,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         textToSpeechManager.speak(timeoutMsg, speechRate, speechPitch)
                         val timedOut = pendingToolCall
                         pendingToolCall = null
-        pendingConfirmationToken = null
+                        pendingConfirmationToken = null
                         if (timedOut != null) toolExecutor.removePendingConfirmation(timedOut)
                         delay(2000)
                         startStandbyMode()

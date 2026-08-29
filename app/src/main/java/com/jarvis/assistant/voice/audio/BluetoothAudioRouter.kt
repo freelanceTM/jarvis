@@ -102,9 +102,16 @@ class BluetoothAudioRouter @Inject constructor(
             if (profile == BluetoothProfile.HEADSET) {
                 bluetoothHeadset = proxy as? BluetoothHeadset
                 // N-05: connectedDevices / .name требуют BLUETOOTH_CONNECT на API 31+.
-                val connectedDevices = if (hasBluetoothConnectPermission()) {
-                    bluetoothHeadset?.connectedDevices.orEmpty()
-                } else {
+                // SecurityException обрабатываем явно (TOCTOU: разрешение могли
+                // отозвать между проверкой и вызовом) — тот же паттерн, что и для
+                // .name ниже.
+                val connectedDevices = try {
+                    if (hasBluetoothConnectPermission()) {
+                        bluetoothHeadset?.connectedDevices.orEmpty()
+                    } else {
+                        emptyList()
+                    }
+                } catch (_: SecurityException) {
                     emptyList()
                 }
                 if (connectedDevices.isNotEmpty()) {
