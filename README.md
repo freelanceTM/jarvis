@@ -33,6 +33,13 @@ embedding-модели в проект не включены (`LocalEmbeddingPro
 `RemoteEmbeddingProvider` не настроен). Настоящие embeddings — будущий слой
 (контракт `EmbeddingProvider` уже зафиксирован), см. docs/ANDROID_CAPABILITIES.md.
 
+## Лицензия
+
+Проект распространяется под проприетарной лицензией — см.
+[LICENSE](LICENSE). Сторонние компоненты и их лицензии перечислены в
+[NOTICE](NOTICE). Сообщение об уязвимостях — только приватно, см.
+[SECURITY.md](SECURITY.md).
+
 ## Требования
 
 - JDK 17

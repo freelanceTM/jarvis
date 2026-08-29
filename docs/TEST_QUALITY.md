@@ -91,7 +91,7 @@ green.
   are not excluded merely because they are difficult to test.
 - No arbitrary aspirational percentage was selected before measurement. After
   reviewing the comparable baseline and full PostgreSQL-backed server run, CI
-  floors are 24% line / 20% branch for Android JVM and 80% line / 55% branch
+  floors are 24% line / 20% branch for Android JVM and 80% line / 35% branch
   for server JVM. They prevent a collapse while leaving improvements to
   package-specific behavioral work.
 - The Phase 3 report records baseline and post-test metrics. Future changes

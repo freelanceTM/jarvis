@@ -668,6 +668,28 @@ fun main() {
             "providers configured",
             "providers" to configuredProviders.joinToString("|") { it.id.name }
         )
+
+        // CR-06 / P1-7: worst-case бюджет маршрутизации против серверного
+        // deadline. Пример-конфиг или ручные env-значения могут превысить
+        // дедлайн (клиент с callTimeout=30s не дождётся ответа) — предупреждаем
+        // на старте, а не диагностируем это по жалобам на таймауты.
+        val maxRequestTimeoutMs = configuredProviders.maxOf { it.requestTimeoutMs }
+        val policy = config.executionPolicy
+        val retryBudget = policy.maxProviderAttempts * policy.maxRetriesPerProvider
+        val worstCaseMs =
+            policy.maxProviderAttempts * maxRequestTimeoutMs +
+                retryBudget * (maxRequestTimeoutMs + policy.retryBackoffMs)
+        if (worstCaseMs > SERVER_REQUEST_DEADLINE_MS) {
+            logger.warn(
+                "provider timeout budget exceeds request deadline",
+                "worstCaseMs" to worstCaseMs.toString(),
+                "deadlineMs" to SERVER_REQUEST_DEADLINE_MS.toString(),
+                "maxProviderAttempts" to policy.maxProviderAttempts.toString(),
+                "maxRetriesPerProvider" to policy.maxRetriesPerProvider.toString(),
+                "maxProviderRequestTimeoutMs" to maxRequestTimeoutMs.toString(),
+                "hint" to "lower *_REQUEST_TIMEOUT_MS / MAX_PROVIDER_ATTEMPTS / MAX_RETRIES_PER_PROVIDER"
+            )
+        }
     }
 
     // C-01: buildResources() собирает ВСЕ JVM-long ресурсы (handler + DB +

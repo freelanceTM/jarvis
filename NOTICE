@@ -1,0 +1,48 @@
+NOTICE — third-party components
+================================
+
+This project (JARVIS/OMNIX) builds on third-party open-source components.
+They remain under their own licenses; this file provides attribution as
+required. It is not an exhaustive legal inventory — see gradle/libs.versions.toml
+for the full dependency list.
+
+Runtime dependencies (Android app)
+----------------------------------
+- Kotlin Standard Library and Coroutines — JetBrains — Apache License 2.0
+- AndroidX (Jetpack: Compose, Room, Hilt Navigation, DataStore, Security Crypto,
+  WorkManager, Lifecycle, Navigation) — The Android Open Source Project —
+  Apache License 2.0
+- Jetpack Compose BOM / Material 3 — The Android Open Source Project — Apache License 2.0
+- Dagger/Hilt (DI) — Google — Apache License 2.0
+- OkHttp — Square — Apache License 2.0
+- Kotlinx Serialization — JetBrains — Apache License 2.0
+- MediaPipe LLM Inference (tasks-genai) — Google — Apache License 2.0
+- Material Design Icons — Google — Apache License 2.0
+
+On-device model
+---------------
+- Gemma (on-device LLM used via MediaPipe, optional user-installed model) is
+  governed by the Google Gemma Terms of Use and Gemma Prohibited Use Policy:
+  https://ai.google.dev/gemma/terms
+  The model weights are NOT distributed with this repository; the user
+  supplies them and is responsible for complying with Gemma terms.
+
+Server dependencies
+-------------------
+- PostgreSQL JDBC Driver — PostgreSQL Global Development Group — BSD-2-Clause
+- HikariCP — Brett Wooldridge — Apache License 2.0
+- JDK built-in HTTP server (com.sun.net.httpserver) — Oracle/OpenJDK —
+  GPL v2 with Classpath Exception
+
+Test and analysis toolchains
+----------------------------
+- JUnit 4 — Eclipse/JUnit — EPL 1.0
+- MockK — MockK maintainers — Apache License 2.0
+- JaCoCo — EPL 2.0; Detekt — Apache License 2.0; Android Lint — Apache License 2.0
+
+Trademarks
+----------
+Android is a trademark of Google LLC. Telegram is a trademark of Telegram
+Messenger Inc. Paddle is a trademark of Paddle Payments Ltd. HELEKET is a
+trademark of its respective owner. These marks belong to their respective
+owners and are used for identification purposes only.

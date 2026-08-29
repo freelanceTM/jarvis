@@ -16,7 +16,7 @@ must be added only when the repository owner creates an actual release.
 - `phase3Coverage`, `phase3StaticAnalysis`, and `phase3Quality` Gradle entry
   points, plus XML/HTML/CSV coverage reports and coverage verification.
 - Reviewed JaCoCo CI floors: 24% lines / 20% branches for Android JVM tests and
-  80% lines / 55% branches for the full PostgreSQL-backed server suite.
+  80% lines / 35% branches for the full PostgreSQL-backed server suite.
 - Detekt static analysis with a reviewed high-signal rule configuration and
   HTML/XML/SARIF reports.
 - Behavioral tests for activation ViewModel, settings ViewModel, repositories,

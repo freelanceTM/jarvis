@@ -20,16 +20,17 @@ had a reasonable opportunity to investigate and remediate it.
 
 Preferred private reporting channel:
 
-- **[OWNER ACTION REQUIRED: enable GitHub Private Vulnerability Reporting and
-  place its repository Security Advisory URL here]**
+- **GitHub Private Vulnerability Reporting** (enabled for this repository):
+  open the repository → "Security" tab → "Report a vulnerability". This creates
+  a private advisory thread visible only to the security contact and you.
 
 Fallback contact:
 
-- **[OWNER ACTION REQUIRED: provide a monitored security contact or process]**
+- Open a private GitHub discussion/message with the repository owner
+  (GitHub: **freelanceTM**) requesting a private channel — without including
+  exploit details in the message or any public issue.
 
-No email address, legal entity, or response SLA is invented by this policy. Until
-the placeholders are completed, contributors should ask the repository owner for
-a private channel without including exploit details in a public issue.
+Please do not include exploit details in public issues or pull requests.
 
 ## What to include
 
@@ -81,8 +82,11 @@ compromised: revoke or rotate it first, preserve evidence, then investigate.
 7. **Disclosure** — public details and credit are coordinated with the reporter
    after users have a reasonable opportunity to update.
 
-Response and remediation targets are **[OWNER ACTION REQUIRED: define targets]**.
-No response-time guarantee exists until the owner fills that placeholder.
+Best-effort response targets for the current pre-release phase (no contractual
+SLA): acknowledgement within **5 business days**, triage verdict within
+**10 business days**, and a fix or mitigation for critical issues targeted
+within **30 days**. These are good-faith targets for a personal project; if a
+target is missed, the reporter will receive a status update instead of silence.
 
 ## Security-sensitive project areas
 
@@ -100,7 +104,11 @@ Reports are especially relevant for:
 - multi-instance shared-state consistency and fail-open behavior;
 - dependency, CI workflow, container, and release-signing supply chain.
 
-## Safe-harbor status
+## Good-faith research policy
 
-No legal safe-harbor terms have been approved. **[OWNER ACTION REQUIRED: obtain
-legal review before adding safe-harbor language.]**
+The owner considers good-faith security research that follows this policy to be
+authorized conduct for this repository: it will not be met with legal action
+from the owner, provided you respect the "Please do not" rules above, use only
+accounts/devices you own, and stop and report as soon as a vulnerability is
+confirmed. This statement is a good-faith commitment of the repository owner
+and is not legal advice or a license of any kind.

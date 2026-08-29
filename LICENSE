@@ -1,25 +1,68 @@
-PROJECT LICENSE — OWNER DECISION REQUIRED
+JARVIS / OMNIX — PROPRIETARY SOFTWARE LICENSE
+=============================================
 
-[OWNER ACTION REQUIRED]
+Copyright (c) 2026 freelanceTM. All Rights Reserved.
 
-No project-wide software license was identified in the repository at the time
-this file was added. The Apache 2.0 notice in the generated Gradle wrapper
-scripts applies to those wrapper scripts; it does not establish a license for
-JARVIS application or server source code.
+IMPORTANT — READ CAREFULLY
+--------------------------
+This software, its source code, binaries, assets and documentation
+(collectively, the "Software") are the private work product of the copyright
+holder. The Software is NOT open-source software.
 
-The repository owner must select and approve the project license before public
-redistribution or third-party contribution. Replace this placeholder with the
-complete, unmodified text of the chosen license and update README/contribution
-documentation accordingly.
+1. GRANT
+   No rights are granted by default. You may view and use the Software only
+   if you have received express written permission from the copyright holder
+   (including a signed license agreement, a paid license key issued through
+   the official JARVIS licensing service, or an explicit invitation to a
+   private collaboration).
 
-Required decisions:
+2. RESTRICTIONS
+   Unless explicitly permitted in writing by the copyright holder, you must
+   NOT:
+     a) copy, distribute, publish, sublicense, sell or lease the Software or
+        any derivative work of it;
+     b) use the Software (or any part of it) to train, fine-tune or evaluate
+        machine-learning models;
+     c) remove or alter any copyright, trademark or licensing notice contained
+        in the Software;
+     d) circumvent the licensing, activation, billing or token systems of the
+        Software, or assist anyone else in doing so.
 
-1. open-source, source-available, or proprietary distribution;
-2. copyright holder/legal entity and applicable years;
-3. treatment of third-party assets, AI model weights, icons, and generated code;
-4. contribution terms;
-5. compatibility with MediaPipe, Gemma model licensing, and all dependency
-   notices.
+3. END-USER LICENSES
+   Distribution of compiled builds to end users is governed by the End User
+   License Agreement shipped with the respective build. Activation requires a
+   valid license code redeemed through the official licensing backend.
 
-This placeholder intentionally does not select a license or invent a copyright
-holder.
+4. THIRD-PARTY COMPONENTS
+   The Software depends on third-party components that remain under their own
+   licenses. See the NOTICE file for the non-exhaustive list and attribution.
+   Nothing in this license modifies the terms of those components.
+
+5. CONTRIBUTIONS
+   Any contribution (pull request, patch, snippet) submitted to the project's
+   official repository is accepted under the project's Contributor Terms:
+   the copyright holder receives a perpetual, worldwide, royalty-free,
+   irrevocable license to use, modify and sublicense the contribution as part
+   of the Software under any license the copyright holder chooses.
+
+6. TERMINATION
+   Any breach of this license terminates all rights with immediate effect.
+   Upon termination you must cease all use and delete all copies of the
+   Software in your possession.
+
+7. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED. THE COPYRIGHT HOLDER IS NOT LIABLE FOR ANY DAMAGES ARISING FROM
+   USE OF THE SOFTWARE.
+
+8. CONTACT
+   Licensing inquiries: open a private discussion with the repository owner
+   (GitHub: freelanceTM) or use the security contact channel described in
+   SECURITY.md.
+
+---------------------------------------------------------------------------
+Owner note: this file replaces the earlier "OWNER DECISION REQUIRED"
+placeholder (decision recorded 2026-08-29). If the owner later chooses an
+open-source license (e.g. Apache-2.0 or PolyForm Strict), replace this file
+in full and update README.md and NOTICE accordingly.
+---------------------------------------------------------------------------
