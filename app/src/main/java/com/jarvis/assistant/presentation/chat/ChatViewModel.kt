@@ -27,6 +27,7 @@ import com.jarvis.assistant.voice.tts.TextToSpeechManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -323,7 +324,10 @@ class ChatViewModel @Inject constructor(
      * Повторяем вызов [SendPromptUseCase] с cloudExplicitlyAllowed=true —
      * use case на этот раз пройдёт privacy gate и отправит запрос в cloud AI.
      */
-    fun confirmCloudConsent(consent: PendingCloudConsentUi = _uiState.value.pendingCloudConsent ?: return) {
+    fun confirmCloudConsent(consent: PendingCloudConsentUi? = _uiState.value.pendingCloudConsent) {
+        // `return` запрещён в default-выражении параметра, поэтому дефолт —
+        // nullable, а выход — первый строкой тела (семантика не изменилась).
+        if (consent == null) return
         _uiState.update { it.copy(pendingCloudConsent = null, isSending = true) }
 
         // H-02: НЕ пересчитываем классификацию — use case сам сделает это с полным
@@ -379,7 +383,8 @@ class ChatViewModel @Inject constructor(
      * локальный путь сам сработает в decision engine, если модель доступна
      * и способна обработать запрос.
      */
-    fun denyCloudConsent(consent: PendingCloudConsentUi = _uiState.value.pendingCloudConsent ?: return) {
+    fun denyCloudConsent(consent: PendingCloudConsentUi? = _uiState.value.pendingCloudConsent) {
+        if (consent == null) return
         _uiState.update { it.copy(pendingCloudConsent = null) }
         val declineMsg = context.getString(R.string.cloud_consent_declined)
         viewModelScope.launch {

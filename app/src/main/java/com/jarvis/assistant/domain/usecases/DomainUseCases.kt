@@ -1,6 +1,5 @@
 package com.jarvis.assistant.domain.usecases
 
-import com.jarvis.assistant.core.network.NetworkMonitor
 import com.jarvis.assistant.domain.models.Message
 import com.jarvis.assistant.domain.models.VoiceSettings
 import com.jarvis.assistant.domain.repository.MessageRepository
@@ -57,11 +56,4 @@ class SaveSettingsUseCase @Inject constructor(
     suspend fun saveModel(model: String) = settingsRepository.setSelectedModel(model)
     suspend fun saveHeadsetOnlyMode(enabled: Boolean) = settingsRepository.setHeadsetOnlyMode(enabled)
     suspend fun saveWakeWordSensitivity(sensitivity: Float) = settingsRepository.setWakeWordSensitivity(sensitivity)
-}
-
-class ObserveNetworkStateUseCase @Inject constructor(
-    private val networkMonitor: NetworkMonitor
-) {
-    operator fun invoke(): Flow<Boolean> = networkMonitor.isOnline
-    fun isOnline(): Boolean = networkMonitor.isCurrentlyOnline()
 }

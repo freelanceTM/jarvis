@@ -7,6 +7,7 @@ import com.jarvis.server.observability.ConsoleStructuredLogger
 import com.jarvis.server.observability.Metrics
 import com.jarvis.server.provider.AiProvider
 import com.jarvis.server.provider.CircuitState
+import com.jarvis.server.provider.DefaultProviderSelectionPolicy
 import com.jarvis.server.provider.ManagerOutcome
 import com.jarvis.server.provider.ProviderCapabilities
 import com.jarvis.server.provider.ProviderFailureKind
@@ -16,7 +17,6 @@ import com.jarvis.server.provider.ProviderManager
 import com.jarvis.server.provider.ProviderRequest
 import com.jarvis.server.provider.ProviderRequirements
 import com.jarvis.server.provider.ProviderResult
-import com.jarvis.server.provider.ProviderSelectionPolicy
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -24,7 +24,6 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.Callable

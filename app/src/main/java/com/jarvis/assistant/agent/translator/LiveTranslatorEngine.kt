@@ -1,6 +1,8 @@
 package com.jarvis.assistant.agent.translator
 
 import android.util.Log
+import com.jarvis.assistant.agent.decision.PrivacyClassifier
+import com.jarvis.assistant.agent.decision.PrivacyContent
 import com.jarvis.assistant.core.network.NetworkMonitor
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.domain.repository.AIRepository
@@ -49,6 +51,18 @@ class LlmTranslationProvider @Inject constructor(
             return@withContext TranslationResult.NetworkRequired("Нет подключения к интернету")
         }
 
+        // C-02: перевод — отдельная точка входа в облако, минующая
+        // SendPromptUseCase (H-02: только он классифицирует чат-запросы
+        // с полным контекстом). Поэтому приватность переводимого текста
+        // проверяем здесь, на границе перевода: PRIVATE/SENSITIVE/UNKNOWN
+        // не уходят в сеть. Синхронный переводчик не умеет показывать
+        // consent-карточку — честно сообщаем пользователю о блокировке.
+        if (PrivacyClassifier.classifySafely(PrivacyContent(text)).level.isCloudRestricted) {
+            return@withContext TranslationResult.Error(
+                "Перевод заблокирован: текст содержит приватные данные"
+            )
+        }
+
         val targetName = TranslationLanguages.displayName(targetLang)
         val sourceName = if (sourceLang == "auto") "исходного языка" else TranslationLanguages.displayName(sourceLang)
 
@@ -73,6 +87,10 @@ class LlmTranslationProvider @Inject constructor(
             }
             is Resource.Error -> TranslationResult.Error(result.message ?: "Ошибка перевода")
             is Resource.Loading -> TranslationResult.Error("Перевод не завершён")
+            // C-02: приватный запрос не уходит в облако без согласия.
+            // Синхронный переводчик не умеет показывать consent-карточку,
+            // поэтому честно сообщаем о блокировке.
+            is Resource.NeedsConsent -> TranslationResult.Error("Требуется подтверждение отправки перевода в облако")
         }
     }
 }

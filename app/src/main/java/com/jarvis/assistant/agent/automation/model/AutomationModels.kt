@@ -1,6 +1,5 @@
 package com.jarvis.assistant.agent.automation.model
 
-import com.jarvis.assistant.agent.model.ToolCall
 import kotlinx.serialization.Serializable
 
 enum class AutomationTriggerType {
@@ -18,22 +17,4 @@ data class TimeRangeCondition(
     val startMinute: Int = 0,
     val endHour: Int = 23,
     val endMinute: Int = 59
-)
-
-@Serializable
-data class AutomationRuleDto(
-    val ruleId: String,
-    val name: String,
-    val triggerType: String,
-    val triggerParam: String = "",
-    val timeCondition: TimeRangeCondition? = null,
-    val actions: List<AutomationActionDto> = emptyList(),
-    val voiceAnnouncement: String = "",
-    val isEnabled: Boolean = true
-)
-
-@Serializable
-data class AutomationActionDto(
-    val tool: String,
-    val arguments: Map<String, String> = emptyMap()
 )

@@ -74,18 +74,20 @@ data class ExecutionRequest(
      * 3–5 duplicate classifications per request and opened the door to
      * drift between layers.
      *
-     * Default is a cheap text-only classification (no systemPrompt / no
-     * history). This is used by tests, internal convenience overloads
-     * (see [AgentPipeline.process(String)]), and direct construction.
-     * Production requests MUST go through [withContextualClassification]
-     * (or supply an explicit classification) so that systemPrompt and
-     * chat history participate in the decision.
+     * Default is a cheap contextual classification (prompt + history; no
+     * systemPrompt). This is used by tests, internal convenience overloads
+     * (see [AgentPipeline.process(String)]), and direct construction — so
+     * that a benign-looking "continue our discussion" request cannot ship
+     * sensitive history to the cloud just because the caller skipped
+     * [withContextualClassification]. Production requests MUST go through
+     * [withContextualClassification] (or supply an explicit classification)
+     * so that the systemPrompt participates in the decision too.
      *
      * The server still re-classifies in `AiRouter` (trust-boundary /
      * defense-in-depth); that is intentional and out of scope here.
      */
     val privacyClassification: PrivacyClassification =
-        PrivacyClassifier.classifySafely(PrivacyContent(text))
+        PrivacyClassifier.classifySafely(PrivacyContent.from(text, history))
 ) {
     /** Автоматически обнаруженный уровень, вычисленный до логирования/роутинга. */
     val detectedPrivacyLevel: PrivacyLevel = privacyClassification.level
@@ -143,31 +145,6 @@ data class ExecutionRequest(
             )
         }
 
-        /**
-         * Build a request with a cheap text-only classification (no
-         * related content / history). Used by convenience overloads,
-         * tests, and internal call sites that don't have the full
-         * context. The [SendPromptUseCase]-produced request (built by
-         * [withContextualClassification]) is the authoritative one.
-         */
-        fun withTextOnlyClassification(
-            text: String,
-            source: RequestSource,
-            declaredLevel: PrivacyLevel = PrivacyLevel.UNKNOWN,
-            requiresWeb: Boolean = false,
-            requiresDeviceControl: Boolean = false,
-            cloudExplicitlyAllowed: Boolean = false,
-            history: List<Message> = emptyList()
-        ): ExecutionRequest = ExecutionRequest(
-            text = text,
-            source = source,
-            requiresWeb = requiresWeb,
-            requiresDeviceControl = requiresDeviceControl,
-            privacyLevel = declaredLevel,
-            cloudExplicitlyAllowed = cloudExplicitlyAllowed,
-            history = history,
-            privacyClassification = PrivacyClassifier.classifySafely(PrivacyContent(text))
-        )
     }
 }
 

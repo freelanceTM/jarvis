@@ -38,7 +38,7 @@ class JarvisApiAiClientPrivacyMatrixTest {
         coEvery {
             network.execute(
                 any(), any(), any(), any(),
-                systemContext = anyOrNull(),
+                systemContext = any(),
                 cloudExplicitlyAllowed = any(),
                 history = any()
             )
@@ -78,7 +78,7 @@ class JarvisApiAiClientPrivacyMatrixTest {
         assertTrue((result as Resource.Error).exception is PrivacyCloudBlockedException)
         coVerify(exactly = 0) {
             network.execute(any(), any(), any(), any(),
-                systemContext = anyOrNull(), cloudExplicitlyAllowed = any(), history = any())
+                systemContext = any(), cloudExplicitlyAllowed = any(), history = any())
         }
     }
 
@@ -119,7 +119,7 @@ class JarvisApiAiClientPrivacyMatrixTest {
         val slot = mutableListOf<List<MessageDto>>()
         coVerify(exactly = 1) {
             network.execute(any(), any(), any(), any(),
-                systemContext = anyOrNull(), cloudExplicitlyAllowed = any(),
+                systemContext = any(), cloudExplicitlyAllowed = any(),
                 history = capture(slot))
         }
         assertEquals(2, slot.single().size)
@@ -154,7 +154,7 @@ class JarvisApiAiClientPrivacyMatrixTest {
         val net = mockk<JarvisApiClient>(relaxed = false)
         coEvery {
             net.execute(any(), any(), any(), any(),
-                systemContext = anyOrNull(), cloudExplicitlyAllowed = any(), history = any())
+                systemContext = any(), cloudExplicitlyAllowed = any(), history = any())
         } returns Resource.Success("ok")
         val ai = JarvisApiAiClient(net)
         val result = ai.complete(

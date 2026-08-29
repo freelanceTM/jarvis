@@ -1,7 +1,6 @@
 package com.jarvis.assistant.benchmark
 
 import com.jarvis.assistant.agent.decision.PrivacyLevel
-import com.jarvis.assistant.agent.decision.RequestSource
 import com.jarvis.assistant.benchmark.BenchmarkCategory.AGENT
 import com.jarvis.assistant.benchmark.BenchmarkCategory.AMBIGUOUS
 import com.jarvis.assistant.benchmark.BenchmarkCategory.CLOUD_AI

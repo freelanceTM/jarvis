@@ -5,8 +5,6 @@ import com.jarvis.assistant.agent.decision.*
 import com.jarvis.assistant.agent.memory.manager.JarvisMemoryManager
 import com.jarvis.assistant.agent.pipeline.AgentPipeline
 import com.jarvis.assistant.core.result.Resource
-import com.jarvis.assistant.domain.models.Message
-import com.jarvis.assistant.domain.models.MessageRole
 import com.jarvis.assistant.domain.models.PromptExecutionResult
 import com.jarvis.assistant.domain.repository.MessageRepository
 import com.jarvis.assistant.domain.repository.SettingsRepository
@@ -47,7 +45,7 @@ class SendPromptUseCasePrivacyGateTest {
 
         messageRepo = mockk(relaxed = true)
         coEvery { messageRepo.getRecentMessages(any()) } returns emptyList()
-        coEvery { messageRepo.insertMessage(any()) } just runs
+        coEvery { messageRepo.insertMessage(any()) } returns 0L
 
         settingsRepo = mockk(relaxed = true)
         every { settingsRepo.systemPromptFlow } returns flowOf("")

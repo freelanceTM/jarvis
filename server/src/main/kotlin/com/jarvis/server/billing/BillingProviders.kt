@@ -3,7 +3,6 @@ package com.jarvis.server.billing
 import com.jarvis.server.license.BillingPlan
 import com.jarvis.server.provider.HttpTransport
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull

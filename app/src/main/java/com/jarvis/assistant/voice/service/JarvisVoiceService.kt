@@ -106,11 +106,9 @@ class JarvisVoiceService : Service() {
                 action = ACTION_START
             }
             return try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(intent)
-                } else {
-                    context.startService(intent)
-                }
+                // startForegroundService доступен с API 26, minSdk = 29 —
+                // проверка версии избыточна (lint: ObsoleteSdkInt).
+                context.startForegroundService(intent)
                 true
             } catch (failure: RuntimeException) {
                 Log.e(
@@ -347,6 +345,8 @@ class JarvisVoiceService : Service() {
                     OrchestratorMode.AI_THINKING -> "Выполнение команды..."
                     OrchestratorMode.TTS_SPEAKING -> getString(R.string.ozvuchivanie_otveta)
                     OrchestratorMode.AWAITING_CONFIRMATION -> getString(R.string.ozhidanie_podtverzhdeniya)
+                    // C-02: ждём голосовое/экранное «да» на cloud-consent.
+                    OrchestratorMode.AWAITING_PRIVACY_CONSENT -> "Ожидаю подтверждения отправки в облако..."
                     OrchestratorMode.LIVE_EAR_INTERPRETER -> "🎧 Синхронный переводчик в ухе активен..."
                     OrchestratorMode.PAUSED_CALL_OR_SLEEP -> "Наушники отключены / Пауза"
                 }

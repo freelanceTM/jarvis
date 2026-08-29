@@ -2,7 +2,6 @@ package com.jarvis.server.license
 
 import java.time.Clock
 import java.time.Duration
-import java.time.Instant
 import java.util.UUID
 
 class LicenseService(

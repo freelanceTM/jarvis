@@ -1,6 +1,5 @@
 package com.jarvis.assistant.presentation.translator
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable

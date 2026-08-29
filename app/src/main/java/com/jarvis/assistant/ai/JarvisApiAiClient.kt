@@ -100,7 +100,9 @@ class JarvisApiAiClient @Inject constructor(
             source = source,
             privacyLevel = effectivePrivacyLevel.name,
             requiresWeb = requiresWeb,
-            systemContext = systemPrompt,
+            // Пустой systemPrompt нормализуем в null: отсутствие контекста —
+            // это не «пустая строка» в контракте запроса.
+            systemContext = systemPrompt.ifBlank { null },
             cloudExplicitlyAllowed = cloudExplicitlyAllowed,
             // CR-03: преобразуем доменные Message → DTO, исключаем SYSTEM
             // (systemPrompt отправляется отдельно и серверный базовый промпт

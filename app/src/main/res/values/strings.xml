@@ -4,14 +4,6 @@
     
     <!-- ===== Исходные строки приложения ===== -->
     <string name="app_name">JARVIS</string>
-    <string name="status_ready">Готов к работе</string>
-    <string name="status_listening">Слушаю…</string>
-    <string name="status_recognizing">Распознавание речи…</string>
-    <string name="status_thinking">Генерация ответа…</string>
-    <string name="status_speaking">Озвучивание ответа…</string>
-    <string name="status_error">Ошибка</string>
-    <string name="btn_talk">Говорить</string>
-    <string name="btn_stop">Остановить</string>
 
     <!-- ===== Presentation layer (audit #17: полный вынос строк) ===== -->
     <string name="apparatnaya_aktivaciya_personalnogo_ai">Аппаратная активация персонального AI</string>

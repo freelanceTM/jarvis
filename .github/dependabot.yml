@@ -1,0 +1,18 @@
+# Dependabot: обязательная часть supply-chain контура (см.
+# SupplyChainConfigurationTest «security workflow covers history
+# dependencies image policy and SBOM»): gradle-зависимости, GitHub Actions
+# и production Dockerfile держим актуальными регулярными PR.
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /deploy
+    schedule:
+      interval: weekly

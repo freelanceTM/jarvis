@@ -5,7 +5,6 @@ import com.jarvis.assistant.agent.decision.PrivacyLevel
 import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.memory.manager.JarvisMemoryManager
 import com.jarvis.assistant.core.result.Resource
-import com.jarvis.assistant.domain.models.Message
 import com.jarvis.assistant.domain.models.MessageRole
 import com.jarvis.assistant.domain.models.PromptExecutionResult
 import com.jarvis.assistant.domain.models.VoiceSettings
@@ -193,7 +192,7 @@ class ChatViewModelPrivacyConsentTest {
                 )
             )
         }
-        coEvery { messageRepository.insertMessage(any()) } just runs
+        coEvery { messageRepository.insertMessage(any()) } returns 0L
 
         vm.sendTextMessage("мой пароль hh29sk")
         testDispatcher.scheduler.advanceUntilIdle()

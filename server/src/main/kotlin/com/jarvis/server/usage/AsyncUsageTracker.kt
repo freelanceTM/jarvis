@@ -207,9 +207,11 @@ class AsyncUsageTracker(
         }
         val usd = estimateCostUsd(inputTokens, outputTokens, providerCostPer1k)
         if (usd > 0.0 && limits.perDayCostUsd > 0.0) {
-            val cents = (usd * 100).toLong()
+            // Локаль нельзя называть `cents`: внутри apply{} она затеняла бы
+            // одноимённое поле AtomicLong у DailyCostCounter.
+            val centsDelta = (usd * 100).toLong()
             dailyCostUsd.computeIfAbsent(clientId) { DailyCostCounter(day) }.apply {
-                rolloverIfNeeded(day); cents.addAndGet(cents)
+                rolloverIfNeeded(day); cents.addAndGet(centsDelta)
             }
         }
     }
@@ -218,7 +220,8 @@ class AsyncUsageTracker(
     fun record(record: AiUsageRecord) {
         if (!started.get()) {
             // Ещё не стартовали — пишем синхронно (защита на период startup race).
-            runCatching { repository.record(record) }
+            // repository.record — suspend, поэтому оборачиваем в runBlocking.
+            runCatching { runBlocking { repository.record(record) } }
             return
         }
         val result = channel.trySend(record)

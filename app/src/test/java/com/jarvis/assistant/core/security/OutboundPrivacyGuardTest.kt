@@ -8,7 +8,6 @@ import com.jarvis.assistant.core.dispatcher.CoroutineDispatchers
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.data.repository.AIRepositoryImpl
 import com.jarvis.assistant.domain.models.Message
-import com.jarvis.assistant.domain.models.MessageRole
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -66,18 +65,6 @@ class OutboundPrivacyGuardTest {
             calls.incrementAndGet()
             lastExplicitConsent = cloudExplicitlyAllowed
             lastEffectiveLevel = effectivePrivacyLevel
-            return Resource.Success("ok")
-        }
-    }
-
-    private class LegacyCountingClient : AIClient {
-        val calls = AtomicInteger(0)
-        override suspend fun complete(
-            prompt: String,
-            systemPrompt: String,
-            history: List<Message>
-        ): Resource<String> {
-            calls.incrementAndGet()
             return Resource.Success("ok")
         }
     }

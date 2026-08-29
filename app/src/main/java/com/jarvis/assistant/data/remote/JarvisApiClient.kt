@@ -189,7 +189,7 @@ class JarvisApiClient @Inject constructor(
         // отменяла OkHttp Call (invokeOnCancellation → call.cancel()),
         // а не просто бросала ждать IO-поток в никуда.
         return@withContext try {
-            suspendCancellableCoroutine { cont ->
+            suspendCancellableCoroutine<Resource<String>> { cont ->
                 val call = apiHttpClient.newCall(request)
                 cont.invokeOnCancellation { call.cancel() }
                 call.enqueue(object : Callback {

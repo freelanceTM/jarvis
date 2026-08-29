@@ -8,7 +8,6 @@ import com.jarvis.assistant.core.license.LicenseInfo
 import com.jarvis.assistant.core.license.LicenseManager
 import com.jarvis.assistant.core.security.AccessTokenPolicy
 import com.jarvis.assistant.core.security.SecurityManager
-import com.jarvis.assistant.domain.models.VoiceSettings
 import com.jarvis.assistant.domain.usecases.GetSettingsUseCase
 import com.jarvis.assistant.domain.usecases.SaveSettingsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel

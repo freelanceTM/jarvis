@@ -165,9 +165,3 @@ enum class ApiErrorCode(val httpStatus: Int, val safeMessage: String) {
         )
     )
 }
-
-/** Исключение уровня API — всегда несёт безопасный код. */
-class ApiException(
-    val code: ApiErrorCode,
-    val logDetail: String? = null
-) : Exception(code.safeMessage)

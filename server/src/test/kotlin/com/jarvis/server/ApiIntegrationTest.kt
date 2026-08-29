@@ -18,13 +18,13 @@ import com.jarvis.server.http.JarvisApiHandler
 import com.jarvis.server.observability.ConsoleStructuredLogger
 import com.jarvis.server.observability.Metrics
 import com.jarvis.server.provider.AiProvider
+import com.jarvis.server.provider.DefaultProviderSelectionPolicy
 import com.jarvis.server.provider.ProviderCapabilities
 import com.jarvis.server.provider.ProviderFailureKind
 import com.jarvis.server.provider.ProviderResult
 import com.jarvis.server.provider.ProviderHealthTracker
 import com.jarvis.server.provider.ProviderId
 import com.jarvis.server.provider.ProviderManager
-import com.jarvis.server.provider.ProviderSelectionPolicy
 import com.jarvis.server.privacy.PrivacyClassification
 import com.jarvis.server.privacy.PrivacyReason
 import com.jarvis.server.privacy.ServerPrivacyClassifier
