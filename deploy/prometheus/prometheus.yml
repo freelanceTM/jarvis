@@ -1,0 +1,20 @@
+# Prometheus scrape для JARVIS API (P1-1).
+# Метрики: GET /v1/admin/metrics/prometheus (Bearer-токен admin-клиента обязателен).
+#
+# Секрет не инлайнится: credentials_file указывает на файл с токеном
+# (chmod 600, владелец prometheus). На хосте:
+#   echo -n "jrv_admin_..." > /etc/prometheus/jarvis-token
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: jarvis-api
+    metrics_path: /v1/admin/metrics/prometheus
+    scheme: https
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/jarvis-token
+    static_configs:
+      - targets:
+          - api.jarvis.ai

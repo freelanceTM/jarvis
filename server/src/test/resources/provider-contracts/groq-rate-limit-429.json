@@ -1,0 +1,7 @@
+{
+  "error": {
+    "message": "Rate limit reached for model `llama-3.3-70b-versatile` on tokens per minute (TPM): Limit 6000, Used 5812, Requested 512.",
+    "type": "tokens",
+    "code": "rate_limit_exceeded"
+  }
+}

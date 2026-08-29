@@ -1,0 +1,24 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {"text": "Первый фрагмент ответа. "},
+          {"text": "Второй фрагмент ответа."}
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0,
+      "safetyRatings": [
+        {"category": "HARM_CATEGORY_HARASSMENT", "probability": "NEGLIGIBLE"}
+      ]
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 137,
+    "candidatesTokenCount": 48,
+    "totalTokenCount": 185
+  },
+  "modelVersion": "gemini-1.5-flash"
+}

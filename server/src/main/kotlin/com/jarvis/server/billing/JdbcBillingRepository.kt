@@ -11,6 +11,10 @@ import java.util.UUID
 import javax.sql.DataSource
 
 class JdbcBillingRepository(private val dataSource: DataSource) {
+    companion object {
+        const val DEFAULT_STALE_SCAN_LIMIT: Int = 50
+    }
+
     fun createOrGetOrder(
         accountId: UUID,
         plan: BillingPlan,
@@ -206,6 +210,45 @@ class JdbcBillingRepository(private val dataSource: DataSource) {
     }
 
     fun findOrder(orderId: UUID): BillingOrder? = dataSource.connection.use { findOrderById(it, orderId) }
+
+    /**
+     * P1-3: заказы в RECONCILIATION_REQUIRED, не обновлявшиеся с [staleBefore].
+     *
+     * ТОЛЬКО чтение: воркер видимости (ReconciliationWorker) не меняет
+     * состояние заказа — решение PAID/FAILED принимает человек или
+     * доверенный webhook провайдера. Уникальные индексы и advisory-lock
+     * продолжают защищать целостность; воркер лишь делает backlog заметным
+     * в метриках и логах (см. docs/RUNBOOK.md §5).
+     */
+    fun findStaleReconciliationOrders(
+        staleBefore: Instant,
+        limit: Int = DEFAULT_STALE_SCAN_LIMIT
+    ): List<StaleReconciliationOrder> = dataSource.connection.use { connection ->
+        connection.prepareStatement(
+            """
+            SELECT id, provider, provider_order_id, updated_at
+            FROM billing_orders
+            WHERE status = 'RECONCILIATION_REQUIRED' AND updated_at < ?
+            ORDER BY updated_at ASC
+            LIMIT ?
+            """.trimIndent()
+        ).use {
+            it.setInstant(1, staleBefore)
+            it.setInt(2, limit)
+            it.executeQuery().use { result ->
+                val orders = mutableListOf<StaleReconciliationOrder>()
+                while (result.next()) {
+                    orders += StaleReconciliationOrder(
+                        orderId = result.getObject("id", UUID::class.java),
+                        provider = BillingProviderId.valueOf(result.getString("provider")),
+                        providerOrderId = result.getString("provider_order_id"),
+                        updatedAt = result.getInstant("updated_at")
+                    )
+                }
+                orders
+            }
+        }
+    }
 
     private fun applyPaid(
         connection: Connection,
