@@ -23,6 +23,16 @@ object WakeWordExtractor {
     )
 
     /**
+     * Шум вокруг wake-word после STT: пробелы и пунктуация, включая
+     * Unicode-тире и кавычки, которые не покрывает ASCII-класс `\p{Punct}`
+     * (баг: «Джарвис — сколько времени» оставлял «—» в запросе).
+     */
+    private const val NOISE = "[\\s\\p{Punct}—–…«»„“”‘’]"
+
+    /** Строка состоит только из шума (пунктуация/пробелы) — команды нет. */
+    private val noiseOnly = Regex("^$NOISE*$")
+
+    /**
      * Удаляет wake-word из начала строки.
      *
      * @return очищенный запрос или null, если после вырезания wake-word
@@ -75,16 +85,5 @@ object WakeWordExtractor {
                 .trim()
         }
         return result
-    }
-
-    private companion object {
-        /**
-         * Шум вокруг wake-word после STT: пробелы и пунктуация, включая
-         * Unicode-тире и кавычки, которые не покрывает ASCII-класс `\p{Punct}`
-         * (баг: «Джарвис — сколько времени» оставлял «—» в запросе).
-         */
-        private const val NOISE = "[\\s\\p{Punct}—–…«»„“”‘’]"
-
-        private val noiseOnly = Regex("^$NOISE*$")
     }
 }
