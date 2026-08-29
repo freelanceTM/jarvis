@@ -12,6 +12,23 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Release signing pipeline: env/keystore.properties-driven `signingConfig`,
+  manual "Release JARVIS (signed)" workflow (AAB+APK, `apksigner verify`),
+  `JARVIS_REQUIRE_SIGNED_RELEASE` fail-fast, R8 release smoke on every PR,
+  `docs/RELEASE.md`.
+- Accessibility privacy boundary: per-package policy
+  (`AccessibilityPrivacyPolicy` + `AccessibilityPrivacyStore`), lock-screen/system
+  packages never accessible, password fields never read or typed,
+  honest `SCREEN_BLOCKED_BY_PRIVACY_POLICY` /
+  `APP_BLOCKED_BY_PRIVACY_POLICY` / `PASSWORD_FIELD_USER_INPUT_REQUIRED`
+  results, package-only audit logging, 16 JVM policy tests.
+
+### Changed
+
+- `ToolExecutionResult.failure(...)` gained optional structured `data`.
+
+### Added
+
 - JaCoCo coverage configuration for Android JVM tests and the server JVM module.
 - `phase3Coverage`, `phase3StaticAnalysis`, and `phase3Quality` Gradle entry
   points, plus XML/HTML/CSV coverage reports and coverage verification.
