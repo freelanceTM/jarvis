@@ -12,6 +12,16 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Release signing pipeline: env/keystore.properties-driven `signingConfig`,
+  manual "Release JARVIS (signed)" workflow (AAB+APK, `apksigner verify`),
+  `JARVIS_REQUIRE_SIGNED_RELEASE` fail-fast, R8 release smoke on every PR,
+  `docs/RELEASE.md`.
+- Accessibility privacy boundary: per-package policy
+  (`AccessibilityPrivacyPolicy` + `AccessibilityPrivacyStore`), lock-screen/system
+  packages never accessible, password fields never read or typed,
+  honest `SCREEN_BLOCKED_BY_PRIVACY_POLICY` /
+  `APP_BLOCKED_BY_PRIVACY_POLICY` / `PASSWORD_FIELD_USER_INPUT_REQUIRED`
+  results, package-only audit logging, 16 JVM policy tests.
 - Prometheus metrics export: `GET /v1/admin/metrics/prometheus`
   (Bearer + VIEW_ADMIN, `text/plain; version=0.0.4`), stable `jarvis_*`
   metric names, endpoint and format tests.
@@ -25,6 +35,9 @@ must be added only when the repository owner creates an actual release.
   (`server/src/test/resources/provider-contracts/`) for Groq/OpenRouter/Gemini:
   success parsing, 429/401 classification, honest schema-drift failures.
 
+### Changed
+
+- `ToolExecutionResult.failure(...)` gained optional structured `data`.
 ### Added
 
 - JaCoCo coverage configuration for Android JVM tests and the server JVM module.

@@ -1,4 +1,5 @@
 import java.net.URI
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -43,6 +44,51 @@ val stagingApiUrl = validatedApiUrl(
 )
 val productionApiUrl = "https://api.jarvis.ai"
 require(stagingApiUrl != productionApiUrl) { "Staging and production API origins must differ" }
+
+// ============================================================================
+// Release signing (P0-1).
+//
+// Значения берутся из ОДНОГО из двух источников (первый непустой выигрывает):
+//   1. keystore.properties в корне проекта (в .gitignore, только локально):
+//        storeFile=/absolute/path/jarvis-release.jks
+//        storePassword=...
+//        keyAlias=jarvis
+//        keyPassword=...
+//   2. переменные окружения CI:
+//        JARVIS_SIGNING_STORE_FILE / JARVIS_SIGNING_STORE_PASSWORD /
+//        JARVIS_SIGNING_KEY_ALIAS  / JARVIS_SIGNING_KEY_PASSWORD
+//
+// Если конфигурация отсутствует — release-сборка остаётся НЕподписанной, но
+// release-пайплайн (см. .github/workflows/release.yml, JARVIS_REQUIRE_SIGNED_RELEASE)
+// обязан провалиться в этом случае. Локальные smoke-сборки при этом не ломаются.
+// Keystore НИКОГДА не коммитится (*.jks/*.keystore в .gitignore).
+// ============================================================================
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
+fun signingValue(propertiesKey: String, envName: String): String? =
+    keystoreProperties.getProperty(propertiesKey)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(envName)?.takeIf { it.isNotBlank() }
+
+val releaseStoreFile = signingValue("storeFile", "JARVIS_SIGNING_STORE_FILE")
+val releaseStorePassword = signingValue("storePassword", "JARVIS_SIGNING_STORE_PASSWORD")
+val releaseKeyAlias = signingValue("keyAlias", "JARVIS_SIGNING_KEY_ALIAS")
+val releaseKeyPassword = signingValue("keyPassword", "JARVIS_SIGNING_KEY_PASSWORD")
+val releaseSigningConfigured =
+    listOf(releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword)
+        .all { it != null }
+val requireSignedRelease =
+    System.getenv("JARVIS_REQUIRE_SIGNED_RELEASE") == "true"
+
+if (requireSignedRelease && !releaseSigningConfigured) {
+    throw GradleException(
+        "JARVIS_REQUIRE_SIGNED_RELEASE=true, но signing-конфигурация не найдена. " +
+            "Задайте keystore.properties или JARVIS_SIGNING_* переменные окружения " +
+            "(см. docs/RELEASE.md)."
+    )
+}
 
 // Экспорт схем Room в app/schemas — обязательно для миграций и MigrationTestHelper
 // (см. JarvisMigrations.kt, пункт аудита #7).
@@ -110,6 +156,17 @@ android {
         }
     }
 
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -118,6 +175,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
         debug {
             isMinifyEnabled = false

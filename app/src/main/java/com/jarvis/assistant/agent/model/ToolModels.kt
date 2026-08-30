@@ -91,10 +91,12 @@ data class ToolExecutionResult(
         fun failure(
             summary: String,
             error: String,
-            executionTimeMs: Long = 0L
+            executionTimeMs: Long = 0L,
+            data: JsonObject? = null
         ) = ToolExecutionResult(
             status = ToolExecutionStatus.FAILURE,
             summary = summary,
+            data = data,
             error = error,
             executionTimeMs = executionTimeMs
         )
