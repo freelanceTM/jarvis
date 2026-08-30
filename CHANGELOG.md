@@ -12,6 +12,10 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- `docs/AUDIT_2026_08_29.md`: final independent audit report — item-by-item
+  verification of the 2026-08-29 review against code, Before/After comparison,
+  explicit deferred/declined items with rationale, and the next-step plan.
+
 - Release signing pipeline: env/keystore.properties-driven `signingConfig`,
   manual "Release JARVIS (signed)" workflow (AAB+APK, `apksigner verify`),
   `JARVIS_REQUIRE_SIGNED_RELEASE` fail-fast, R8 release smoke on every PR,
