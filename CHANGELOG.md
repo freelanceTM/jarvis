@@ -22,18 +22,29 @@ must be added only when the repository owner creates an actual release.
   honest `SCREEN_BLOCKED_BY_PRIVACY_POLICY` /
   `APP_BLOCKED_BY_PRIVACY_POLICY` / `PASSWORD_FIELD_USER_INPUT_REQUIRED`
   results, package-only audit logging, 16 JVM policy tests.
+- Prometheus metrics export: `GET /v1/admin/metrics/prometheus`
+  (Bearer + VIEW_ADMIN, `text/plain; version=0.0.4`), stable `jarvis_*`
+  metric names, endpoint and format tests.
+- Operational runbook `docs/RUNBOOK.md` (metrics map, alert table,
+  provider/rate-limit/401/usage/Postgres/rollback playbooks, backup RPO/RTO,
+  reconciliation procedure) plus `deploy/prometheus/{prometheus,alerts}.yml`.
+- `ReconciliationWorker`: read-only visibility for orders stuck in
+  `RECONCILIATION_REQUIRED` (aging metric + warn logs, no state guessing),
+  `JdbcBillingRepository.findStaleReconciliationOrders`, lifecycle wiring.
+- Provider contract tests over recorded fixtures
+  (`server/src/test/resources/provider-contracts/`) for Groq/OpenRouter/Gemini:
+  success parsing, 429/401 classification, honest schema-drift failures.
 
 ### Changed
 
 - `ToolExecutionResult.failure(...)` gained optional structured `data`.
-
 ### Added
 
 - JaCoCo coverage configuration for Android JVM tests and the server JVM module.
 - `phase3Coverage`, `phase3StaticAnalysis`, and `phase3Quality` Gradle entry
   points, plus XML/HTML/CSV coverage reports and coverage verification.
 - Reviewed JaCoCo CI floors: 24% lines / 20% branches for Android JVM tests and
-  80% lines / 55% branches for the full PostgreSQL-backed server suite.
+  80% lines / 35% branches for the full PostgreSQL-backed server suite.
 - Detekt static analysis with a reviewed high-signal rule configuration and
   HTML/XML/SARIF reports.
 - Behavioral tests for activation ViewModel, settings ViewModel, repositories,

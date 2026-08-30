@@ -32,6 +32,17 @@ data class BillingOrder(
     val paidAt: Instant?
 )
 
+/**
+ * P1-3: снимок зависшего reconciliation-заказа для воркера видимости.
+ * Не содержит PII: идентификаторы и провайдер.
+ */
+data class StaleReconciliationOrder(
+    val orderId: UUID,
+    val provider: BillingProviderId,
+    val providerOrderId: String?,
+    val updatedAt: Instant
+)
+
 data class ProviderCheckout(
     val providerOrderId: String,
     val checkoutUrl: String,

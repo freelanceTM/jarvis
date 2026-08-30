@@ -1,0 +1,58 @@
+# Правила алертов JARVIS API (см. docs/RUNBOOK.md §2).
+# Подключение: rule_files: [alerts.yml] в prometheus.yml.
+groups:
+  - name: jarvis-api
+    rules:
+      - alert: HighRequestFailureRate
+        expr: |
+          rate(jarvis_requests_failed_total[5m])
+            > 0.2 * rate(jarvis_requests_total[5m])
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "JARVIS: >20% AI-запросов падают (5m)"
+          runbook: docs/RUNBOOK.md §3.1
+
+      - alert: AllProvidersFailing
+        expr: |
+          sum(rate(jarvis_provider_success_total[10m])) == 0
+            and sum(rate(jarvis_provider_failure_total[10m])) > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "JARVIS: все AI-провайдеры неудачны 10 минут"
+          runbook: docs/RUNBOOK.md §3.2
+
+      - alert: RateLimitSaturation
+        expr: increase(jarvis_requests_rate_limited_total[15m]) > 100
+        labels:
+          severity: warning
+        annotations:
+          summary: "JARVIS: массовые 429 (rate-limit)"
+          runbook: docs/RUNBOOK.md §3.3
+
+      - alert: UnauthorizedSpike
+        expr: increase(jarvis_requests_unauthorized_total[15m]) > 50
+        labels:
+          severity: warning
+        annotations:
+          summary: "JARVIS: всплеск 401 — возможна утечка/подбор токена"
+          runbook: docs/RUNBOOK.md §3.4
+
+      - alert: ReconciliationBacklog
+        expr: increase(jarvis_named_reconciliation_stale[1h]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "JARVIS: заказ(ы) застряли в RECONCILIATION_REQUIRED"
+          runbook: docs/RUNBOOK.md §5
+
+      - alert: UsageRecordsDropped
+        expr: increase(jarvis_named_usage_dropped[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "JARVIS: usage-записи не сохраняются (Postgres?)"
+          runbook: docs/RUNBOOK.md §3.5

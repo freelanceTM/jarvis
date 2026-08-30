@@ -69,6 +69,7 @@ class ServerLifecycleTest {
             handler = handler,
             dataSource = dataSource,
             usageTracker = usageTracker,
+            reconciliationWorker = null,
             instanceGuard = instanceGuard,
         )
 
@@ -153,6 +154,7 @@ class ServerLifecycleTest {
             handler = handler,
             dataSource = dataSource,
             usageTracker = usageTracker,
+            reconciliationWorker = null,
             instanceGuard = instanceGuard,
         )
         val running = ServerBootstrap.bindServer(config, resources, port = 0)

@@ -105,3 +105,20 @@ A future multi-instance ADR must, before increasing replicas:
 - Application horizontal scaling is intentionally unavailable.
 - Circuit state and metrics reset on restart.
 - PostgreSQL is a hard availability dependency; this is intentional fail-closed behavior.
+
+## Review 2026-08-29 (reaffirmed)
+
+Независимый аудит предложил снятие single-instance ограничения (P0-3) как путь
+масштабирования. Решение пересмотрено и **подтверждено как осознанное**:
+
+- продукт находится в pre-release; наблюдаемая нагрузка (персональный ассистент)
+  на порядки ниже потолка одного инстанса;
+- проектная спецификация прямо запрещает premature horizontal scaling и
+  лишние инфраструктурные слои;
+- все security/business-critical состояния (auth, license, billing, rate-limit,
+  usage, idempotency) уже в PostgreSQL — путь к N инстансам описан в разделе
+  «A future multi-instance ADR» выше и не заблокирован кодом.
+
+Аддитивные улучшения наблюдаемости (Prometheus-экспорт метрик), не требующие
+снятия ограничения, выполняются отдельно. Потолок остаётся задокументированным
+и намеренным.

@@ -12,6 +12,7 @@ import com.jarvis.server.billing.BillingService
 import com.jarvis.server.billing.HeleketBillingProvider
 import com.jarvis.server.billing.HeleketWebhookVerifier
 import com.jarvis.server.billing.JdbcBillingRepository
+import com.jarvis.server.billing.ReconciliationWorker
 import com.jarvis.server.billing.PaddleBillingProvider
 import com.jarvis.server.billing.PaddleWebhookVerifier
 import com.jarvis.server.config.ServerConfig
@@ -89,10 +90,12 @@ object ServerBootstrap {
         val handler: JarvisApiHandler,
         val dataSource: HikariDataSource,
         val usageTracker: AsyncUsageTracker,
+        val reconciliationWorker: ReconciliationWorker?,
         val instanceGuard: PostgresSingleInstanceGuard?,
     ) : AutoCloseable {
         override fun close() {
             runCatching { usageTracker.shutdown() }
+            runCatching { reconciliationWorker?.shutdown() }
             runCatching { instanceGuard?.close() }
             runCatching { dataSource.close() }
         }
@@ -336,6 +339,14 @@ object ServerBootstrap {
             providers = billingProviders
         )
 
+        // P1-3: фоновая видимость зависших reconciliation-заказов
+        // (только чтение + метрики; разбор по docs/RUNBOOK.md §5).
+        val reconciliationWorker = ReconciliationWorker(
+            orderSource = billingRepository::findStaleReconciliationOrders,
+            logger = logger,
+            metrics = metrics
+        ).also { it.start() }
+
         // ADMIN-права выдаются только явно перечисленным статическим клиентам.
         // S-02: строгая regex-валидация clientId. Невалидные значения отбрасываются
         // (fail-closed) и логируются без раскрытия полного значения — достаточно
@@ -416,6 +427,7 @@ object ServerBootstrap {
             json = json,
             healthProvider = healthProvider,
             metricsProvider = { renderMetrics(metrics) },
+            prometheusMetricsProvider = { metrics.prometheus() },
             // AR-06: выбор реализации чекера — production-по-умолчанию через
             // LicenseService, а при dev-режиме — AlwaysGranted (без биллинга).
             // НЕ допускаем AlwaysGranted в production-окружении: fail-closed.
@@ -432,6 +444,7 @@ object ServerBootstrap {
             handler = handler,
             dataSource = dataSource,
             usageTracker = usageTracker,
+            reconciliationWorker = reconciliationWorker,
             instanceGuard = instanceGuard,
         )
     }
@@ -668,6 +681,28 @@ fun main() {
             "providers configured",
             "providers" to configuredProviders.joinToString("|") { it.id.name }
         )
+
+        // CR-06 / P1-7: worst-case бюджет маршрутизации против серверного
+        // deadline. Пример-конфиг или ручные env-значения могут превысить
+        // дедлайн (клиент с callTimeout=30s не дождётся ответа) — предупреждаем
+        // на старте, а не диагностируем это по жалобам на таймауты.
+        val maxRequestTimeoutMs = configuredProviders.maxOf { it.requestTimeoutMs }
+        val policy = config.executionPolicy
+        val retryBudget = policy.maxProviderAttempts * policy.maxRetriesPerProvider
+        val worstCaseMs =
+            policy.maxProviderAttempts * maxRequestTimeoutMs +
+                retryBudget * (maxRequestTimeoutMs + policy.retryBackoffMs)
+        if (worstCaseMs > SERVER_REQUEST_DEADLINE_MS) {
+            logger.warn(
+                "provider timeout budget exceeds request deadline",
+                "worstCaseMs" to worstCaseMs.toString(),
+                "deadlineMs" to SERVER_REQUEST_DEADLINE_MS.toString(),
+                "maxProviderAttempts" to policy.maxProviderAttempts.toString(),
+                "maxRetriesPerProvider" to policy.maxRetriesPerProvider.toString(),
+                "maxProviderRequestTimeoutMs" to maxRequestTimeoutMs.toString(),
+                "hint" to "lower *_REQUEST_TIMEOUT_MS / MAX_PROVIDER_ATTEMPTS / MAX_RETRIES_PER_PROVIDER"
+            )
+        }
     }
 
     // C-01: buildResources() собирает ВСЕ JVM-long ресурсы (handler + DB +
