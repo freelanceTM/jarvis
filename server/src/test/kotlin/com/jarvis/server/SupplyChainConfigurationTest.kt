@@ -22,7 +22,15 @@ class SupplyChainConfigurationTest {
             val text = Files.readString(workflow)
             assertTrue("missing read-only permissions: $workflow", text.contains("permissions:\n  contents: read"))
             assertFalse("unsafe pull_request_target: $workflow", text.contains("pull_request_target:"))
-            assertFalse("PR workflow exposes repository secrets: $workflow", text.contains("secrets."))
+            // Инвариант: workflow, выполняющийся на pull_request, не имеет доступа
+            // к репозиторным секретам (форк-атака через изменённый workflow-код).
+            // Dispatch/push-only workflow (например, release.yml) может использовать
+            // secrets легитимно — проверяем запрет ТОЛЬКО для PR-триггеров.
+            val onBlock = Regex("(?ms)^on:.*?(?=^[A-Za-z-]+:|\\z)").find(text)?.value.orEmpty()
+            val runsOnPullRequest = onBlock.contains("pull_request")
+            if (runsOnPullRequest) {
+                assertFalse("PR workflow exposes repository secrets: $workflow", text.contains("secrets."))
+            }
             for (match in actionRef.findAll(text)) {
                 val value = match.groupValues[1]
                 if (value.startsWith("./")) continue
