@@ -78,7 +78,8 @@ class AdminSessionRepository(private val dataSource: DataSource) {
         dataSource.connection.use { c ->
             c.prepareStatement(
                 "UPDATE admin_sessions SET expires_at = ?, last_seen_at = ? " +
-                    "WHERE id = ? AND revoked_at IS NULL AND expires_at > ? AND ? > expires_at - ?"
+                    "WHERE id = ? AND revoked_at IS NULL AND expires_at > ? " +
+                    "AND ?::timestamptz > expires_at - (? * interval '1 millisecond')"
             ).use { ps ->
                 ps.setTimestamp(1, Timestamp.from(now.plus(ttl)))
                 ps.setTimestamp(2, Timestamp.from(now))
