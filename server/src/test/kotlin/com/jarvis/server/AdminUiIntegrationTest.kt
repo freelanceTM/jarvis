@@ -14,6 +14,7 @@ import com.jarvis.server.admin.FeatureFlagService
 import com.jarvis.server.auth.ClientTier
 import com.jarvis.server.auth.TokenAuthenticator
 import com.jarvis.server.config.RateLimitConfig
+import com.jarvis.server.ratelimit.PostgresRateLimiter
 import com.jarvis.server.http.HttpRequestContext
 import com.jarvis.server.provider.ProviderManager
 import io.mockk.mockk

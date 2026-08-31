@@ -116,7 +116,7 @@ class AdminControlPlaneUnitTest {
     /* ── Feature flags rollout (ТЗ §21) ───────────────────────────────────── */
 
     @Test
-    fun `flag buckets are deterministic and within 0..99`() {
+    fun `flag buckets are deterministic and within range`() {
         val service = FeatureFlagService(mockk(relaxed = true))
         val first = service.bucketOf("wake_word", "client-123")
         assertEquals(first, service.bucketOf("wake_word", "client-123"))
