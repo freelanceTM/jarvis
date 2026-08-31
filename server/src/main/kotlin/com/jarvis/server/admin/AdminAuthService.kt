@@ -128,15 +128,17 @@ class AdminAuthService(
         // Legacy: статический env-токен с tier ADMIN действует как SUPER_ADMIN.
         if (fallbackStaticAuth != null && bearer.isNotEmpty()) {
             when (val result = fallbackStaticAuth.authenticate("Bearer $bearer")) {
-                is AuthResult.Success if result.client.tier == ClientTier.ADMIN ->
-                    return AdminAuthResult.Success(
-                        AdminPrincipal(
-                            accountId = null,
-                            actor = "token:${result.client.clientId}",
-                            role = AdminRole.SUPER_ADMIN,
-                            sessionId = null
+                is AuthResult.Success ->
+                    if (result.client.tier == ClientTier.ADMIN) {
+                        return AdminAuthResult.Success(
+                            AdminPrincipal(
+                                accountId = null,
+                                actor = "token:${result.client.clientId}",
+                                role = AdminRole.SUPER_ADMIN,
+                                sessionId = null
+                            )
                         )
-                    )
+                    }
                 else -> Unit
             }
         }
