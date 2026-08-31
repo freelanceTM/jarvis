@@ -343,7 +343,7 @@ class AdminControlPlaneIntegrationTest : PostgresTestSupport() {
         val token = login("usage-admin", "bootstrap-pass-123")!!
         val usage = get(token, "/v1/admin/usage?days=7")
         assertEquals("usage body=${'$'}{usage.body}", 200, usage.status)
-        assertTrue(usage.body.contains("\"requests\":1"))
+        assertTrue("usage body=${'$'}{usage.body}", usage.body.contains("\"requests\":1"))
         assertTrue(usage.body.contains("NOT COLLECTED")) // локальные выполнения: честно
 
         // VIEWER не может писать настройки → cost настраивает отдельный админ:
@@ -352,7 +352,7 @@ class AdminControlPlaneIntegrationTest : PostgresTestSupport() {
         put(adminToken, "/v1/admin/settings/cost", """{"providers":{"GROQ":{"usdPerMillionInput":5.0,"usdPerMillionOutput":10.0}}}""")
         val cost = get(token, "/v1/admin/usage/cost?days=7")
         assertEquals(200, cost.status)
-        assertTrue("ожидаем формулу в ответе", cost.body.contains("in/1e6*5.0"))
+        assertTrue("cost body=${'$'}{cost.body}", cost.body.contains("in/1e6*5.0"))
         assertTrue(cost.body.contains("\"totalUsd\":15.0") || cost.body.contains("15.0"))
     }
 
