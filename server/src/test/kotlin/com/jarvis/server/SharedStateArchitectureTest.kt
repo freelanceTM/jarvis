@@ -12,7 +12,9 @@ class SharedStateArchitectureTest {
         val root = repositoryRoot()
         val main = Files.readString(root.resolve("server/src/main/kotlin/com/jarvis/server/Main.kt"))
         val compose = Files.readString(root.resolve("deploy/docker-compose.production.yml"))
-        val adr = Files.readString(root.resolve("docs/adr/0001-single-application-instance.md"))
+        val deploymentConfig = Files.readString(
+            root.resolve("server/src/main/kotlin/com/jarvis/server/config/DeploymentSecurityConfig.kt")
+        )
 
         assertTrue(main.contains("JdbcUsageRepository(dataSource)"))
         assertTrue(main.contains("PostgresRateLimiter(dataSource, \"ai_execute\""))
@@ -20,7 +22,9 @@ class SharedStateArchitectureTest {
         assertFalse(main.contains("InMemoryUsageRepository()"))
         assertFalse(main.contains("SlidingWindowRateLimiter(config.rateLimit)"))
         assertTrue(compose.contains("APPLICATION_REPLICA_COUNT: \"1\""))
-        assertTrue(adr.contains("production supports exactly"))
+        // Single-instance decision lives in the enforcing code, not in a doc:
+        // production composition must reject replicas != 1.
+        assertTrue(deploymentConfig.contains("permits exactly one production application instance"))
     }
 
     @Test

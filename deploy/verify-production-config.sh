@@ -39,7 +39,7 @@ published = {int(item["published"]) for item in ports}
 assert published == {80, 443}, f"only 80/443 may be public, got {published}"
 env = services["jarvis-server"]["environment"]
 assert str(env["APP_ENV"]).lower() == "production"
-assert str(env["APPLICATION_REPLICA_COUNT"]) == "1", "ADR-0001 requires exactly one app replica"
+assert str(env["APPLICATION_REPLICA_COUNT"]) == "1", "single-instance decision requires exactly one app replica"
 assert str(env["PRODUCTION_TLS_TERMINATED"]).lower() == "true"
 assert str(env["TRUST_PROXY_HEADERS"]).lower() == "true"
 assert env["PUBLIC_BASE_URL"].startswith("https://")

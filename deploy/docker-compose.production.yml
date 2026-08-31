@@ -37,7 +37,7 @@ services:
       APP_ENV: production
       BIND_HOST: 0.0.0.0
       PORT: 8080
-      # ADR-0001: process-local circuit/metrics state requires exactly one app instance.
+      # Single-instance decision: process-local circuit/metrics state requires exactly one app instance.
       APPLICATION_REPLICA_COUNT: "1"
       PRODUCTION_TLS_TERMINATED: "true"
       TRUST_PROXY_HEADERS: "true"

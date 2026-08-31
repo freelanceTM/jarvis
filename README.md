@@ -59,9 +59,7 @@ bash ./gradlew :app:assembleDevDebugAndroidTest        # compile device tests
 bash ./gradlew :server:test                            # requires test PostgreSQL
 ```
 
-Coverage и quality tasks описаны в
-[`docs/TEST_QUALITY.md`](docs/TEST_QUALITY.md). APK:
-`app/build/outputs/apk/dev/debug/app-dev-debug.apk`.
+APK: `app/build/outputs/apk/dev/debug/app-dev-debug.apk`.
 
 ## Структура
 
@@ -76,8 +74,7 @@ Coverage и quality tasks описаны в
 - `app/src/test/` — JVM unit-тесты; `app/src/androidTest/` — тесты на устройстве.
 - `server/` — JVM API: auth/authz, PostgreSQL licensing/billing, persistent
   license rate limits, Paddle/HELEKET adapters, AI router, provider fallback,
-  circuit breaker и metrics. См. `docs/SERVER_AI_LAYER.md` и
-  `docs/LICENSE_BILLING.md`.
+  circuit breaker и metrics. См. `docs/LICENSE_BILLING.md`.
 
 ## Конфигурация
 
@@ -138,6 +135,4 @@ bash ./gradlew :app:createDevDebugCoverageReport
 
 - [CHANGELOG.md](CHANGELOG.md) — только фактические изменения и releases.
 - [SECURITY.md](SECURITY.md) — private vulnerability disclosure process.
-- [LICENSE](LICENSE) — license пока не выбрана; требуется решение владельца.
-- [docs/DEPENDENCY_UPDATE_PLAN.md](docs/DEPENDENCY_UPDATE_PLAN.md) — reviewed
-  dependency migration plan.
+- [LICENSE](LICENSE) — проприетарная лицензия проекта; [NOTICE](NOTICE) — атрибуция third-party.
