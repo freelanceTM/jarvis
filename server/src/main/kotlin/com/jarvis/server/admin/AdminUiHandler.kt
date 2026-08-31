@@ -32,7 +32,7 @@ class AdminUiHandler(
 ) {
 
     fun handle(request: HttpRequestContext): HttpResponseContext {
-        val path = request.path.removePrefix("/v1/admin/ui").trim('/')
+        val path = request.path.substringBefore('?').removePrefix("/v1/admin/ui").trim('/')
         val cookie = cookieValue(request, "admin_session")
         val authResult = cookie?.let { auth.authenticate("Bearer $it", staticAuthenticator) }
         val principal = if (authResult is AdminAuthResult.Success) {

@@ -50,7 +50,8 @@ class AdminHttpHandler(
     }
 
     suspend fun handle(request: HttpRequestContext): HttpResponseContext? {
-        val path = request.path
+        // path может прийти и с query (в тестах/прямых вызовах) — режем её.
+        val path = request.path.substringBefore('?')
         if (!path.startsWith(PREFIX) || path in RESERVED_FOR_LICENSE_HANDLER) return null
         val sub = path.removePrefix(PREFIX).trim('/')
 
@@ -263,10 +264,12 @@ class AdminHttpHandler(
         return size to (page.toLong() * size)
     }
 
-    private fun queryParam(request: HttpRequestContext, name: String): String? =
-        request.path.substringAfter('?', "").split('&')
-            .firstOrNull { it.substringBefore('=') == name }
+    private fun queryParam(request: HttpRequestContext, name: String): String? {
+        val query = request.rawQuery ?: request.path.substringAfter('?', "").takeIf { request.path.contains('?') }
+        return query?.split('&')
+            ?.firstOrNull { it.substringBefore('=') == name }
             ?.substringAfter('=', "")?.takeIf { it.isNotEmpty() }
+    }
 
     private fun handleUsers(request: HttpRequestContext): HttpResponseContext {
         val (size, offset) = pagination(request)

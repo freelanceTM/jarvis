@@ -700,6 +700,7 @@ private suspend fun handleExchange(
                 val ctx = HttpRequestContext(
                     method = exchange.requestMethod,
                     path = exchange.requestURI.path,
+                    rawQuery = exchange.requestURI.rawQuery,
                     authorizationHeader = exchange.requestHeaders.getFirst("Authorization"),
                     body = String(rawBody, StandardCharsets.UTF_8),
                     contentLength = maxOf(
