@@ -348,7 +348,7 @@ class AdminHttpHandler(
             newValue = """{"status":"REVOKED"}""", remoteAddress = request.remoteAddress,
             sessionId = principal.sessionId, requestId = null
         )
-        return plain(200, buildJsonObject { put("revoked", changed) })
+        return plain(200, buildJsonObject { put("revoked", changed); put("status", "REVOKED") })
     }
 
     /* ── handlers: licenses / subscriptions ───────────────────────────────── */

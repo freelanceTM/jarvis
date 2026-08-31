@@ -231,8 +231,8 @@ class AdminControlPlaneIntegrationTest : PostgresTestSupport() {
         createAdmin("dev-admin", AdminRole.ADMIN)
         val token = login("dev-admin", "bootstrap-pass-123")!!
         val response = post(token, "/v1/admin/devices/$tokenId/revoke")
-        assertEquals(200, response.status)
-        assertTrue(response.body.contains("REVOKED"))
+        assertEquals("revoke body=${'$'}{response.body}", 200, response.status)
+        assertTrue("body=${'$'}{response.body}", response.body.contains("REVOKED"))
         dataSource.connection.use { c ->
             c.prepareStatement("SELECT status FROM api_tokens WHERE id = ?").use { ps ->
                 ps.setObject(1, tokenId)
@@ -249,11 +249,12 @@ class AdminControlPlaneIntegrationTest : PostgresTestSupport() {
 
     @Test
     fun `license lifecycle actions persist and audit`() {
-        val licenseId = seedPlanAndLicense()
+        val (_, licenseId) = seedPlanAndLicenseBoth()
         createAdmin("lic-admin", AdminRole.ADMIN)
         val token = login("lic-admin", "bootstrap-pass-123")!!
 
-        assertEquals(200, post(token, "/v1/admin/licenses/$licenseId/disable").status)
+        val disableResp = post(token, "/v1/admin/licenses/$licenseId/disable")
+        assertEquals("disable body=${'$'}{disableResp.body}", 200, disableResp.status)
         assertEquals("DISABLED", statusOf(licenseId))
         assertEquals(200, post(token, "/v1/admin/licenses/$licenseId/enable").status)
         assertEquals("ACTIVE", statusOf(licenseId))
@@ -270,11 +271,11 @@ class AdminControlPlaneIntegrationTest : PostgresTestSupport() {
 
     @Test
     fun `change plan with unknown plan is 400 and audited as nothing`() {
-        val licenseId = seedPlanAndLicense()
+        val (_, licenseId) = seedPlanAndLicenseBoth()
         createAdmin("plan-admin", AdminRole.ADMIN)
         val token = login("plan-admin", "bootstrap-pass-123")!!
         val response = post(token, "/v1/admin/licenses/$licenseId/change-plan", """{"planId":"no_such_plan"}""")
-        assertEquals(400, response.status)
+        assertEquals("change-plan body=${'$'}{response.body}", 400, response.status)
         assertTrue(audit.find(AdminAuditQuery(action = "license.change-plan")).isEmpty())
     }
 
@@ -341,7 +342,7 @@ class AdminControlPlaneIntegrationTest : PostgresTestSupport() {
         createAdmin("usage-admin", AdminRole.VIEWER)
         val token = login("usage-admin", "bootstrap-pass-123")!!
         val usage = get(token, "/v1/admin/usage?days=7")
-        assertEquals(200, usage.status)
+        assertEquals("usage body=${'$'}{usage.body}", 200, usage.status)
         assertTrue(usage.body.contains("\"requests\":1"))
         assertTrue(usage.body.contains("NOT COLLECTED")) // локальные выполнения: честно
 
@@ -357,10 +358,18 @@ class AdminControlPlaneIntegrationTest : PostgresTestSupport() {
 
     /* ── helpers ──────────────────────────────────────────────────────────── */
 
+    private var seedReturn: Pair<UUID, UUID> = UUID.randomUUID() to UUID.randomUUID()
+
     private fun seedPlanAndLicense(): UUID {
+        seedPlanAndLicenseBoth()
+        return seedReturn.first
+    }
+
+    private fun seedPlanAndLicenseBoth(): Pair<UUID, UUID> {
         val accountId = UUID.randomUUID()
         val licenseId = UUID.randomUUID()
         val now = Timestamp.from(Instant.now())
+        seedReturn = accountId to licenseId
         dataSource.connection.use { c ->
             c.prepareStatement(
                 "INSERT INTO accounts (id, external_ref, status, created_at, updated_at) VALUES (?, ?, 'ACTIVE', ?, ?)"
@@ -385,7 +394,7 @@ class AdminControlPlaneIntegrationTest : PostgresTestSupport() {
                 ps.executeUpdate()
             }
         }
-        return accountId
+        return accountId to licenseId
     }
 
     private fun insertApiToken(accountId: UUID): UUID {
