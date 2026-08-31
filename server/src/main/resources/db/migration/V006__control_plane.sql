@@ -1,6 +1,7 @@
 -- OMNIX Control Plane (V006): admin identities, sessions, audit, settings, feature flags.
 -- Existing entities (accounts, licenses, api_tokens, license_audit_log, ai_usage_records)
--- are REUSED as the source of truth; nothing here duplicates them.
+-- are REUSED as the source of truth. Nothing here duplicates them.
+-- NOTE: no semicolons allowed in these comment lines (the migrator splits on ";").
 
 CREATE TABLE admin_accounts (
     id UUID PRIMARY KEY,
