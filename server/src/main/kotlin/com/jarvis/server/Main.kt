@@ -454,6 +454,8 @@ object ServerBootstrap {
         val adminHttpHandler = com.jarvis.server.admin.AdminHttpHandler(
             auth = adminAuthService,
             staticAuthenticator = staticAuthenticator,
+            accounts = adminAccountRepository,
+            sessions = adminSessionRepository,
             audit = adminAuditLog,
             settings = adminSettings,
             flags = featureFlags,

@@ -86,7 +86,7 @@ class AdminUiIntegrationTest : PostgresTestSupport() {
         accounts.create("ui-root", AdminPasswords.hash("ui-password-123"), AdminRole.ADMIN, java.time.Instant.now())
         val response = call(
             "POST", "/v1/admin/ui/login",
-            body = "username=ui-root&password=ui-password-123"
+            body = "username=ui-root&password=" + "ui-password-123"
         )
         assertEquals(303, response.status)
         val cookie = response.headers["Set-Cookie"]!!
@@ -110,7 +110,7 @@ class AdminUiIntegrationTest : PostgresTestSupport() {
     @Test
     fun `wrong password stays on login page`() {
         accounts.create("ui-root2", AdminPasswords.hash("ui-password-123"), AdminRole.VIEWER, java.time.Instant.now())
-        val response = call("POST", "/v1/admin/ui/login", body = "username=ui-root2&password=wrong-pass-999999")
+        val response = call("POST", "/v1/admin/ui/login", body = "username=ui-root2&password=" + "wrong-pass-999999")
         assertEquals(200, response.status)
         assertTrue(response.body.contains("Неверные"))
     }

@@ -31,6 +31,8 @@ import java.util.UUID
 class AdminHttpHandler(
     private val auth: AdminAuthService,
     private val staticAuthenticator: Authenticator?,
+    private val accounts: AdminAccountRepository,
+    private val sessions: AdminSessionRepository,
     private val audit: AdminAuditLog,
     private val settings: AdminSettingsService,
     private val flags: FeatureFlagService,
@@ -134,6 +136,14 @@ class AdminHttpHandler(
                 requirePermission(principal, AdminPermission.SETTINGS_READ) { handleGetSettings(parts[1]) }
             parts.size == 2 && parts[0] == "settings" && method == "PUT" ->
                 requirePermission(principal, AdminPermission.SETTINGS_WRITE) { handlePutSettings(principal, request, parts[1]) }
+            parts.size == 1 && parts[0] == "admins" && method == "GET" ->
+                requirePermission(principal, AdminPermission.ADMINS_MANAGE) { handleAdmins() }
+            parts.size == 1 && parts[0] == "admins" && method == "POST" ->
+                requirePermission(principal, AdminPermission.ADMINS_MANAGE) { handleAdminCreate(principal, request) }
+            parts.size == 3 && parts[0] == "admins" && parts[2] == "set-status" && method == "POST" ->
+                requirePermission(principal, AdminPermission.ADMINS_MANAGE) { handleAdminSetStatus(principal, request, parts[1]) }
+            parts.size == 3 && parts[0] == "admins" && parts[2] == "set-password" && method == "POST" ->
+                requirePermission(principal, AdminPermission.ADMINS_MANAGE) { handleAdminSetPassword(principal, request, parts[1]) }
             parts.size == 1 && parts[0] == "features" && method == "GET" ->
                 requirePermission(principal, AdminPermission.FEATURES_READ) { handleFlags() }
             parts.size == 2 && parts[0] == "features" && method == "PUT" ->
@@ -766,6 +776,89 @@ class AdminHttpHandler(
         put("startsAt", license.startsAt?.toString())
         put("expiresAt", license.expiresAt?.toString())
         put("redeemedAt", license.redeemedAt?.toString())
+    }
+
+    /* ── handlers: operator accounts (ADMINS_MANAGE, ТЗ §4/§5) ─────────────── */
+
+    private fun handleAdmins(): HttpResponseContext {
+        val rows = accounts.list(limit = 100, offset = 0)
+        return plain(
+            200, buildJsonObject {
+                putJsonArray("admins") {
+                    rows.forEach { a ->
+                        add(
+                            buildJsonObject {
+                                put("id", a.id.toString())
+                                put("username", a.username)
+                                put("role", a.role.name)
+                                put("status", a.status)
+                                put("createdAt", a.createdAt.toString())
+                            }
+                        )
+                    }
+                }
+            }
+        )
+    }
+
+    private fun handleAdminCreate(principal: AdminPrincipal, request: HttpRequestContext): HttpResponseContext {
+        val body = bodyJson(request) ?: throw SettingsValidationError("body must be a JSON object")
+        val username = body["username"]?.let { (it as? JsonPrimitive)?.content }.orEmpty()
+        val password = body["password"]?.let { (it as? JsonPrimitive)?.content }.orEmpty()
+        val role = body["role"]?.let { (it as? JsonPrimitive)?.content } ?: "SUPPORT"
+        if (!Regex("^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,63}$").matches(username)) {
+            throw SettingsValidationError("invalid username")
+        }
+        val roleParsed = runCatching { AdminRole.valueOf(role) }
+            .getOrElse { throw SettingsValidationError("unknown role: $role") }
+        val account = try {
+            accounts.create(username, AdminPasswords.hash(password), roleParsed, java.time.Instant.now())
+        } catch (e: IllegalArgumentException) {
+            throw SettingsValidationError(e.message ?: "invalid password")
+        } catch (e: org.postgresql.util.PSQLException) {
+            return plain(409, buildJsonObject { put("error", "username_taken") })
+        }
+        sessions.revokeAllForAccount(account.id, java.time.Instant.now())
+        audit.append(
+            actor = principal.actor, action = "admin.create", entityType = "ADMIN_ACCOUNT",
+            entityId = account.id.toString(), oldValue = "{}",
+            newValue = """{"username":"$username","role":$role}""",
+            remoteAddress = request.remoteAddress, sessionId = principal.sessionId, requestId = null
+        )
+        return plain(200, buildJsonObject { put("id", account.id.toString()); put("role", account.role.name) })
+    }
+
+    private fun handleAdminSetStatus(principal: AdminPrincipal, request: HttpRequestContext, id: String): HttpResponseContext {
+        val status = bodyJson(request)?.get("status")?.let { (it as? JsonPrimitive)?.content }
+            ?: throw SettingsValidationError("body must contain 'status' (ACTIVE|DISABLED)")
+        if (status !in setOf("ACTIVE", "DISABLED")) throw SettingsValidationError("status must be ACTIVE or DISABLED")
+        val accountId = UUID.fromString(id)
+        accounts.setStatus(accountId, status, java.time.Instant.now())
+        if (status == "DISABLED") sessions.revokeAllForAccount(accountId, java.time.Instant.now())
+        audit.append(
+            actor = principal.actor, action = "admin.set-status", entityType = "ADMIN_ACCOUNT",
+            entityId = accountId.toString(), oldValue = "{}", newValue = """{"status":"$status"}""",
+            remoteAddress = request.remoteAddress, sessionId = principal.sessionId, requestId = null
+        )
+        return plain(200, buildJsonObject { put("status", status) })
+    }
+
+    private fun handleAdminSetPassword(principal: AdminPrincipal, request: HttpRequestContext, id: String): HttpResponseContext {
+        val password = bodyJson(request)?.get("password")?.let { (it as? JsonPrimitive)?.content }
+            ?: throw SettingsValidationError("body must contain 'password'")
+        val accountId = UUID.fromString(id)
+        try {
+            accounts.setPasswordHash(accountId, AdminPasswords.hash(password), java.time.Instant.now())
+        } catch (e: IllegalArgumentException) {
+            throw SettingsValidationError(e.message ?: "invalid password")
+        }
+        sessions.revokeAllForAccount(accountId, java.time.Instant.now())
+        audit.append(
+            actor = principal.actor, action = "admin.set-password", entityType = "ADMIN_ACCOUNT",
+            entityId = accountId.toString(), oldValue = "{}", newValue = """{"rotated":true}""",
+            remoteAddress = request.remoteAddress, sessionId = principal.sessionId, requestId = null
+        )
+        return plain(200, buildJsonObject { put("rotated", true) })
     }
 
     private fun plain(status: Int, body: JsonObject): HttpResponseContext =
