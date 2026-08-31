@@ -273,7 +273,9 @@ object ServerBootstrap {
         }
 
         val health = ProviderHealthTracker(config.circuitBreaker)
-        val selectionPolicy = DefaultProviderSelectionPolicy(configsById, health)
+        // Control Plane §12: runtime-overrides (priority/enabled) поверх startup-конфига.
+        val providerOverrides = com.jarvis.server.admin.ProviderRuntimeOverrides()
+        val selectionPolicy = DefaultProviderSelectionPolicy(configsById, health, providerOverrides)
 
         val providerManager = ProviderManager(
             providers = providers,
@@ -416,6 +418,56 @@ object ServerBootstrap {
             }
         }
 
+        // ── OMNIX Control Plane (admin auth/RBAC/audit/settings/flags) ──────
+        val adminAccountRepository = com.jarvis.server.admin.AdminAccountRepository(dataSource)
+        val adminSessionRepository = com.jarvis.server.admin.AdminSessionRepository(dataSource)
+        val adminAuditLog = com.jarvis.server.admin.AdminAuditLog(dataSource)
+        val adminSettings = com.jarvis.server.admin.AdminSettingsService(dataSource, json)
+        val featureFlags = com.jarvis.server.admin.FeatureFlagService(dataSource)
+        val adminPolicy = com.jarvis.server.admin.AdminSecurityPolicy()
+        val adminAuthService = com.jarvis.server.admin.AdminAuthService(
+            accounts = adminAccountRepository,
+            sessions = adminSessionRepository,
+            // Brute-force: переиспользование персистентного лимитера; попытки
+            // логина считаются и в минуту, и в сутки (reset после успеха).
+            loginRateLimiter = PostgresRateLimiter(
+                dataSource,
+                "admin_login",
+                com.jarvis.server.config.RateLimitConfig(
+                    perMinute = adminPolicy.loginMaxAttempts,
+                    perDay = adminPolicy.loginMaxAttempts
+                )
+            ),
+            policy = adminPolicy
+        )
+        val adminQueries = com.jarvis.server.admin.AdminQueries(dataSource)
+        val adminUiHandler = com.jarvis.server.admin.AdminUiHandler(
+            auth = adminAuthService,
+            staticAuthenticator = staticAuthenticator,
+            audit = adminAuditLog,
+            settings = adminSettings,
+            flags = featureFlags,
+            queries = adminQueries,
+            providerManager = providerManager,
+            json = json
+        )
+        val adminHttpHandler = com.jarvis.server.admin.AdminHttpHandler(
+            auth = adminAuthService,
+            staticAuthenticator = staticAuthenticator,
+            audit = adminAuditLog,
+            settings = adminSettings,
+            flags = featureFlags,
+            queries = adminQueries,
+            providerManager = providerManager,
+            overrides = providerOverrides,
+            ui = adminUiHandler,
+            json = json
+        )
+        // Apply при старте: сохранённые routing-overrides вступают в силу
+        // без пересборки (Validate→Persist→Audit выполнены в момент PUT).
+        adminHttpHandler.applyOverrides(adminSettings.ai())
+        bootstrapAdminAccount(adminAccountRepository, adminAuditLog, logger)
+
         val handler = JarvisApiHandler(
             authenticator = authenticator,
             authorizer = authorizer,
@@ -436,7 +488,11 @@ object ServerBootstrap {
                 licenseService = licenseService,
                 logger = logger
             )::isEntitled,
-            extensionHandler = licenseHttpHandler::handle,
+            // Control Plane: admin-маршруты (/v1/admin/*) первым слоем,
+            // лицензионные (issue/revoke, redeem, checkout, webhooks) — следом.
+            extensionHandler = { request ->
+                adminHttpHandler.handle(request) ?: licenseHttpHandler.handle(request)
+            },
             // Публикуем healthProvider для внешнего kickoff в main().
             healthProviderFunc = healthProvider
         )
@@ -458,6 +514,54 @@ object ServerBootstrap {
             else -> """"$value""""
         }
         return render(metrics.snapshot())
+    }
+
+    /**
+     * OMNIX Control Plane: one-time bootstrap SUPER_ADMIN.
+     *
+     * Создаёт первого оператора ТОЛЬКО если (а) таблица admin_accounts пуста
+     * и (б) заданы оба env: JARVIS_ADMIN_BOOTSTRAP_USERNAME и
+     * JARVIS_ADMIN_BOOTSTRAP_PASSWORD. Пароль < 12 символов — fail-fast
+     * (сервер не стартует со слабым bootstrap-паролем). Событие пишется
+     * в admin_audit_log. Повторные старты — no-op.
+     */
+    private fun bootstrapAdminAccount(
+        accounts: com.jarvis.server.admin.AdminAccountRepository,
+        audit: com.jarvis.server.admin.AdminAuditLog,
+        logger: StructuredLogger
+    ) {
+        val username = System.getenv("JARVIS_ADMIN_BOOTSTRAP_USERNAME")?.trim().orEmpty()
+        val password = System.getenv("JARVIS_ADMIN_BOOTSTRAP_PASSWORD") ?: ""
+        if (accounts.count() > 0) return
+        if (username.isEmpty() || password.isEmpty()) {
+            logger.warn(
+                "no admin accounts and no bootstrap credentials; Control Plane login disabled",
+                "hint" to "set JARVIS_ADMIN_BOOTSTRAP_USERNAME/JARVIS_ADMIN_BOOTSTRAP_PASSWORD"
+            )
+            return
+        }
+        if (!Regex("^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,63}$").matches(username)) {
+            error("JARVIS_ADMIN_BOOTSTRAP_USERNAME must match [a-zA-Z0-9][a-zA-Z0-9_.-]{2,63}")
+        }
+        if (password.length < com.jarvis.server.admin.AdminPasswords.MIN_PASSWORD_LENGTH) {
+            error(
+                "JARVIS_ADMIN_BOOTSTRAP_PASSWORD must be at least " +
+                    com.jarvis.server.admin.AdminPasswords.MIN_PASSWORD_LENGTH + " characters"
+            )
+        }
+        val account = accounts.create(
+            username = username,
+            passwordHash = com.jarvis.server.admin.AdminPasswords.hash(password),
+            role = com.jarvis.server.admin.AdminRole.SUPER_ADMIN,
+            now = java.time.Instant.now()
+        )
+        audit.append(
+            actor = "system:bootstrap", action = "admin.bootstrap", entityType = "ADMIN_ACCOUNT",
+            entityId = account.id.toString(), oldValue = "{}",
+            newValue = """{"username":"$username","role":"SUPER_ADMIN"}""",
+            remoteAddress = null, sessionId = null, requestId = null
+        )
+        logger.info("control plane bootstrap admin created", "username" to username)
     }
 }
 

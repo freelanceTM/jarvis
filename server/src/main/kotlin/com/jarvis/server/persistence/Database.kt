@@ -58,7 +58,8 @@ class DatabaseMigrator(private val dataSource: DataSource) {
         Migration(2, "billing orders and events", "/db/migration/V002__billing_orders_events.sql"),
         Migration(3, "persistent license rate limits", "/db/migration/V003__persistent_license_rate_limits.sql"),
         Migration(4, "billing reconciliation guard", "/db/migration/V004__billing_reconciliation_guard.sql"),
-        Migration(5, "shared AI usage", "/db/migration/V005__shared_ai_usage.sql")
+        Migration(5, "shared AI usage", "/db/migration/V005__shared_ai_usage.sql"),
+        Migration(6, "control plane", "/db/migration/V006__control_plane.sql")
     )
 
     fun migrate() {

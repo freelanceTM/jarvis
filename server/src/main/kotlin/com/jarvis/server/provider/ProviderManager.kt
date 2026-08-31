@@ -53,7 +53,10 @@ interface ProviderSelectionPolicy {
  */
 class DefaultProviderSelectionPolicy(
     private val configs: Map<ProviderId, ProviderConfig>,
-    private val health: ProviderHealthTracker
+    private val health: ProviderHealthTracker,
+    /** Control Plane §12: runtime-overrides priority/enabled (admin settings). */
+    private val overrides: com.jarvis.server.admin.ProviderRuntimeOverrides =
+        com.jarvis.server.admin.ProviderRuntimeOverrides()
 ) : ProviderSelectionPolicy {
     override fun select(
         providers: List<AiProvider>,
@@ -62,7 +65,8 @@ class DefaultProviderSelectionPolicy(
         .asSequence()
         .filter { provider ->
             val cfg = configs[provider.id]
-            cfg != null && cfg.enabled && provider.isConfigured()
+            val runtimeEnabled = overrides.enabled(provider.id)
+            cfg != null && cfg.enabled && (runtimeEnabled ?: true) && provider.isConfigured()
         }
         .filter { provider ->
             val caps = provider.capabilities
@@ -73,7 +77,7 @@ class DefaultProviderSelectionPolicy(
         .sortedWith(
             compareBy(
                 { if (health.status(it.id) == HealthStatus.HEALTHY) 0 else 1 },
-                { configs[it.id]?.priority ?: Int.MAX_VALUE }
+                { overrides.priority(it.id) ?: configs[it.id]?.priority ?: Int.MAX_VALUE }
             )
         )
         .toList()
