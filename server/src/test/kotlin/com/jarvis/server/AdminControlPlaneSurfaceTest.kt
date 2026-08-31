@@ -122,8 +122,9 @@ class AdminControlPlaneSurfaceTest : PostgresTestSupport() {
         assertEquals(200, api("GET", "/v1/admin/admins", token).status)
         val supporterId = accounts.findByUsername("supporter")!!.id
         assertEquals(200, api("POST", "/v1/admin/admins/$supporterId/set-status", token, """{"status":"DISABLED"}""").status)
-        // DISABLED-оператор не может войти.
-        assertEquals(403, api("POST", "/v1/admin/auth/login", null, "{\"username\":\"" + "supporter" + "\",\"password\":\"" + "support-pass-123" + "\"}").status)
+        // DISABLED-оператор не может войти: passwordHashOf отдаёт хэш только
+        // ACTIVE-аккаунтам, поэтому login даёт unified 401 (fail-closed).
+        assertEquals(401, api("POST", "/v1/admin/auth/login", null, "{\"username\":\"" + "supporter" + "\",\"password\":\"" + "support-pass-123" + "\"}").status)
         assertEquals(200, api("POST", "/v1/admin/admins/$supporterId/set-status", token, """{"status":"ACTIVE"}""").status)
         // Ротация пароля + старый пароль больше не работает.
         assertEquals(200, api("POST", "/v1/admin/admins/$supporterId/set-password", token, "{\"password\":\"" + "fresh-pass-12345" + "\"}").status)
