@@ -12,6 +12,13 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- `docs/OMNIX_V03_PLAN_VERIFICATION.md`: item-by-item verification of the
+  proposed OMNIX v0.3 plan against actual code — what already exists
+  (ExecutionDecisionEngine as the ExecutionRouter, FastCommandRouter no-AI
+  paths, server provider selection), the confirmed gap table
+  (key pools, neural embeddings, device identity, admin plane, local LLM
+  measurements) with причина/влияние/исправление, and the adjusted phase order.
+
 - `docs/AUDIT_2026_08_29.md`: final independent audit report — item-by-item
   verification of the 2026-08-29 review against code, Before/After comparison,
   explicit deferred/declined items with rationale, and the next-step plan.
