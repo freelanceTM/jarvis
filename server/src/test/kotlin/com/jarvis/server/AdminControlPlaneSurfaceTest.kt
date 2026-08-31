@@ -86,7 +86,7 @@ class AdminControlPlaneSurfaceTest : PostgresTestSupport() {
     }
 
     private fun login(username: String, password: String): String {
-        val r = api("POST", "/v1/admin/auth/login", null, """{"username":"$username","password":"""" + password + """"}""")
+        val r = api("POST", "/v1/admin/auth/login", null, "{\"username\":\"" + username + "\",\"password\":\"" + password + "\"})
         assertEquals(200, r.status)
         return Json.parseToJsonElement(r.body).let { (it as kotlinx.serialization.json.JsonObject)["token"] }
             ?.let { (it as kotlinx.serialization.json.JsonPrimitive).content }!!
@@ -111,27 +111,27 @@ class AdminControlPlaneSurfaceTest : PostgresTestSupport() {
         // Создание SUPPORT-оператора.
         val created = api(
             "POST", "/v1/admin/admins", token,
-            """{"username":"supporter","password":"""" + "support-pass-123" + ""","role":"SUPPORT"}"""
+            "{\"username\":\"supporter\",\"password\":\"" + "support-pass-123" + "\",\"role\":\"SUPPORT\"}"
         )
         assertEquals("create body=${created.body}", 200, created.status)
         // VIEWER не может создавать операторов.
         accounts.create("seer", AdminPasswords.hash("viewer-pass-123"), AdminRole.VIEWER, Instant.now())
         val viewerToken = login("seer", "viewer-pass-123")
-        assertEquals(403, api("POST", "/v1/admin/admins", viewerToken, """{"username":"x1","password":"""" + "whatever-pass-1" + ""","role":"ADMIN"}""").status)
+        assertEquals(403, api("POST", "/v1/admin/admins", viewerToken, "{\"username\":\"x1\",\"password\":\"" + "whatever-pass-1" + "\",\"role\":\"ADMIN\"}").status)
         // Список и смена статуса.
         assertEquals(200, api("GET", "/v1/admin/admins", token).status)
         val supporterId = accounts.findByUsername("supporter")!!.id
         assertEquals(200, api("POST", "/v1/admin/admins/$supporterId/set-status", token, """{"status":"DISABLED"}""").status)
         // DISABLED-оператор не может войти.
-        assertEquals(403, api("POST", "/v1/admin/auth/login", null, """{"username":"supporter","password":"""" + "support-pass-123" + """}").status)
+        assertEquals(403, api("POST", "/v1/admin/auth/login", null, "{\"username\":\"supporter\",\"password\":\"" + "support-pass-123" + "\"}).status)
         assertEquals(200, api("POST", "/v1/admin/admins/$supporterId/set-status", token, """{"status":"ACTIVE"}""").status)
         // Ротация пароля + старый пароль больше не работает.
-        assertEquals(200, api("POST", "/v1/admin/admins/$supporterId/set-password", token, """{"password":"""" + "fresh-pass-12345" + """}").status)
-        val relogin = api("POST", "/v1/admin/auth/login", null, """{"username":"supporter","password":"""" + "support-pass-123" + """}")
+        assertEquals(200, api("POST", "/v1/admin/admins/$supporterId/set-password", token, "{\"password\":\"" + "fresh-pass-12345" + "\"}).status)
+        val relogin = api("POST", "/v1/admin/auth/login", null, "{\"username\":\"supporter\",\"password\":\"" + "support-pass-123" + "\"})
         assertEquals(401, relogin.status)
-        assertEquals(200, api("POST", "/v1/admin/auth/login", null, """{"username":"supporter","password":"""" + "fresh-pass-12345" + """}""").status)
+        assertEquals(200, api("POST", "/v1/admin/auth/login", null, "{\"username\":\"supporter\",\"password\":\"" + "fresh-pass-12345" + "\"}).status)
         // Дубликат username → 409.
-        assertEquals(409, api("POST", "/v1/admin/admins", token, """{"username":"supporter","password":"""" + "another-pass-123" + ""","role":"VIEWER"}""").status)
+        assertEquals(409, api("POST", "/v1/admin/admins", token, "{\"username\":\"supporter\",\"password\":\"" + "another-pass-123" + "\",\"role\":\"VIEWER\"}").status)
     }
 
     @Test

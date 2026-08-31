@@ -97,7 +97,7 @@ class AdminControlPlaneIntegrationTest : PostgresTestSupport() {
                 HttpRequestContext(
                     method = "POST", path = "/v1/admin/auth/login",
                     authorizationHeader = null,
-                    body = """{"username":"$username","password":"""" + password + """}",
+                    body = "{\"username\":\"" + username + "\",\"password\":\"" + password + "\"},
                     contentLength = 0, remoteAddress = "10.0.0.9"
                 )
             )
@@ -150,7 +150,7 @@ class AdminControlPlaneIntegrationTest : PostgresTestSupport() {
     @Test
     fun `wrong password is 401 and does not crash limiter`() {
         createAdmin("root2", AdminRole.SUPER_ADMIN)
-        assertEquals(401, post(null, "/v1/admin/auth/login", """{"username":"root2","password":"""" + "totally-wrong-pass" + """}""").status)
+        assertEquals(401, post(null, "/v1/admin/auth/login", "{\"username\":\"root2\",\"password\":\" + "totally-wrong-pass" + \"}").status)
     }
 
     @Test
@@ -160,10 +160,10 @@ class AdminControlPlaneIntegrationTest : PostgresTestSupport() {
             assertEquals(
                 "attempt ${it + 1} должен быть 401",
                 401,
-                post(null, "/v1/admin/auth/login", """{"username":"victim","password":"""" + "guess-pass-0001" + """}""").status
+                post(null, "/v1/admin/auth/login", "{\"username\":\"victim\",\"password\":\" + "guess-pass-0001" + \"}").status
             )
         }
-        assertEquals(429, post(null, "/v1/admin/auth/login", """{"username":"victim","password":"""" + "guess-pass-0002" + """}""").status)
+        assertEquals(429, post(null, "/v1/admin/auth/login", "{\"username\":\"victim\",\"password\":\" + "guess-pass-0002" + \"}").status)
     }
 
     @Test
