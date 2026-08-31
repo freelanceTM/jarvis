@@ -822,7 +822,7 @@ class AdminHttpHandler(
         audit.append(
             actor = principal.actor, action = "admin.create", entityType = "ADMIN_ACCOUNT",
             entityId = account.id.toString(), oldValue = "{}",
-            newValue = """{"username":"$username","role":$role}""",
+            newValue = """{"username":"$username","role":"$role"}""",
             remoteAddress = request.remoteAddress, sessionId = principal.sessionId, requestId = null
         )
         return plain(200, buildJsonObject { put("id", account.id.toString()); put("role", account.role.name) })
