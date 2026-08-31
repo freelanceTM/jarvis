@@ -1,7 +1,7 @@
 -- OMNIX Control Plane (V006): admin identities, sessions, audit, settings, feature flags.
 -- Existing entities (accounts, licenses, api_tokens, license_audit_log, ai_usage_records)
 -- are REUSED as the source of truth. Nothing here duplicates them.
--- NOTE: no semicolons allowed in these comment lines (the migrator splits on ";").
+-- NOTE: no semicolons allowed in comment lines (the migrator splits on the char).
 
 CREATE TABLE admin_accounts (
     id UUID PRIMARY KEY,
@@ -17,7 +17,7 @@ CREATE TABLE admin_accounts (
 CREATE TABLE admin_sessions (
     id UUID PRIMARY KEY,
     account_id UUID NOT NULL REFERENCES admin_accounts(id) ON DELETE CASCADE,
-    -- SHA-256 of the bearer token; the raw token is never stored.
+    -- SHA-256 of the bearer token. The raw token is never stored.
     token_hash BYTEA NOT NULL UNIQUE,
     created_at TIMESTAMPTZ NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
@@ -31,7 +31,7 @@ CREATE TABLE admin_sessions (
 CREATE INDEX idx_admin_sessions_account ON admin_sessions(account_id, expires_at);
 
 -- Append-only administrative audit trail (immutable by design: the application
--- contains no UPDATE/DELETE path; see AdminControlPlaneIntegrationTest).
+-- contains no UPDATE/DELETE path (see AdminControlPlaneIntegrationTest).
 CREATE TABLE admin_audit_log (
     id UUID PRIMARY KEY,
     occurred_at TIMESTAMPTZ NOT NULL,
