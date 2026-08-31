@@ -231,8 +231,8 @@ class AdminControlPlaneIntegrationTest : PostgresTestSupport() {
         createAdmin("dev-admin", AdminRole.ADMIN)
         val token = login("dev-admin", "bootstrap-pass-123")!!
         val response = post(token, "/v1/admin/devices/$tokenId/revoke")
-        assertEquals("revoke body=${'$'}{response.body}", 200, response.status)
-        assertTrue("body=${'$'}{response.body}", response.body.contains("REVOKED"))
+        assertEquals("revoke body=${response.body}", 200, response.status)
+        assertTrue("body=${response.body}", response.body.contains("REVOKED"))
         dataSource.connection.use { c ->
             c.prepareStatement("SELECT status FROM api_tokens WHERE id = ?").use { ps ->
                 ps.setObject(1, tokenId)
@@ -254,7 +254,7 @@ class AdminControlPlaneIntegrationTest : PostgresTestSupport() {
         val token = login("lic-admin", "bootstrap-pass-123")!!
 
         val disableResp = post(token, "/v1/admin/licenses/$licenseId/disable")
-        assertEquals("disable body=${'$'}{disableResp.body}", 200, disableResp.status)
+        assertEquals("disable body=${disableResp.body}", 200, disableResp.status)
         assertEquals("DISABLED", statusOf(licenseId))
         assertEquals(200, post(token, "/v1/admin/licenses/$licenseId/enable").status)
         assertEquals("ACTIVE", statusOf(licenseId))
@@ -275,7 +275,7 @@ class AdminControlPlaneIntegrationTest : PostgresTestSupport() {
         createAdmin("plan-admin", AdminRole.ADMIN)
         val token = login("plan-admin", "bootstrap-pass-123")!!
         val response = post(token, "/v1/admin/licenses/$licenseId/change-plan", """{"planId":"no_such_plan"}""")
-        assertEquals("change-plan body=${'$'}{response.body}", 400, response.status)
+        assertEquals("change-plan body=${response.body}", 400, response.status)
         assertTrue(audit.find(AdminAuditQuery(action = "license.change-plan")).isEmpty())
     }
 
@@ -342,8 +342,8 @@ class AdminControlPlaneIntegrationTest : PostgresTestSupport() {
         createAdmin("usage-admin", AdminRole.VIEWER)
         val token = login("usage-admin", "bootstrap-pass-123")!!
         val usage = get(token, "/v1/admin/usage?days=7")
-        assertEquals("usage body=${'$'}{usage.body}", 200, usage.status)
-        assertTrue("usage body=${'$'}{usage.body}", usage.body.contains("\"requests\":1"))
+        assertEquals("usage body=${usage.body}", 200, usage.status)
+        assertTrue("usage body=${usage.body}", usage.body.contains("\"requests\":1"))
         assertTrue(usage.body.contains("NOT COLLECTED")) // локальные выполнения: честно
 
         // VIEWER не может писать настройки → cost настраивает отдельный админ:
@@ -352,7 +352,7 @@ class AdminControlPlaneIntegrationTest : PostgresTestSupport() {
         put(adminToken, "/v1/admin/settings/cost", """{"providers":{"GROQ":{"usdPerMillionInput":5.0,"usdPerMillionOutput":10.0}}}""")
         val cost = get(token, "/v1/admin/usage/cost?days=7")
         assertEquals(200, cost.status)
-        assertTrue("cost body=${'$'}{cost.body}", cost.body.contains("in/1e6*5.0"))
+        assertTrue("cost body=${cost.body}", cost.body.contains("in/1e6*5.0"))
         assertTrue(cost.body.contains("\"totalUsd\":15.0") || cost.body.contains("15.0"))
     }
 
