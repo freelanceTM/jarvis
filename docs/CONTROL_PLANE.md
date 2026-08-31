@@ -80,8 +80,14 @@ GET  /v1/admin/usage?days | usage/cost?days
 GET  /v1/admin/logs?component | audit
 GET|PUT /v1/admin/settings/{system|security|ai|limits|cost}
 GET  /v1/admin/features                     PUT /v1/admin/features/{key}
+GET  /v1/admin/admins                       POST /v1/admin/admins
+POST /v1/admin/admins/{id}/set-status | set-password   (ADMINS_MANAGE)
 GET  /v1/admin/ui/*                         (server-rendered operational UI)
 ```
+
+Query-параметры (`?page`, `?days`, `?component`, `?actor`, `?action`) приходят
+через `HttpRequestContext.rawQuery` (заполняется из `requestURI.rawQuery` в
+`Main`); путь в `handle()` режется по `?` — тесты могут передавать полный URI.
 
 Не тронуты: `/v1/admin/licenses/issue|revoke`, `/v1/admin/metrics*`,
 `/v1/license/*`, `/v1/billing/*`, `/v1/ai/execute`, `/v1/health`.
