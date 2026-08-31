@@ -12,16 +12,7 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
-- `docs/OMNIX_V03_PLAN_VERIFICATION.md`: item-by-item verification of the
-  proposed OMNIX v0.3 plan against actual code — what already exists
-  (ExecutionDecisionEngine as the ExecutionRouter, FastCommandRouter no-AI
-  paths, server provider selection), the confirmed gap table
-  (key pools, neural embeddings, device identity, admin plane, local LLM
-  measurements) with причина/влияние/исправление, and the adjusted phase order.
 
-- `docs/AUDIT_2026_08_29.md`: final independent audit report — item-by-item
-  verification of the 2026-08-29 review against code, Before/After comparison,
-  explicit deferred/declined items with rationale, and the next-step plan.
 
 - Release signing pipeline: env/keystore.properties-driven `signingConfig`,
   manual "Release JARVIS (signed)" workflow (AAB+APK, `apksigner verify`),
@@ -49,6 +40,21 @@ must be added only when the repository owner creates an actual release.
 ### Changed
 
 - `ToolExecutionResult.failure(...)` gained optional structured `data`.
+### Removed
+
+- Documentation cleanup: removed agent-session and meta documentation
+  (`docs/AUDIT_2026_08_29.md`, `docs/OMNIX_V03_PLAN_VERIFICATION.md`,
+  `docs/BENCHMARK.md` + `docs/benchmark/`, `docs/DEPENDENCY_UPDATE_PLAN.md`,
+  `docs/SUPPLY_CHAIN_SECURITY.md`, `docs/EXECUTION_DECISION_ENGINE.md`,
+  `docs/SERVER_AI_LAYER.md`, `docs/TEST_QUALITY.md`,
+  `docs/ROOM_SCHEMA_POLICY.md`, `docs/PHASE2_DEVICE_AND_PROVIDER_VALIDATION.md`,
+  `docs/ANDROID_ENVIRONMENTS.md`, `docs/adr/`). Operational docs kept:
+  RUNBOOK, RELEASE, PRODUCTION_DEPLOYMENT, LICENSE_BILLING,
+  ANDROID_CAPABILITIES, LOCAL_AI. The single-instance decision (former
+  ADR-0001) is now stated inline in the enforcing code
+  (`DeploymentSecurityConfig`, `PostgresSingleInstanceGuard`) and asserted
+  by `SharedStateArchitectureTest` against code, not prose.
+
 ### Added
 
 - JaCoCo coverage configuration for Android JVM tests and the server JVM module.

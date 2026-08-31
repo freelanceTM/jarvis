@@ -5,7 +5,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.sql.DataSource
 
 /**
- * Session-level PostgreSQL advisory lock enforcing ADR-0001's one-server limit.
+ * Session-level PostgreSQL advisory lock enforcing the single-instance decision
+ * (exactly one production server; shared state lives in PostgreSQL).
  *
  * The dedicated connection remains open for the process lifetime. PostgreSQL
  * releases the lock automatically if the process/connection dies. Failure to

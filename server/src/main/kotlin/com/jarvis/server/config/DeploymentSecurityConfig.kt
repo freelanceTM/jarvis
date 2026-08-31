@@ -92,7 +92,11 @@ data class DeploymentSecurityConfig(
     val tlsTerminatedByProxy: Boolean = false,
     val trustProxyHeaders: Boolean = false,
     val trustedProxyCidrs: List<IpCidr> = emptyList(),
-    /** Declared orchestrator replica count; ADR-0001 currently permits exactly one. */
+    /**
+     * Declared orchestrator replica count. Single-instance decision: production
+     * permits exactly one instance (circuit/metrics state is process-local;
+     * shared security/accounting state lives in PostgreSQL).
+     */
     val applicationReplicaCount: Int = 1
 ) {
     val isProduction: Boolean get() = environment == DeploymentEnvironment.PRODUCTION
@@ -117,7 +121,7 @@ data class DeploymentSecurityConfig(
         }
         if (isProduction) {
             require(applicationReplicaCount == 1) {
-                "ADR-0001 permits exactly one production application instance"
+                "Single-instance decision permits exactly one production application instance"
             }
             require(tlsTerminatedByProxy) {
                 "Production requires PRODUCTION_TLS_TERMINATED=true"

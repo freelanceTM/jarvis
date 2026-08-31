@@ -21,7 +21,7 @@ Internet
 Internet -> TCP 80 -> Caddy 308 redirect only (never reverse_proxy)
 ```
 
-ADR-0001 ограничивает topology одним application instance. Production требует
+Single-instance решение ограничивает topology одним application instance. Production требует
 `APPLICATION_REPLICA_COUNT=1`, а PostgreSQL session advisory lock не позволяет
 запуститься второму процессу. Не используйте `docker compose --scale`, Kubernetes
 replicas >1 или несколько VM с этим application до replacement ADR/shared
@@ -101,7 +101,7 @@ docker compose \
 ```text
 APP_ENV=production
 BIND_HOST=0.0.0.0                 # только внутри private container network
-APPLICATION_REPLICA_COUNT=1       # ADR-0001; другое значение запрещено
+APPLICATION_REPLICA_COUNT=1       # single-instance решение; другое значение запрещено
 PRODUCTION_TLS_TERMINATED=true
 TRUST_PROXY_HEADERS=true
 TRUSTED_PROXY_CIDRS=172.30.0.2/32        # exact Caddy container IP
