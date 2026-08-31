@@ -46,7 +46,7 @@ class AdminUiHandler(
             return if (request.method == "POST") {
                 handleLoginPost(request)
             } else {
-                html(200, loginPage(request))
+                html(200, loginPage())
             }
         }
         if (path == "logout" && request.method == "POST") {
@@ -105,7 +105,7 @@ class AdminUiHandler(
                     )
                 )
             }
-            else -> html(200, loginPage(request, failed = true))
+            else -> html(200, loginPage(failed = true))
         }
     }
 
@@ -346,7 +346,7 @@ class AdminUiHandler(
     private fun csrfToken(request: HttpRequestContext): String? =
         cookieValue(request, "admin_session")?.let { AdminPasswords.sha256Hex("csrf|$it").take(32) }
 
-    private fun loginPage(request: HttpRequestContext, failed: Boolean = false): String {
+    private fun loginPage(failed: Boolean = false): String {
         val msg = if (failed) """<p class="err">Неверные учётные данные или rate limit.</p>""" else ""
         return """
         <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -413,7 +413,7 @@ class AdminUiHandler(
 
     private companion object {
         // Dense operational theme: dark, small paddings, no decorative chrome.
-        val CSS = """
+        const val CSS = """
         :root{--bg:#0d1117;--panel:#161b22;--fg:#c9d1d9;--mut:#8b949e;--acc:#58a6ff;--ok:#3fb950;--warn:#d29922;--err:#f85149}
         *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,sans-serif}
         header{display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--panel);flex-wrap:wrap}
