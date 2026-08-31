@@ -111,13 +111,13 @@ class AdminControlPlaneSurfaceTest : PostgresTestSupport() {
         // Создание SUPPORT-оператора.
         val created = api(
             "POST", "/v1/admin/admins", token,
-            "{\"username\":\"" + "supporter" + "\",\"password\":\"" + "support-pass-123" + ",\"role\":\"SUPPORT\"}"
+            "{\"username\":\"" + "supporter" + "\",\"password\":\"" + "support-pass-123" + "\",\"role\":\"SUPPORT\"}"
         )
         assertEquals("create body=${created.body}", 200, created.status)
         // VIEWER не может создавать операторов.
         accounts.create("seer", AdminPasswords.hash("viewer-pass-123"), AdminRole.VIEWER, Instant.now())
         val viewerToken = login("seer", "viewer-pass-123")
-        assertEquals(403, api("POST", "/v1/admin/admins", viewerToken, "{\"username\":\"" + "x1" + "\",\"password\":\"" + "whatever-pass-1" + ",\"role\":\"ADMIN\"}").status)
+        assertEquals(403, api("POST", "/v1/admin/admins", viewerToken, "{\"username\":\"" + "x1" + "\",\"password\":\"" + "whatever-pass-1" + "\",\"role\":\"ADMIN\"}").status)
         // Список и смена статуса.
         assertEquals(200, api("GET", "/v1/admin/admins", token).status)
         val supporterId = accounts.findByUsername("supporter")!!.id
@@ -131,7 +131,7 @@ class AdminControlPlaneSurfaceTest : PostgresTestSupport() {
         assertEquals(401, relogin.status)
         assertEquals(200, api("POST", "/v1/admin/auth/login", null, "{\"username\":\"" + "supporter" + "\",\"password\":\"" + "fresh-pass-12345" + "\"}").status)
         // Дубликат username → 409.
-        assertEquals(409, api("POST", "/v1/admin/admins", token, "{\"username\":\"" + "supporter" + "\",\"password\":\"" + "another-pass-123" + ",\"role\":\"VIEWER\"}").status)
+        assertEquals(409, api("POST", "/v1/admin/admins", token, "{\"username\":\"" + "supporter" + "\",\"password\":\"" + "another-pass-123" + "\",\"role\":\"VIEWER\"}").status)
     }
 
     @Test
@@ -230,8 +230,8 @@ class AdminControlPlaneSurfaceTest : PostgresTestSupport() {
         val now = Timestamp.from(Instant.now())
         dataSource.connection.use { c ->
             c.prepareStatement(
-                "INSERT INTO billing_orders (id, account_id, plan_id, provider, status, amount_minor, currency, idempotency_key, created_at, updated_at) " +
-                    "VALUES (?, ?, 'pro_monthly', 'PADDLE', 'PAID', 1400, 'USD', ?, ?, ?)"
+                "INSERT INTO billing_orders (id, account_id, plan_id, provider, status, amount_minor, currency, idempotency_key, paid_at, created_at, updated_at) " +
+                    "VALUES (?, ?, 'pro_monthly', 'PADDLE', 'PAID', 1400, 'USD', ?, now(), ?, ?)"
             ).use { ps ->
                 ps.setObject(1, UUID.randomUUID()); ps.setObject(2, accountId)
                 ps.setString(3, "idem-" + UUID.randomUUID()); ps.setTimestamp(4, now); ps.setTimestamp(5, now)
