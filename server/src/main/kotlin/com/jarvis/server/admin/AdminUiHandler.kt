@@ -34,11 +34,11 @@ class AdminUiHandler(
     fun handle(request: HttpRequestContext): HttpResponseContext {
         val path = request.path.removePrefix("/v1/admin/ui").trim('/')
         val cookie = cookieValue(request, "admin_session")
-        val principal = cookie?.let {
-            when (val result = auth.authenticate("Bearer $it", staticAuthenticator)) {
-                is AdminAuthResult.Success -> result.principal
-                AdminAuthResult.Unauthenticated -> null
-            }
+        val authResult = cookie?.let { auth.authenticate("Bearer $it", staticAuthenticator) }
+        val principal = if (authResult is AdminAuthResult.Success) {
+            authResult.principal
+        } else {
+            null
         }
 
         // Login/логаут доступны без principal.
@@ -60,10 +60,9 @@ class AdminUiHandler(
             )
         }
 
-        principal ?: return html(
-            303, "",
-            headers = mapOf("Location" to "/v1/admin/ui/login")
-        )
+        if (principal == null) {
+            return html(303, "", headers = mapOf("Location" to "/v1/admin/ui/login"))
+        }
 
         if (request.method == "POST" && path.startsWith("licenses/")) {
             return licenseAction(principal, request, path.removePrefix("licenses/"))
@@ -276,7 +275,7 @@ class AdminUiHandler(
         val summary = queries.usageSummary(clientId = null, days = 7)
         val totals = CostModel.calculate(summary.byProvider, settings.cost())
         val lines = totals.lines.joinToString("") { l ->
-            row(l.provider, l.inputTokens ?: "-", l.outputTokens ?: "-", l.costUsd?.toString() ?: "UNKNOWN", l.formula)
+            row(l.provider, l.inputTokens?.toString() ?: "-", l.outputTokens?.toString() ?: "-", l.costUsd?.toString() ?: "UNKNOWN", l.formula)
         }
         return page(
             principal, "Usage & Cost (7d)",

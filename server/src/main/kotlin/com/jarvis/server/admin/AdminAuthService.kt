@@ -49,7 +49,7 @@ data class AdminSecurityPolicy(
  * - короткоживущие session-токены, хранятся только хеши;
  * - logout / revocation / sliding re-issue;
  * - legacy static admin-токены (env) продолжают работать как SUPER_ADMIN —
- *   обратная совместимость с существующими /v1/admin/licenses/* (ТЗ §23:
+ *   обратная совместимость с существующими /v1/admin/licenses/… (ТЗ §23:
  *   «сначала проверь существующие routes»).
  *
  * Подготовка к 2FA: точка расширения — [AdminLoginResult.Success] после

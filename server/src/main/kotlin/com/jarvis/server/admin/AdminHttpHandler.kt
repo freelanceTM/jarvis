@@ -17,7 +17,7 @@ import java.util.UUID
 /**
  * OMNIX CONTROL PLANE — Admin API (Control Plane ТЗ §23).
  *
- * Все маршруты под существующим convention `/v1/admin/*` (ТЗ §23: «сначала
+ * Все маршруты под существующим convention `/v1/admin/…` (ТЗ §23: «сначала
  * проверь существующие routes»); issue/revoke лицензий остаются в
  * LicenseBillingHttpHandler — этот handler возвращает для них null.
  *
@@ -37,7 +37,7 @@ class AdminHttpHandler(
     private val queries: AdminQueries,
     private val providerManager: ProviderManager,
     private val overrides: com.jarvis.server.admin.ProviderRuntimeOverrides,
-    /** Server-rendered operational UI (/v1/admin/ui/*). */
+    /** Server-rendered operational UI (/v1/admin/ui/…). */
     private val ui: com.jarvis.server.admin.AdminUiHandler? = null,
     private val json: Json = Json
 ) {

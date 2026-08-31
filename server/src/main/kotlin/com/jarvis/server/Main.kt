@@ -488,7 +488,7 @@ object ServerBootstrap {
                 licenseService = licenseService,
                 logger = logger
             )::isEntitled,
-            // Control Plane: admin-маршруты (/v1/admin/*) первым слоем,
+            // Control Plane: admin-маршруты /v1/admin/… первым слоем,
             // лицензионные (issue/revoke, redeem, checkout, webhooks) — следом.
             extensionHandler = { request ->
                 adminHttpHandler.handle(request) ?: licenseHttpHandler.handle(request)

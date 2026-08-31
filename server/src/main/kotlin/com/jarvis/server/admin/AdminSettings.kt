@@ -210,17 +210,6 @@ class AdminSettingsService(private val dataSource: DataSource, private val json:
         }
     }
 
-    private fun serializerFor(key: String): kotlinx.serialization.KSerializer<out kotlinx.serialization.Serializable>? =
-        when (key) {
-            "system" -> SystemSettings.serializer()
-            "security" -> SecuritySettings.serializer()
-            "ai" -> AiRoutingSettings.serializer()
-            "limits" -> LimitsSettings.serializer()
-            "cost" -> CostSettings.serializer()
-            else -> null
-        }
-}
-
     /** Версия сохранённой секции (null = ещё не менялась). */
     fun versionOf(key: String): Long? = dataSource.connection.use { c ->
         c.prepareStatement("SELECT version FROM admin_settings WHERE key = ?").use { ps ->
@@ -228,3 +217,4 @@ class AdminSettingsService(private val dataSource: DataSource, private val json:
             ps.executeQuery().use { rs -> if (rs.next()) rs.getLong(1) else null }
         }
     }
+}
