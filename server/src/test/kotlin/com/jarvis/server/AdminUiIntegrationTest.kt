@@ -24,6 +24,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.sql.Timestamp
+import java.time.Instant
+import java.util.UUID
 
 /**
  * UI integration (Control Plane ТЗ §30 E2E): login → dashboard → pages.
@@ -105,6 +108,35 @@ class AdminUiIntegrationTest : PostgresTestSupport() {
 
         val audit = call("GET", "/v1/admin/ui/audit", cookie = "admin_session=$sessionToken")
         assertEquals(200, audit.status)
+    }
+
+    @Test
+    fun `user-controlled values are escaped in rendered html`() {
+        val accountId = UUID.randomUUID()
+        val now = Timestamp.from(Instant.now())
+        dataSource.connection.use { c ->
+            c.prepareStatement(
+                "INSERT INTO accounts (id, external_ref, status, created_at, updated_at) VALUES (?, ?, 'ACTIVE', ?, ?)"
+            ).use { ps ->
+                ps.setObject(1, accountId)
+                ps.setString(2, "<img src=x onerror=alert(1)>")
+                ps.setTimestamp(3, now)
+                ps.setTimestamp(4, now)
+                ps.executeUpdate()
+            }
+        }
+        accounts.create("ui-escape", AdminPasswords.hash("ui-password-123"), AdminRole.VIEWER, Instant.now())
+        val tokenResponse = call(
+            "POST", "/v1/admin/ui/login",
+            body = "username=ui-escape&password=ui-password-123"
+        )
+        val sessionToken = tokenResponse.headers["Set-Cookie"]!!
+            .substringAfter("admin_session=").substringBefore(';')
+
+        val users = call("GET", "/v1/admin/ui/users", cookie = "admin_session=$sessionToken")
+        assertEquals(200, users.status)
+        assertTrue(users.body.contains("&lt;img src=x onerror=alert(1)&gt;"))
+        assertTrue(!users.body.contains("<img src=x onerror=alert(1)>"))
     }
 
     @Test

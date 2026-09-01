@@ -55,7 +55,7 @@ class AdminUiHandler(
                 303, "",
                 headers = mapOf(
                     "Location" to "/v1/admin/ui/login",
-                    "Set-Cookie" to "admin_session=; HttpOnly; SameSite=Strict; Max-Age=0; Path=/v1/admin/ui"
+                    "Set-Cookie" to "admin_session=; HttpOnly; Secure; SameSite=Strict; Max-Age=0; Path=/v1/admin/ui"
                 )
             )
         }
@@ -172,7 +172,7 @@ class AdminUiHandler(
                 r.externalRef ?: "-", r.status,
                 r.licenses.toString() + " (" + r.activeLicenses + " active)",
                 r.lastActiveAt?.toString()?.take(19) ?: "never",
-                """<a href="/v1/admin/ui/users/${r.accountId}">open</a>"""
+                raw("""<a href="/v1/admin/ui/users/${r.accountId}">open</a>""")
             )
         }
         return page(principal, "Users", """<table><tr><th>ID</th><th>Ref</th><th>Status</th><th>Licenses</th><th>Last active</th><th></th></tr>$body</table>""")
@@ -220,7 +220,7 @@ class AdminUiHandler(
         val rows = queries.licenses(50, 0)
         val body = rows.joinToString("") { l ->
             row(
-                """<a href="/v1/admin/ui/licenses/${l.id}">${l.id.toString().take(8)}…</a>""",
+                raw("""<a href="/v1/admin/ui/licenses/${l.id}">${l.id.toString().take(8)}…</a>"""),
                 l.planId, l.status, l.billingStatus, l.expiresAt?.toString()?.take(10) ?: "-"
             )
         }
@@ -230,12 +230,12 @@ class AdminUiHandler(
     private fun licenseDetail(principal: AdminPrincipal, id: String, csrf: String?): String {
         val uuid = runCatching { UUID.fromString(id) }.getOrNull() ?: return errorPage("bad id")
         val license = queries.license(uuid) ?: return errorPage("not found")
-        
+
         return page(
             principal, "License ${license.id.toString().take(8)}…",
             """
-            <p>Plan: <b>${license.planId}</b>, status <b>${license.status}</b>, billing ${license.billingStatus},
-            expires ${license.expiresAt?.toString()?.take(10) ?: "-"}</p>
+            <p>Plan: <b>${esc(license.planId)}</b>, status <b>${esc(license.status)}</b>, billing ${esc(license.billingStatus)},
+            expires ${esc(license.expiresAt?.toString()?.take(10) ?: "-")}</p>
             ${if (AdminRbac.can(principal.role, AdminPermission.LICENSES_WRITE)) {
                 """
                 <form method="post" action="/v1/admin/ui/licenses/$id">
@@ -308,14 +308,14 @@ class AdminUiHandler(
         val body = events.joinToString("") { e ->
             row(
                 e.occurredAt.toString().take(19), e.actor.take(24), e.action, e.entityType,
-                (e.entityId ?: "-").take(12), esc(e.newValue.take(40))
+                (e.entityId ?: "-").take(12), e.newValue.take(40)
             )
         }
         return page(principal, "Audit Log", """<table><tr><th>Time</th><th>Actor</th><th>Action</th><th>Entity</th><th>ID</th><th>New</th></tr>$body</table>""")
     }
 
     private fun settings(principal: AdminPrincipal): String {
-        fun sec(name: String, value: String) = row(name, "<code>${esc(value)}</code>")
+        fun sec(name: String, value: String) = row(name, raw("<code>${esc(value)}</code>"))
         return page(
             principal, "Settings",
             """
@@ -370,11 +370,11 @@ class AdminUiHandler(
         }
         return """
         <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-        <title>$title · OMNIX</title><style>$CSS</style></head><body>
+        <title>${esc(title)} · OMNIX</title><style>$CSS</style></head><body>
         <header><span class="brand">OMNIX CONTROL PLANE</span> $nav
         <form method="post" action="/v1/admin/ui/logout" class="inline"><button class="ghost">Logout (${esc(principal.actor)})</button></form>
         </header>
-        <main><h2>$title</h2>$content</main>
+        <main><h2>${esc(title)}</h2>$content</main>
         </body></html>
         """.trimIndent()
     }
@@ -383,11 +383,18 @@ class AdminUiHandler(
         """<!doctype html><html><head><meta charset="utf-8"><title>OMNIX</title><style>$CSS</style></head>
            <body><main><h2>Ошибка</h2><p>${esc(message)}</p><p><a href="/v1/admin/ui/dashboard">← dashboard</a></p></main></body></html>"""
 
-    private fun row(vararg cells: String): String =
-        "<tr>" + cells.joinToString("") { "<td>${it}</td>" } + "</tr>"
+    private data class RawHtml(val value: String)
+
+    private fun raw(value: String): RawHtml = RawHtml(value)
+
+    private fun row(vararg cells: Any): String =
+        "<tr>" + cells.joinToString("") { cell ->
+            val value = if (cell is RawHtml) cell.value else esc(cell.toString())
+            "<td>$value</td>"
+        } + "</tr>"
 
     private fun cookie(token: String): String =
-        "admin_session=$token; HttpOnly; SameSite=Strict; Path=/v1/admin/ui; Max-Age=${Duration.ofMinutes(60).toSeconds()}"
+        "admin_session=$token; HttpOnly; Secure; SameSite=Strict; Path=/v1/admin/ui; Max-Age=${Duration.ofMinutes(60).toSeconds()}"
 
     private fun cookieValue(request: HttpRequestContext, name: String): String? =
         request.header("Cookie")?.split(';')?.map { it.trim() }
@@ -408,7 +415,14 @@ class AdminUiHandler(
     private fun html(status: Int, body: String, headers: Map<String, String> = emptyMap()): HttpResponseContext =
         HttpResponseContext(
             status, body,
-            headers + mapOf("Content-Type" to "text/html; charset=utf-8", "Cache-Control" to "no-store", "X-Frame-Options" to "DENY")
+            headers + mapOf(
+                "Content-Type" to "text/html; charset=utf-8",
+                "Cache-Control" to "no-store",
+                "X-Frame-Options" to "DENY",
+                "X-Content-Type-Options" to "nosniff",
+                "Referrer-Policy" to "no-referrer",
+                "Content-Security-Policy" to "default-src 'self'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'"
+            )
         )
 
     private companion object {
