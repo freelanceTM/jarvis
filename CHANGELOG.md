@@ -12,6 +12,33 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- OMNIX Control Plane (merged from `feat/control-plane`): admin HTTP API with
+  RBAC and audit log, admin sessions/passwords, settings and feature flags,
+  provider runtime overrides, cost model, operational UI, `rawQuery` plumbing
+  through `HttpRequestContext`, and `V006__control_plane.sql` migration.
+  Covered by 44 new tests (unit, surface, integration, UI).
+
+### Changed
+
+- CI: `anchore/sbom-action` bumped 0.24.0 -> 0.24.2 (SHA-pinned; pin verified
+  against the upstream `v0.24.2` tag object).
+
+### Fixed
+
+- Restored executable bits on `scripts/*.sh` and `device-validation/*.sh`
+  that were dropped by the control-plane branch (CI invokes them via `bash`,
+  but the manual on-device kit relies on the exec bit).
+
+### Deferred (dependency bumps rejected during the 2026-09-01 branch audit)
+
+- `kotlin 1.9.24 -> 2.4.10`, `ksp -> 2.3.11`, `coroutines -> 1.11.0`,
+  `room -> 2.8.4`, `androidx.test:runner -> 1.7.0`: all five Dependabot PRs
+  omit the matching `gradle/verification-metadata.xml` entries, so the build
+  fails dependency verification. The Kotlin/KSP jumps additionally conflict
+  with the pinned Compose compiler `1.5.14` (Kotlin 1.9.x). These must be
+  redone as coordinated upgrades (toolchain + Compose compiler + lockfiles +
+  verification metadata) rather than merged as-is.
+
 
 
 - Release signing pipeline: env/keystore.properties-driven `signingConfig`,
