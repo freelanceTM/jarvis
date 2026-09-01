@@ -26,6 +26,8 @@ data class HttpRequestContext(
     val contentLength: Long,
     val headers: Map<String, String> = emptyMap(),
     val remoteAddress: String? = null,
+    /** Raw query string (после '?', без него). null = query отсутствует. */
+    val rawQuery: String? = null,
     val scheme: String = "http",
     val host: String? = null,
     val viaTrustedProxy: Boolean = false,
