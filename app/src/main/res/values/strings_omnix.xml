@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  OMNIX frontend copy — default (English) locale.
+
+  Rules: human language only. No technical permission names, no exception
+  class names, no HTTP codes, no provider or router names (§12, §18, §50, §73).
+  Every error answers WHAT / WHY / NEXT ACTION.
+-->
+<resources>
+
+    <!-- ===== Brand ===== -->
+    <string name="omnix_wordmark" translatable="false">OMNIX</string>
+    <string name="omnix_wake_word_quoted">“Omni”</string>
+
+    <!-- ===== Clip status (header) ===== -->
+    <string name="omnix_status_clip_connected">Clip Connected</string>
+    <string name="omnix_status_clip_disconnected">Clip disconnected</string>
+    <string name="omnix_status_clip_connecting">Connecting…</string>
+    <string name="omnix_status_clip_searching">Looking for your Clip…</string>
+    <string name="omnix_status_bluetooth_off">Bluetooth is off</string>
+    <string name="omnix_status_offline">Offline</string>
+
+    <!-- ===== Voice states (§15) ===== -->
+    <string name="omnix_state_ready">Ready to listen</string>
+    <string name="omnix_state_listening">Listening…</string>
+    <string name="omnix_state_thinking">Understanding…</string>
+    <string name="omnix_state_speaking">Speaking</string>
+    <string name="omnix_state_working">Working…</string>
+
+    <!-- ===== Home guidance (§9, §24–§26) ===== -->
+    <string name="omnix_home_hint_say_omni_wake">Say %1$s</string>
+    <string name="omnix_home_example_time">“Omni, what time is it?”</string>
+    <string name="omnix_home_offline_partial">Some features are still available.</string>
+
+    <!-- ===== Action phrasing (§16, §19) ===== -->
+    <string name="omnix_action_calling">Calling %1$s…</string>
+    <string name="omnix_action_calling_generic">Calling…</string>
+    <string name="omnix_action_messaging">Messaging %1$s…</string>
+    <string name="omnix_action_messaging_generic">Sending message…</string>
+    <string name="omnix_action_alarm">Setting alarm…</string>
+    <string name="omnix_action_timer">Setting timer…</string>
+    <string name="omnix_action_calendar">Checking your calendar…</string>
+    <string name="omnix_action_navigation">Getting directions to %1$s…</string>
+    <string name="omnix_action_navigation_generic">Getting directions…</string>
+    <string name="omnix_action_weather">Checking the weather…</string>
+    <string name="omnix_action_search">Searching…</string>
+    <string name="omnix_action_translate">Translating…</string>
+    <string name="omnix_action_app">Opening %1$s…</string>
+    <string name="omnix_action_app_generic">Opening app…</string>
+    <string name="omnix_action_device_setting">Adjusting your phone…</string>
+    <string name="omnix_action_media">Controlling playback…</string>
+    <string name="omnix_action_automation">Creating automation…</string>
+
+    <!-- Action results -->
+    <string name="omnix_result_call_started">Call started</string>
+    <string name="omnix_result_message_sent">Message sent</string>
+    <string name="omnix_result_done">Done</string>
+    <string name="omnix_result_cancelled">Cancelled</string>
+
+    <!-- ===== Confirmation (§17, §36) ===== -->
+    <string name="omnix_confirm_confirm">Confirm</string>
+    <string name="omnix_confirm_voice_hint">You can also say “%1$s”.</string>
+
+    <!-- ===== System states (§18, §49) ===== -->
+    <string name="omnix_error_clip_title">OMNIX Clip isn’t connected</string>
+    <string name="omnix_error_clip_body">Check your Bluetooth connection.</string>
+    <string name="omnix_error_clip_action">Connect</string>
+
+    <string name="omnix_error_bt_off_title">Bluetooth is off</string>
+    <string name="omnix_error_bt_off_body">Turn on Bluetooth to connect your OMNIX Clip.</string>
+    <string name="omnix_error_bt_off_action">Open Bluetooth</string>
+
+    <string name="omnix_error_mic_title">Microphone access is needed</string>
+    <string name="omnix_error_mic_body">OMNIX needs your microphone for voice commands.</string>
+    <string name="omnix_error_mic_action">Allow</string>
+
+    <string name="omnix_error_mic_unavailable_title">The microphone is busy</string>
+    <string name="omnix_error_mic_unavailable_body">Another app is using it. Try again in a moment.</string>
+
+    <string name="omnix_error_network_title">I can’t reach OMNIX right now.</string>
+    <string name="omnix_error_network_body">Try again in a moment.</string>
+    <string name="omnix_error_network_action">Retry</string>
+
+    <string name="omnix_error_user_action_title">One more step</string>
+    <string name="omnix_error_user_action_body">Unlock your phone to continue.</string>
+    <string name="omnix_error_user_action_action">Continue</string>
+
+    <string name="omnix_error_not_understood_title">I didn’t catch that.</string>
+    <string name="omnix_error_not_understood_body">Say “Omni” and try again.</string>
+
+    <string name="omnix_error_generic_title">That didn’t work.</string>
+    <string name="omnix_error_generic_body">Try again.</string>
+    <string name="omnix_error_generic_action">Retry</string>
+
+    <string name="omnix_error_permission_title">Permission needed</string>
+    <string name="omnix_error_permission_body">OMNIX needs your approval to do this.</string>
+    <string name="omnix_error_permission_action">Allow</string>
+
+    <string name="omnix_error_access_expired_title">OMNIX Access expired</string>
+    <string name="omnix_error_access_expired_body">Renew to continue using cloud-powered features.</string>
+    <string name="omnix_error_access_expired_action">Manage access</string>
+
+    <string name="omnix_error_unavailable_title">Not available yet</string>
+    <string name="omnix_error_unavailable_body">This isn’t supported on your device right now.</string>
+
+    <!-- ===== First run (§30–§35) ===== -->
+    <string name="omnix_welcome_headline">Voice in your ear.</string>
+    <string name="omnix_welcome_body">Speak naturally.\nOMNIX takes care of the rest.</string>
+    <string name="omnix_welcome_cta">Get started</string>
+
+    <string name="omnix_pairing_title">Meet your OMNIX Clip</string>
+    <string name="omnix_pairing_searching">Looking for your Clip…</string>
+    <string name="omnix_pairing_detected">Detected</string>
+    <string name="omnix_pairing_verified">Device verified</string>
+    <string name="omnix_pairing_code_link">Have an activation code?</string>
+    <string name="omnix_pairing_not_found_title">No Clip found</string>
+    <string name="omnix_pairing_not_found_body">Make sure your Clip is charged and nearby.</string>
+    <string name="omnix_pairing_retry">Search again</string>
+
+    <string name="omnix_clip_ready_title">You’re ready.</string>
+    <string name="omnix_clip_ready_say">Say:</string>
+    <string name="omnix_clip_continue">Continue</string>
+
+    <string name="omnix_mic_title">Let OMNIX hear you</string>
+    <string name="omnix_mic_body">Your microphone is needed for voice commands.</string>
+    <string name="omnix_mic_ready">Microphone ready.</string>
+    <string name="omnix_mic_continue">Continue</string>
+    <string name="omnix_mic_open_settings">Open settings</string>
+
+    <string name="omnix_first_success_title">You just used OMNIX.</string>
+    <string name="omnix_first_success_body">You can now talk to OMNIX naturally.</string>
+    <string name="omnix_first_success_cta">Done</string>
+
+    <string name="omnix_activation_title">Activate OMNIX</string>
+    <string name="omnix_activation_body">Enter the code from the card in your Clip box.</string>
+    <string name="omnix_activation_field">Activation code</string>
+    <string name="omnix_activation_cta">Activate</string>
+
+    <!-- ===== Navigation (§27, §78) ===== -->
+    <string name="omnix_nav_history">History</string>
+    <string name="omnix_nav_core">Core</string>
+    <string name="omnix_nav_me">Me</string>
+    <string name="omnix_nav_back">Back</string>
+
+    <!-- ===== History (§22, §39) ===== -->
+    <string name="omnix_history_title">History</string>
+    <string name="omnix_history_today">Today</string>
+    <string name="omnix_history_yesterday">Yesterday</string>
+    <string name="omnix_history_earlier">Earlier</string>
+    <string name="omnix_history_empty_title">No interactions yet</string>
+    <string name="omnix_history_empty_body">Your conversations and actions will appear here.</string>
+    <string name="omnix_history_clear">Clear history</string>
+
+    <!-- ===== Devices (§23, §40, §41) ===== -->
+    <string name="omnix_devices_title">Devices</string>
+    <string name="omnix_devices_clip_name">OMNIX Clip</string>
+    <string name="omnix_devices_battery">Battery</string>
+    <string name="omnix_devices_battery_unavailable">Not reported by this device</string>
+    <string name="omnix_devices_connection">Connection</string>
+    <string name="omnix_devices_connection_active">Active</string>
+    <string name="omnix_devices_connect">Connect</string>
+    <string name="omnix_devices_empty_title">No OMNIX Clip connected</string>
+    <string name="omnix_devices_empty_body">Connect your Clip to use hands-free voice control.</string>
+
+    <!-- ===== Chat (§21, §38) ===== -->
+    <string name="omnix_chat_title">Conversation</string>
+    <string name="omnix_chat_you">You</string>
+    <string name="omnix_chat_omnix">OMNIX</string>
+    <string name="omnix_chat_input_hint">Type a message…</string>
+    <string name="omnix_chat_send">Send</string>
+    <string name="omnix_chat_empty_title">Nothing here yet</string>
+    <string name="omnix_chat_empty_body">Use chat when you can’t speak out loud.</string>
+
+    <!-- ===== Translator (§24, §42) ===== -->
+    <string name="omnix_translator_title">Translation</string>
+    <string name="omnix_translator_direction">%1$s → %2$s</string>
+    <string name="omnix_translator_start">Start</string>
+    <string name="omnix_translator_stop">Stop</string>
+    <string name="omnix_translator_swap">Swap languages</string>
+    <string name="omnix_translator_empty_body">Speak, and OMNIX translates straight into your ear.</string>
+
+    <!-- ===== Settings (§25, §43–§47) ===== -->
+    <string name="omnix_settings_title">Settings</string>
+    <string name="omnix_settings_voice">Voice</string>
+    <string name="omnix_settings_privacy">Privacy</string>
+    <string name="omnix_settings_devices">Devices</string>
+    <string name="omnix_settings_ai">AI</string>
+    <string name="omnix_settings_language">Language</string>
+    <string name="omnix_settings_notifications">Notifications</string>
+    <string name="omnix_settings_appearance">Appearance</string>
+    <string name="omnix_settings_about">About</string>
+    <string name="omnix_settings_advanced">Advanced</string>
+
+    <string name="omnix_voice_title">Voice</string>
+    <string name="omnix_voice_speaking_speed">Speaking speed</string>
+    <string name="omnix_voice_tone">Voice tone</string>
+    <string name="omnix_voice_feedback">Voice feedback</string>
+    <string name="omnix_voice_listening">Listening</string>
+    <string name="omnix_voice_listening_body">Keep OMNIX listening for “Omni” in the background.</string>
+    <string name="omnix_voice_headset_only">Only when the Clip is connected</string>
+    <string name="omnix_voice_headset_only_body">Saves battery by listening only through your Clip.</string>
+    <string name="omnix_voice_sensitivity">Wake sensitivity</string>
+    <string name="omnix_voice_background">Background</string>
+    <string name="omnix_voice_background_body">Allow OMNIX to keep working when the screen is off.</string>
+    <string name="omnix_voice_background_action">Allow</string>
+    <string name="omnix_voice_automations">Automations</string>
+    <string name="omnix_voice_automations_empty">No automations yet. Say: “Omni, when my Clip connects, play music.”</string>
+
+    <string name="omnix_privacy_title">Privacy</string>
+    <string name="omnix_privacy_microphone">Microphone</string>
+    <string name="omnix_privacy_allowed">Allowed</string>
+    <string name="omnix_privacy_not_allowed">Not allowed</string>
+    <string name="omnix_privacy_voice_history">Voice history</string>
+    <string name="omnix_privacy_stored_on_device">Stored on this phone</string>
+    <string name="omnix_privacy_not_stored">Not stored</string>
+    <string name="omnix_privacy_cloud">Cloud processing</string>
+    <string name="omnix_privacy_cloud_controlled">Asks before sending private requests</string>
+    <string name="omnix_privacy_permissions">Permissions</string>
+    <string name="omnix_privacy_permissions_manage">Manage</string>
+    <string name="omnix_privacy_delete_history">Delete voice history</string>
+
+    <string name="omnix_ai_title">AI</string>
+    <string name="omnix_ai_personality">How OMNIX answers</string>
+    <string name="omnix_ai_personality_body">Set the tone and instructions OMNIX follows.</string>
+
+    <string name="omnix_language_title">Language</string>
+    <string name="omnix_language_system">System</string>
+
+    <string name="omnix_notifications_settings_title">Notifications</string>
+    <string name="omnix_notifications_assistant">Assistant responses</string>
+    <string name="omnix_notifications_device">Device status</string>
+    <string name="omnix_notifications_routines">Routine reminders</string>
+
+    <string name="omnix_appearance_title">Appearance</string>
+    <string name="omnix_appearance_system">System</string>
+    <string name="omnix_appearance_light">Light</string>
+    <string name="omnix_appearance_dark">Dark</string>
+    <string name="omnix_appearance_night">Night dimming</string>
+    <string name="omnix_appearance_night_body">Lower brightness and contrast in the dark.</string>
+    <string name="omnix_appearance_reduce_motion">Reduce motion</string>
+    <string name="omnix_appearance_reduce_motion_body">Follow the system setting, or turn animation off here.</string>
+
+    <string name="omnix_about_title">About</string>
+    <string name="omnix_about_access">OMNIX Access</string>
+    <string name="omnix_about_access_active">Active</string>
+    <string name="omnix_about_access_expired">Expired</string>
+    <string name="omnix_about_access_not_configured">Not set up</string>
+    <string name="omnix_about_renewal">Renewal</string>
+    <string name="omnix_about_renewal_unavailable">Not available yet</string>
+    <string name="omnix_about_version">Version</string>
+    <string name="omnix_about_device_code">Device code</string>
+
+    <string name="omnix_advanced_title">Advanced</string>
+    <string name="omnix_advanced_body">Diagnostics and developer options. Not part of everyday OMNIX use.</string>
+    <string name="omnix_advanced_access_token">Access token</string>
+    <string name="omnix_advanced_access_token_body">Issued on activation. AI provider keys are never stored on this phone.</string>
+    <string name="omnix_advanced_show_hide">Show or hide</string>
+    <string name="omnix_advanced_token_invalid">The token must be 32–256 characters with no spaces.</string>
+    <string name="omnix_advanced_accessibility">Screen reading and tapping</string>
+    <string name="omnix_advanced_accessibility_body">Lets OMNIX read your screen and tap for you.</string>
+    <string name="omnix_advanced_accessibility_action">Open Android settings</string>
+    <string name="omnix_advanced_save">Save</string>
+    <string name="omnix_advanced_saved">Saved</string>
+
+    <!-- ===== Shared ===== -->
+    <string name="omnix_continue">Continue</string>
+    <string name="omnix_cancel">Cancel</string>
+    <string name="omnix_percent" translatable="false">%1$d%%</string>
+
+    <!-- ===== Accessibility (§55) ===== -->
+    <string name="omnix_a11y_core_state">OMNIX is %1$s</string>
+    <string name="omnix_a11y_clip_status">Clip status: %1$s</string>
+    <string name="omnix_a11y_open_settings">Open settings</string>
+    <string name="omnix_a11y_open_chat">Open chat</string>
+    <string name="omnix_a11y_open_translator">Open translation</string>
+    <string name="omnix_a11y_open_devices">Open devices</string>
+
+    <!-- ===== Clip flow states (§40, §70, §71) ===== -->
+    <string name="omnix_clip_connecting_title">Connecting…</string>
+    <string name="omnix_clip_connected_title">Clip connected</string>
+    <string name="omnix_error_clip_failed_title">Couldn\'t connect</string>
+    <string name="omnix_clip_battery_low_title">Clip battery is low</string>
+    <string name="omnix_clip_last_seen">Last connected %1$s</string>
+    <string name="omnix_clip_find_coming_soon">Find my Clip — coming soon</string>
+
+    <!-- Spoken decision words shown as hints (§17) -->
+    <string name="omnix_voice_yes">Yes</string>
+
+    <string name="omnix_skip_for_now">Skip for now</string>
+    <!-- Honest capability states (§3, §33) -->
+    <string name="omnix_coming_soon">Coming soon</string>
+    <string name="omnix_not_configured">Not set up yet</string>
+    <string name="omnix_chat_clear">Clear</string>
+    <!-- Human labels for continuous values (§42) -->
+    <string name="omnix_level_lowest">Slowest</string>
+    <string name="omnix_level_low">Slower</string>
+    <string name="omnix_level_normal">Normal</string>
+    <string name="omnix_level_high">Faster</string>
+    <string name="omnix_level_highest">Fastest</string>
+</resources>

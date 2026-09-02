@@ -54,6 +54,12 @@ class SpeechRecognizerManager @Inject constructor(
 
     companion object {
         private const val TAG = "SpeechRecognizerManager"
+
+        /** Silence floor of SpeechRecognizer.onRmsChanged, in dB. */
+        private const val RMS_FLOOR_DB = -2f
+
+        /** Loud-speech ceiling of SpeechRecognizer.onRmsChanged, in dB. */
+        private const val RMS_CEILING_DB = 10f
     }
 
     private val disposed = AtomicBoolean(false)
@@ -67,6 +73,17 @@ class SpeechRecognizerManager @Inject constructor(
     private var recognizer: SpeechRecognizer? = null
     private val _speechState = MutableStateFlow<SpeechRecognitionEvent>(SpeechRecognitionEvent.Idle)
     val speechState: StateFlow<SpeechRecognitionEvent> = _speechState.asStateFlow()
+
+    /**
+     * Live microphone amplitude, normalised to 0..1.
+     *
+     * The recogniser reports RMS in dB, roughly within [-2, 10]. The UI Core is
+     * audio-reactive (specification §16) and must be driven by a real signal —
+     * never by a timer or a placeholder — so the value is published here and
+     * reset to 0 whenever recognition stops.
+     */
+    private val _audioLevel = MutableStateFlow(0f)
+    val audioLevel: StateFlow<Float> = _audioLevel.asStateFlow()
 
     @Volatile
     private var isListening = false
@@ -186,6 +203,7 @@ class SpeechRecognizerManager @Inject constructor(
         }
         sttJob.cancel()
         _speechState.value = SpeechRecognitionEvent.Idle
+        _audioLevel.value = 0f
     }
 
     /**
@@ -194,6 +212,7 @@ class SpeechRecognizerManager @Inject constructor(
      */
     private fun cancelCurrentRecognitionLocked() {
         isListening = false
+        _audioLevel.value = 0f
         // Инкремент поколения: все долетевшие callbacks от текущей сессии
         // будут молча проигнорированы.
         generation.incrementAndGet()
@@ -223,7 +242,13 @@ class SpeechRecognizerManager @Inject constructor(
 
     override fun onBeginningOfSpeech() { /* no-op; guarded via onReady */ }
 
-    override fun onRmsChanged(rmsdB: Float) {}
+    override fun onRmsChanged(rmsdB: Float) {
+        val session = generation.get()
+        if (!isCurrentSession(session)) return
+        // SpeechRecognizer reports roughly -2 dB (silence) to 10 dB (loud).
+        _audioLevel.value = ((rmsdB - RMS_FLOOR_DB) / (RMS_CEILING_DB - RMS_FLOOR_DB))
+            .coerceIn(0f, 1f)
+    }
 
     override fun onBufferReceived(buffer: ByteArray?) {}
 
@@ -238,6 +263,7 @@ class SpeechRecognizerManager @Inject constructor(
         Log.w(TAG, "Speech recognition error code: $error")
 
         isListening = false
+        _audioLevel.value = 0f
 
         if (isContinuousMode && (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT)) {
             // Непрерывный режим: пауза собеседника — не конец сессии.
@@ -263,6 +289,7 @@ class SpeechRecognizerManager @Inject constructor(
         }
 
         isListening = false
+        _audioLevel.value = 0f
         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
         val best = matches?.firstOrNull()?.trim().orEmpty()
 

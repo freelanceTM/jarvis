@@ -1,248 +1,158 @@
 package com.jarvis.assistant.presentation.activation
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.jarvis.assistant.domain.models.VoiceAssistantState
 import com.jarvis.assistant.R
-import com.jarvis.assistant.presentation.components.JarvisOrbVisualizer
-import com.jarvis.assistant.presentation.theme.*
+import com.jarvis.assistant.presentation.components.OmnixPrimaryButton
+import com.jarvis.assistant.presentation.core.CoreState
+import com.jarvis.assistant.presentation.core.OmnixCore
+import com.jarvis.assistant.presentation.design.OmnixRadius
+import com.jarvis.assistant.presentation.design.OmnixTheme
+import com.jarvis.assistant.presentation.design.OmnixWordmarkStyle
 
+/**
+ * Activation (§34, step 2).
+ *
+ * The same Core, the same wordmark, the same type scale as every other
+ * screen — activation is the user's first impression of the product, so it
+ * cannot look like a different app (§2).
+ *
+ * The screen shows the Core in THINKING while the code is being checked; there
+ * is no separate spinner, and no technical wording about licences or servers.
+ */
 @Composable
 fun ActivationScreen(
     onActivationSuccess: () -> Unit,
+    modifier: Modifier = Modifier,
     viewModel: ActivationViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val colors = OmnixTheme.colors
+    val spacing = OmnixTheme.spacing
+    val typography = OmnixTheme.typography
 
     LaunchedEffect(uiState.isActivated) {
-        if (uiState.isActivated) {
-            onActivationSuccess()
-        }
+        if (uiState.isActivated) onActivationSuccess()
     }
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = JarvisBackground
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .imePadding()
+            .padding(horizontal = spacing.screenHorizontal),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 24.dp)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Spacer(modifier = Modifier.height(24.dp))
+        Spacer(Modifier.height(spacing.colossal))
 
-            // 1. Arc Reactor / Header Visualizer
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(160.dp)
-                ) {
-                    JarvisOrbVisualizer(
-                        assistantState = if (uiState.isLoading) VoiceAssistantState.Thinking else VoiceAssistantState.Idle,
-                        rmsDb = 60f
-                    )
-                }
+        OmnixCore(
+            state = if (uiState.isLoading) CoreState.THINKING else CoreState.IDLE,
+            size = OmnixTheme.coreSizes.home
+        )
 
-                Spacer(modifier = Modifier.height(16.dp))
+        Spacer(Modifier.height(spacing.xl))
 
-                Text(
-                    text = "JARVIS EARCLIP",
-                    style = MaterialTheme.typography.displayLarge.copy(
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 2.sp
-                    ),
-                    color = JarvisCyanPrimary
-                )
+        Text(
+            text = stringResource(R.string.omnix_wordmark),
+            style = OmnixWordmarkStyle,
+            color = colors.textPrimary
+        )
 
-                Text(
-                    text = stringResource(R.string.apparatnaya_aktivaciya_personalnogo_ai),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
-                )
-            }
+        Spacer(Modifier.height(spacing.xl))
 
-            Spacer(modifier = Modifier.height(20.dp))
+        Text(
+            text = stringResource(R.string.omnix_activation_title),
+            style = typography.heading,
+            color = colors.textPrimary,
+            textAlign = TextAlign.Center
+        )
 
-            // 2. Card with Code Input
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(12.dp, RoundedCornerShape(20.dp), ambientColor = JarvisCyanGlow),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = JarvisCardBackground),
-                border = BorderStroke(1.dp, JarvisCyanPrimary.copy(alpha = 0.5f))
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.VpnKey,
-                            contentDescription = null,
-                            tint = JarvisCyanPrimary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = stringResource(R.string.kod_so_skretch_karty),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = TextPrimary
-                        )
-                    }
+        Spacer(Modifier.height(spacing.xs))
 
-                    Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.omnix_activation_body),
+            style = typography.body,
+            color = colors.textSecondary,
+            textAlign = TextAlign.Center
+        )
 
-                    Text(
-                        text = stringResource(R.string.sotrite_zaschitnyy_sloy_na_kartochke_v_korobke_vashih_naushn),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextTertiary,
-                        textAlign = TextAlign.Center
-                    )
+        Spacer(Modifier.height(spacing.xl))
 
-                    Spacer(modifier = Modifier.height(16.dp))
+        OutlinedTextField(
+            value = uiState.inputCode,
+            onValueChange = viewModel::onCodeChanged,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            enabled = !uiState.isLoading,
+            isError = uiState.errorMessage != null,
+            label = { Text(stringResource(R.string.omnix_activation_field)) },
+            textStyle = typography.body,
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Characters,
+                imeAction = ImeAction.Done
+            ),
+            shape = RoundedCornerShape(OmnixRadius.medium),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = colors.textPrimary,
+                unfocusedTextColor = colors.textPrimary,
+                focusedBorderColor = colors.stateIdle,
+                unfocusedBorderColor = colors.border,
+                errorBorderColor = colors.stateError,
+                focusedLabelColor = colors.textSecondary,
+                unfocusedLabelColor = colors.textTertiary,
+                cursorColor = colors.stateIdle,
+                focusedContainerColor = colors.surface,
+                unfocusedContainerColor = colors.surface,
+                errorContainerColor = colors.surface
+            )
+        )
 
-                    OutlinedTextField(
-                        value = uiState.inputCode,
-                        onValueChange = { viewModel.onCodeChanged(it) },
-                        placeholder = {
-                            Text(
-                                text = "JRV-ABCDE-FGHJK-LMNPQ-RSTUV",
-                                color = TextTertiary,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        },
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.titleMedium.copy(
-                            color = JarvisCyanPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            textAlign = TextAlign.Center,
-                            fontSize = 18.sp,
-                            letterSpacing = 2.sp
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = JarvisCyanPrimary,
-                            unfocusedBorderColor = JarvisSurface,
-                            focusedTextColor = JarvisCyanPrimary,
-                            unfocusedTextColor = JarvisCyanPrimary,
-                            cursorColor = JarvisCyanPrimary
-                        )
-                    )
-
-                    AnimatedVisibility(visible = uiState.errorMessage != null) {
-                        Text(
-                            text = uiState.errorMessage ?: "",
-                            color = JarvisRed,
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(top = 8.dp),
-                            textAlign = TextAlign.Center
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Button(
-                        onClick = { viewModel.activate() },
-                        enabled = !uiState.isLoading,
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = JarvisCyanPrimary,
-                            contentColor = JarvisBackground
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(54.dp)
-                            .shadow(10.dp, RoundedCornerShape(16.dp), ambientColor = JarvisCyanGlow)
-                    ) {
-                        if (uiState.isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = JarvisBackground,
-                                strokeWidth = 2.5.dp
-                            )
-                        } else {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = stringResource(R.string.aktivirovat_jarvis),
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = JarvisBackground
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // 3. Information Footer
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = JarvisSurface.copy(alpha = 0.6f),
-                border = BorderStroke(1.dp, JarvisSurfaceVariant),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = null,
-                        tint = JarvisCyanSecondary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = stringResource(R.string.s_30_dney_vklyucheno_besplatno),
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = stringResource(R.string.aktivaciya_privyazyvaet_naushniki_k_vashemu_ustroystvu_prodl),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextTertiary
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
+        // Errors are shown in the user's language by the view model; the UI
+        // never renders a status code (§18).
+        AnimatedVisibility(visible = uiState.errorMessage != null) {
+            Text(
+                text = uiState.errorMessage.orEmpty(),
+                style = typography.caption,
+                color = colors.stateError,
+                modifier = Modifier.padding(top = spacing.xs)
+            )
         }
+
+        Spacer(Modifier.height(spacing.lg))
+
+        OmnixPrimaryButton(
+            text = stringResource(R.string.omnix_activation_cta),
+            onClick = viewModel::activate,
+            enabled = uiState.inputCode.isNotBlank() && !uiState.isLoading,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(Modifier.height(spacing.colossal))
     }
 }

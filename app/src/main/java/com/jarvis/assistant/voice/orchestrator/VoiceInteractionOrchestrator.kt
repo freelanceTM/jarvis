@@ -14,6 +14,7 @@ import com.jarvis.assistant.agent.decision.RequestSource
 import com.jarvis.assistant.agent.executor.ConfirmationOwner
 import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.model.ToolCall
+import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.translator.LiveTranslatorEngine
 import com.jarvis.assistant.core.confirmation.ConfirmationIntent
 import com.jarvis.assistant.core.result.Resource
@@ -107,6 +108,32 @@ class VoiceInteractionOrchestrator @Inject constructor(
     )
     val privacyClassification: StateFlow<PrivacyClassification> =
         _privacyClassification.asStateFlow()
+
+    /**
+     * Live microphone amplitude, 0..1, taken straight from the recogniser.
+     *
+     * Exposed so the UI Core can be audio reactive with a real signal instead
+     * of a fabricated animation (frontend specification §16, §33).
+     */
+    val audioLevel: StateFlow<Float> = speechRecognizerManager.audioLevel
+
+    /**
+     * The tool call OMNIX is currently executing or awaiting confirmation for,
+     * or null when nothing is in flight.
+     *
+     * The UI turns this into a sentence such as "Calling Alex…"; the
+     * orchestrator remains the only owner of the truth (specification §16).
+     */
+    private val _currentToolCall = MutableStateFlow<ToolCall?>(null)
+    val currentToolCall: StateFlow<ToolCall?> = _currentToolCall.asStateFlow()
+
+    /** Result of the last executed tool call, paired with [currentToolCall]. */
+    private val _lastToolResult = MutableStateFlow<ToolExecutionResult?>(null)
+    val lastToolResult: StateFlow<ToolExecutionResult?> = _lastToolResult.asStateFlow()
+
+    /** Human prompt of the confirmation currently awaiting a decision. */
+    private val _confirmationPrompt = MutableStateFlow<String?>(null)
+    val confirmationPrompt: StateFlow<String?> = _confirmationPrompt.asStateFlow()
 
     private var toneGenerator: ToneGenerator? = null
     private var aiJob: Job? = null
@@ -284,6 +311,9 @@ class VoiceInteractionOrchestrator @Inject constructor(
         pendingToolCall = null
         pendingConfirmationToken = null
         pendingConfirmationPrompt = ""
+        _currentToolCall.value = null
+        _confirmationPrompt.value = null
+        _lastToolResult.value = null
         // C-02: при уходе в standby сбрасываем и privacy-consent.
         pendingCloudConsentQuery = null
         pendingCloudConsentLevel = PrivacyLevel.UNKNOWN
@@ -565,6 +595,10 @@ class VoiceInteractionOrchestrator @Inject constructor(
                             is PromptExecutionResult.ConfirmationRequired -> {
                                 pendingToolCall = execution.toolCall
                                 pendingConfirmationPrompt = execution.promptMessage
+                                // UI mirror: the pending call and its prompt.
+                                _currentToolCall.value = execution.toolCall
+                                _confirmationPrompt.value = execution.promptMessage
+                                _lastToolResult.value = null
                                 // CR-04: забираем вызов у CHAT_UI под управление голоса
                                 // (чтобы «да» из TTS-потока не подтвердило чат-запрос),
                                 // а токен берём ПО callId, а не с головы очереди.
@@ -668,12 +702,32 @@ class VoiceInteractionOrchestrator @Inject constructor(
     }
 
     private fun handleConfirmationResponse(response: String) {
-        confirmationTimeoutJob?.cancel()
-
         // Единый источник распознавания «да/нет» — ConfirmationIntent
         // (общий для голосового флоу и текстового чата).
-        val isYes = ConfirmationIntent.isYes(response)
-        val isNo = ConfirmationIntent.isNo(response)
+        handleConfirmationDecision(
+            isYes = ConfirmationIntent.isYes(response),
+            isNo = ConfirmationIntent.isNo(response)
+        )
+    }
+
+    /**
+     * Подтверждение действия, пришедшее из UI (кнопка в bottom sheet), а не
+     * голосом. Спецификация фронтенда (§17) требует, чтобы подтвердить можно
+     * было и голосом, и касанием; обе двери ведут в один и тот же код.
+     */
+    fun confirmPendingToolCallFromUi() {
+        if (_currentMode.value != OrchestratorMode.AWAITING_CONFIRMATION) return
+        handleConfirmationDecision(isYes = true, isNo = false)
+    }
+
+    /** Отмена ожидающего действия из UI. */
+    fun cancelPendingToolCallFromUi() {
+        if (_currentMode.value != OrchestratorMode.AWAITING_CONFIRMATION) return
+        handleConfirmationDecision(isYes = false, isNo = true)
+    }
+
+    private fun handleConfirmationDecision(isYes: Boolean, isNo: Boolean) {
+        confirmationTimeoutJob?.cancel()
 
         when {
             // N-02: захватываем pendingToolCall в локальную val ДО ветвления,
@@ -696,6 +750,9 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
                 _currentMode.value = OrchestratorMode.AI_THINKING
                 _assistantState.value = VoiceAssistantState.Thinking
+                // UI mirror: confirmation resolved, execution starts.
+                _confirmationPrompt.value = null
+                _currentToolCall.value = callToExecute
 
                 scope.launch {
                     val result = toolExecutor.executeWithBypass(
@@ -703,6 +760,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         confirmationToken = tokenToUse,
                         source = "voice_orchestrator"
                     )
+                    _lastToolResult.value = result
                     val voiceResponse = when {
                         result.isSuccess -> "${result.summary}, сэр."
                         // Разрешение/системный UI/неподдерживаемая возможность —
@@ -722,6 +780,9 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         val next = toolExecutor.findPendingConfirmation(head.toolCall.callId) ?: head
                         pendingToolCall = next.toolCall
                         pendingConfirmationPrompt = next.promptMessage
+                        _currentToolCall.value = next.toolCall
+                        _confirmationPrompt.value = next.promptMessage
+                        _lastToolResult.value = null
                         pendingConfirmationToken =
                             toolExecutor.confirmationTokenFor(next.toolCall.callId)
                         _currentMode.value = OrchestratorMode.AWAITING_CONFIRMATION
@@ -735,6 +796,8 @@ class VoiceInteractionOrchestrator @Inject constructor(
                 pendingToolCall = null
                 pendingConfirmationToken = null
                 if (cancelled != null) toolExecutor.removePendingConfirmation(cancelled)
+                _confirmationPrompt.value = null
+                _currentToolCall.value = null
                 val cancelMsg = context.getString(R.string.operaciya_otmenena_sir)
                 _lastAnswer.value = cancelMsg
                 _currentMode.value = OrchestratorMode.TTS_SPEAKING
@@ -758,6 +821,8 @@ class VoiceInteractionOrchestrator @Inject constructor(
                         pendingToolCall = null
                         pendingConfirmationToken = null
                         if (timedOut != null) toolExecutor.removePendingConfirmation(timedOut)
+                        _confirmationPrompt.value = null
+                        _currentToolCall.value = null
                         delay(2000)
                         startStandbyMode()
                     }

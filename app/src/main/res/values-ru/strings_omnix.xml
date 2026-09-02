@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  OMNIX — русская локализация фронтенда.
+
+  Только человеческий язык: без технических имён разрешений, классов
+  исключений, HTTP-кодов, названий провайдеров и роутеров (§12, §18, §50, §73).
+  Каждая ошибка отвечает: ЧТО / ПОЧЕМУ / ЧТО ДЕЛАТЬ.
+-->
+<resources>
+
+    <!-- ===== Бренд ===== -->
+    <string name="omnix_wake_word_quoted">«Омни»</string>
+
+    <!-- ===== Статус Clip ===== -->
+    <string name="omnix_status_clip_connected">Clip подключён</string>
+    <string name="omnix_status_clip_disconnected">Clip отключён</string>
+    <string name="omnix_status_clip_connecting">Подключаюсь…</string>
+    <string name="omnix_status_clip_searching">Ищу ваш Clip…</string>
+    <string name="omnix_status_bluetooth_off">Bluetooth выключен</string>
+    <string name="omnix_status_offline">Офлайн</string>
+
+    <!-- ===== Голосовые состояния ===== -->
+    <string name="omnix_state_ready">Готов слушать</string>
+    <string name="omnix_state_listening">Слушаю…</string>
+    <string name="omnix_state_thinking">Понимаю…</string>
+    <string name="omnix_state_speaking">Отвечаю</string>
+    <string name="omnix_state_working">Выполняю…</string>
+
+    <!-- ===== Подсказки на Home ===== -->
+    <string name="omnix_home_hint_say_omni_wake">Скажите %1$s</string>
+    <string name="omnix_home_example_time">«Omni, который час?»</string>
+    <string name="omnix_home_offline_partial">Часть возможностей доступна.</string>
+
+    <!-- ===== Действия ===== -->
+    <string name="omnix_action_calling">Звоню %1$s…</string>
+    <string name="omnix_action_calling_generic">Звоню…</string>
+    <string name="omnix_action_messaging">Пишу %1$s…</string>
+    <string name="omnix_action_messaging_generic">Отправляю сообщение…</string>
+    <string name="omnix_action_alarm">Ставлю будильник…</string>
+    <string name="omnix_action_timer">Ставлю таймер…</string>
+    <string name="omnix_action_calendar">Смотрю календарь…</string>
+    <string name="omnix_action_navigation">Строю маршрут: %1$s…</string>
+    <string name="omnix_action_navigation_generic">Строю маршрут…</string>
+    <string name="omnix_action_weather">Смотрю погоду…</string>
+    <string name="omnix_action_search">Ищу…</string>
+    <string name="omnix_action_translate">Перевожу…</string>
+    <string name="omnix_action_app">Открываю %1$s…</string>
+    <string name="omnix_action_app_generic">Открываю приложение…</string>
+    <string name="omnix_action_device_setting">Настраиваю телефон…</string>
+    <string name="omnix_action_media">Управляю воспроизведением…</string>
+    <string name="omnix_action_automation">Создаю автоматизацию…</string>
+
+    <string name="omnix_result_call_started">Звонок начат</string>
+    <string name="omnix_result_message_sent">Сообщение отправлено</string>
+    <string name="omnix_result_done">Готово</string>
+    <string name="omnix_result_cancelled">Отменено</string>
+
+    <!-- ===== Подтверждение ===== -->
+    <string name="omnix_confirm_confirm">Подтвердить</string>
+    <string name="omnix_confirm_voice_hint">Можно сказать «%1$s».</string>
+
+    <!-- ===== Системные состояния ===== -->
+    <string name="omnix_error_clip_title">OMNIX Clip не подключён</string>
+    <string name="omnix_error_clip_body">Проверьте подключение Bluetooth.</string>
+    <string name="omnix_error_clip_action">Подключить</string>
+
+    <string name="omnix_error_bt_off_title">Bluetooth выключен</string>
+    <string name="omnix_error_bt_off_body">Включите Bluetooth, чтобы подключить OMNIX Clip.</string>
+    <string name="omnix_error_bt_off_action">Открыть Bluetooth</string>
+
+    <string name="omnix_error_mic_title">Нужен доступ к микрофону</string>
+    <string name="omnix_error_mic_body">Микрофон нужен OMNIX для голосовых команд.</string>
+    <string name="omnix_error_mic_action">Разрешить</string>
+
+    <string name="omnix_error_mic_unavailable_title">Микрофон занят</string>
+    <string name="omnix_error_mic_unavailable_body">Его использует другое приложение. Попробуйте через минуту.</string>
+
+    <string name="omnix_error_network_title">Сейчас не могу связаться с OMNIX.</string>
+    <string name="omnix_error_network_body">Попробуйте ещё раз через минуту.</string>
+    <string name="omnix_error_network_action">Повторить</string>
+
+    <string name="omnix_error_user_action_title">Ещё один шаг</string>
+    <string name="omnix_error_user_action_body">Разблокируйте телефон, чтобы продолжить.</string>
+    <string name="omnix_error_user_action_action">Продолжить</string>
+
+    <string name="omnix_error_not_understood_title">Не расслышал.</string>
+    <string name="omnix_error_not_understood_body">Скажите «Omni» и повторите.</string>
+
+    <string name="omnix_error_generic_title">Не получилось.</string>
+    <string name="omnix_error_generic_body">Попробуйте ещё раз.</string>
+    <string name="omnix_error_generic_action">Повторить</string>
+
+    <string name="omnix_error_permission_title">Нужно разрешение</string>
+    <string name="omnix_error_permission_body">Для этого действия нужно ваше согласие.</string>
+    <string name="omnix_error_permission_action">Разрешить</string>
+
+    <string name="omnix_error_access_expired_title">Доступ OMNIX истёк</string>
+    <string name="omnix_error_access_expired_body">Продлите, чтобы снова пользоваться облачными возможностями.</string>
+    <string name="omnix_error_access_expired_action">Управлять доступом</string>
+
+    <string name="omnix_error_unavailable_title">Пока недоступно</string>
+    <string name="omnix_error_unavailable_body">На вашем устройстве это сейчас не поддерживается.</string>
+
+    <!-- ===== Первый запуск ===== -->
+    <string name="omnix_welcome_headline">Голос в вашем ухе.</string>
+    <string name="omnix_welcome_body">Говорите как обычно.\nОстальное сделает OMNIX.</string>
+    <string name="omnix_welcome_cta">Начать</string>
+
+    <string name="omnix_pairing_title">Знакомство с OMNIX Clip</string>
+    <string name="omnix_pairing_searching">Ищу ваш Clip…</string>
+    <string name="omnix_pairing_detected">Найден</string>
+    <string name="omnix_pairing_verified">Устройство подтверждено</string>
+    <string name="omnix_pairing_code_link">Есть код активации?</string>
+    <string name="omnix_pairing_not_found_title">Clip не найден</string>
+    <string name="omnix_pairing_not_found_body">Проверьте, что Clip заряжен и находится рядом.</string>
+    <string name="omnix_pairing_retry">Искать снова</string>
+
+    <string name="omnix_clip_ready_title">Всё готово.</string>
+    <string name="omnix_clip_ready_say">Скажите:</string>
+    <string name="omnix_clip_continue">Продолжить</string>
+
+    <string name="omnix_mic_title">Дайте OMNIX себя услышать</string>
+    <string name="omnix_mic_body">Микрофон нужен для голосовых команд.</string>
+    <string name="omnix_mic_ready">Микрофон готов.</string>
+    <string name="omnix_mic_continue">Продолжить</string>
+    <string name="omnix_mic_open_settings">Открыть настройки</string>
+
+    <string name="omnix_first_success_title">Вы только что использовали OMNIX.</string>
+    <string name="omnix_first_success_body">Теперь говорите с OMNIX обычным языком.</string>
+    <string name="omnix_first_success_cta">Готово</string>
+
+    <string name="omnix_activation_title">Активация OMNIX</string>
+    <string name="omnix_activation_body">Введите код с карточки из коробки Clip.</string>
+    <string name="omnix_activation_field">Код активации</string>
+    <string name="omnix_activation_cta">Активировать</string>
+
+    <!-- ===== Навигация ===== -->
+    <string name="omnix_nav_history">История</string>
+    <string name="omnix_nav_core">Core</string>
+    <string name="omnix_nav_me">Профиль</string>
+    <string name="omnix_nav_back">Назад</string>
+
+    <!-- ===== История ===== -->
+    <string name="omnix_history_title">История</string>
+    <string name="omnix_history_today">Сегодня</string>
+    <string name="omnix_history_yesterday">Вчера</string>
+    <string name="omnix_history_earlier">Ранее</string>
+    <string name="omnix_history_empty_title">Пока ничего нет</string>
+    <string name="omnix_history_empty_body">Здесь появятся ваши запросы и действия.</string>
+    <string name="omnix_history_clear">Очистить историю</string>
+
+    <!-- ===== Устройства ===== -->
+    <string name="omnix_devices_title">Устройства</string>
+    <string name="omnix_devices_clip_name">OMNIX Clip</string>
+    <string name="omnix_devices_battery">Заряд</string>
+    <string name="omnix_devices_battery_unavailable">Устройство не сообщает</string>
+    <string name="omnix_devices_connection">Соединение</string>
+    <string name="omnix_devices_connection_active">Активно</string>
+    <string name="omnix_devices_connect">Подключить</string>
+    <string name="omnix_devices_empty_title">OMNIX Clip не подключён</string>
+    <string name="omnix_devices_empty_body">Подключите Clip, чтобы управлять голосом без рук.</string>
+
+    <!-- ===== Чат ===== -->
+    <string name="omnix_chat_title">Диалог</string>
+    <string name="omnix_chat_you">Вы</string>
+    <string name="omnix_chat_omnix">OMNIX</string>
+    <string name="omnix_chat_input_hint">Напишите сообщение…</string>
+    <string name="omnix_chat_send">Отправить</string>
+    <string name="omnix_chat_empty_title">Здесь пока пусто</string>
+    <string name="omnix_chat_empty_body">Чат пригодится, когда говорить вслух неудобно.</string>
+
+    <!-- ===== Переводчик ===== -->
+    <string name="omnix_translator_title">Перевод</string>
+    <string name="omnix_translator_direction">%1$s → %2$s</string>
+    <string name="omnix_translator_start">Начать</string>
+    <string name="omnix_translator_stop">Остановить</string>
+    <string name="omnix_translator_swap">Поменять языки</string>
+    <string name="omnix_translator_empty_body">Говорите — OMNIX переведёт прямо вам в ухо.</string>
+
+    <!-- ===== Настройки ===== -->
+    <string name="omnix_settings_title">Настройки</string>
+    <string name="omnix_settings_voice">Голос</string>
+    <string name="omnix_settings_privacy">Приватность</string>
+    <string name="omnix_settings_devices">Устройства</string>
+    <string name="omnix_settings_ai">AI</string>
+    <string name="omnix_settings_language">Язык</string>
+    <string name="omnix_settings_notifications">Уведомления</string>
+    <string name="omnix_settings_appearance">Оформление</string>
+    <string name="omnix_settings_about">О программе</string>
+    <string name="omnix_settings_advanced">Для разработчика</string>
+
+    <string name="omnix_voice_title">Голос</string>
+    <string name="omnix_voice_speaking_speed">Скорость речи</string>
+    <string name="omnix_voice_tone">Тембр</string>
+    <string name="omnix_voice_feedback">Голосовые ответы</string>
+    <string name="omnix_voice_listening">Прослушивание</string>
+    <string name="omnix_voice_listening_body">OMNIX ждёт слово «Omni» в фоне.</string>
+    <string name="omnix_voice_headset_only">Только с подключённым Clip</string>
+    <string name="omnix_voice_headset_only_body">Экономит батарею: OMNIX слушает только через Clip.</string>
+    <string name="omnix_voice_sensitivity">Чувствительность</string>
+    <string name="omnix_voice_background">Работа в фоне</string>
+    <string name="omnix_voice_background_body">Разрешите OMNIX работать при выключенном экране.</string>
+    <string name="omnix_voice_background_action">Разрешить</string>
+    <string name="omnix_voice_automations">Автоматизации</string>
+    <string name="omnix_voice_automations_empty">Автоматизаций пока нет. Скажите: «Omni, когда подключится Clip — включи музыку».</string>
+
+    <string name="omnix_privacy_title">Приватность</string>
+    <string name="omnix_privacy_microphone">Микрофон</string>
+    <string name="omnix_privacy_allowed">Разрешён</string>
+    <string name="omnix_privacy_not_allowed">Не разрешён</string>
+    <string name="omnix_privacy_voice_history">История запросов</string>
+    <string name="omnix_privacy_stored_on_device">Хранится на телефоне</string>
+    <string name="omnix_privacy_not_stored">Не хранится</string>
+    <string name="omnix_privacy_cloud">Обработка в облаке</string>
+    <string name="omnix_privacy_cloud_controlled">Спрашивает перед отправкой личных запросов</string>
+    <string name="omnix_privacy_permissions">Разрешения</string>
+    <string name="omnix_privacy_permissions_manage">Управлять</string>
+    <string name="omnix_privacy_delete_history">Удалить историю запросов</string>
+
+    <string name="omnix_ai_title">AI</string>
+    <string name="omnix_ai_personality">Как OMNIX отвечает</string>
+    <string name="omnix_ai_personality_body">Задайте тон и указания, которым следует OMNIX.</string>
+
+    <string name="omnix_language_title">Язык</string>
+    <string name="omnix_language_system">Системный</string>
+
+    <string name="omnix_notifications_settings_title">Уведомления</string>
+    <string name="omnix_notifications_assistant">Ответы ассистента</string>
+    <string name="omnix_notifications_device">Состояние устройства</string>
+    <string name="omnix_notifications_routines">Напоминания сценариев</string>
+
+    <string name="omnix_appearance_title">Оформление</string>
+    <string name="omnix_appearance_system">Системное</string>
+    <string name="omnix_appearance_light">Светлое</string>
+    <string name="omnix_appearance_dark">Тёмное</string>
+    <string name="omnix_appearance_night">Ночное затемнение</string>
+    <string name="omnix_appearance_night_body">Меньше яркости и контраста в темноте.</string>
+    <string name="omnix_appearance_reduce_motion">Меньше движения</string>
+    <string name="omnix_appearance_reduce_motion_body">Следовать системной настройке или отключить анимацию здесь.</string>
+
+    <string name="omnix_about_title">О программе</string>
+    <string name="omnix_about_access">Доступ OMNIX</string>
+    <string name="omnix_about_access_active">Активен</string>
+    <string name="omnix_about_access_expired">Истёк</string>
+    <string name="omnix_about_access_not_configured">Не настроен</string>
+    <string name="omnix_about_renewal">Продление</string>
+    <string name="omnix_about_renewal_unavailable">Пока недоступно</string>
+    <string name="omnix_about_version">Версия</string>
+    <string name="omnix_about_device_code">Код устройства</string>
+
+    <string name="omnix_advanced_title">Для разработчика</string>
+    <string name="omnix_advanced_body">Диагностика и служебные параметры. Обычному использованию OMNIX они не нужны.</string>
+    <string name="omnix_advanced_access_token">Токен доступа</string>
+    <string name="omnix_advanced_access_token_body">Выдаётся при активации. Ключи AI-провайдеров на телефоне не хранятся.</string>
+    <string name="omnix_advanced_show_hide">Показать или скрыть</string>
+    <string name="omnix_advanced_token_invalid">Токен должен содержать от 32 до 256 символов без пробелов.</string>
+    <string name="omnix_advanced_accessibility">Чтение экрана и нажатия</string>
+    <string name="omnix_advanced_accessibility_body">Позволяет OMNIX читать экран и нажимать за вас.</string>
+    <string name="omnix_advanced_accessibility_action">Открыть настройки Android</string>
+    <string name="omnix_advanced_save">Сохранить</string>
+    <string name="omnix_advanced_saved">Сохранено</string>
+
+    <!-- ===== Общее ===== -->
+    <string name="omnix_continue">Продолжить</string>
+    <string name="omnix_cancel">Отмена</string>
+
+    <!-- ===== Доступность ===== -->
+    <string name="omnix_a11y_core_state">OMNIX: %1$s</string>
+    <string name="omnix_a11y_clip_status">Состояние Clip: %1$s</string>
+    <string name="omnix_a11y_open_settings">Открыть настройки</string>
+    <string name="omnix_a11y_open_chat">Открыть чат</string>
+    <string name="omnix_a11y_open_translator">Открыть перевод</string>
+    <string name="omnix_a11y_open_devices">Открыть устройства</string>
+
+    <!-- ===== Clip flow states (§40, §70, §71) ===== -->
+    <string name="omnix_clip_connecting_title">Подключение…</string>
+    <string name="omnix_clip_connected_title">Clip подключён</string>
+    <string name="omnix_error_clip_failed_title">Не удалось подключиться</string>
+    <string name="omnix_clip_battery_low_title">Низкий заряд Clip</string>
+    <string name="omnix_clip_last_seen">Последнее подключение: %1$s</string>
+    <string name="omnix_clip_find_coming_soon">Поиск Clip — скоро</string>
+
+    <!-- Spoken decision words shown as hints (§17) -->
+    <string name="omnix_voice_yes">Да</string>
+
+    <string name="omnix_skip_for_now">Пропустить</string>
+    <!-- Honest capability states (§3, §33) -->
+    <string name="omnix_coming_soon">Скоро</string>
+    <string name="omnix_not_configured">Ещё не настроено</string>
+    <string name="omnix_chat_clear">Очистить</string>
+    <!-- Human labels for continuous values (§42) -->
+    <string name="omnix_level_lowest">Самая медленная</string>
+    <string name="omnix_level_low">Медленнее</string>
+    <string name="omnix_level_normal">Обычная</string>
+    <string name="omnix_level_high">Быстрее</string>
+    <string name="omnix_level_highest">Самая быстрая</string>
+</resources>
