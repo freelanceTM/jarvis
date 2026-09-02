@@ -33,12 +33,23 @@ data class OmnixTypographyTokens(
 
 private val Sans = FontFamily.SansSerif
 
+/*
+ * Scale reconciled with the reference poster: Display 34/600, Heading 20/600,
+ * Body 16/400, Caption 12/400.
+ *
+ * screenTitle, status and overline have no poster equivalent — the poster
+ * shows a handful of screens, not a whole product — so they remain as the
+ * intermediate steps the app actually needs. The poster's "SF Pro Display" is
+ * deliberately not bundled: the platform sans-serif keeps Dynamic Type and
+ * the user's font choice working (§32).
+ */
+
 val OmnixTypography = OmnixTypographyTokens(
     display = TextStyle(
         fontFamily = Sans,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 32.sp,
-        lineHeight = 38.sp,
+        fontSize = 34.sp,
+        lineHeight = 40.sp,
         letterSpacing = (-0.2).sp
     ),
     screenTitle = TextStyle(
@@ -50,21 +61,21 @@ val OmnixTypography = OmnixTypographyTokens(
     ),
     heading = TextStyle(
         fontFamily = Sans,
-        fontWeight = FontWeight.Medium,
-        fontSize = 19.sp,
-        lineHeight = 25.sp
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 20.sp,
+        lineHeight = 26.sp
     ),
     body = TextStyle(
         fontFamily = Sans,
         fontWeight = FontWeight.Normal,
-        fontSize = 15.sp,
-        lineHeight = 22.sp
+        fontSize = 16.sp,
+        lineHeight = 23.sp
     ),
     caption = TextStyle(
         fontFamily = Sans,
         fontWeight = FontWeight.Normal,
-        fontSize = 13.sp,
-        lineHeight = 19.sp
+        fontSize = 12.sp,
+        lineHeight = 17.sp
     ),
     status = TextStyle(
         fontFamily = Sans,

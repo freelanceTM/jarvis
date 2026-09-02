@@ -150,6 +150,17 @@ fun OmnixCore(
         label = "core_glyph"
     )
 
+    // Dots fade in and out rather than appearing abruptly, and stay hidden
+    // entirely when motion is reduced — a rotating element is exactly what
+    // that setting exists to suppress.
+    val orbitAlpha by animateFloatAsState(
+        targetValue = if (
+            !reduced && (state == CoreState.RECOGNIZING || state == CoreState.THINKING)
+        ) 1f else 0f,
+        animationSpec = tween(motion.stateTransitionMs, easing = motion.standard),
+        label = "core_orbit"
+    )
+
     val innerSweep by animateFloatAsState(
         targetValue = CoreMotion.innerArcSweep(state),
         animationSpec = tween(motion.stateTransitionMs, easing = motion.standard),
@@ -180,6 +191,7 @@ fun OmnixCore(
     val innerRotation = when (state) {
         CoreState.THINKING -> drivers.thinkingAngle
         CoreState.EXECUTING -> drivers.executingAngle
+        CoreState.RECOGNIZING -> drivers.recognizingDrift
         else -> 0f
     }
 
@@ -209,6 +221,21 @@ fun OmnixCore(
                     color = color,
                     widthPx = CoreGeometry.STROKE_RATIO * baseRadius * 0.45f,
                     alpha = shape.opacity * 0.45f
+                )
+            }
+
+            // Orbiting dots mark the two states where OMNIX is working on
+            // something the user cannot see: interpreting speech, and
+            // reasoning. They are the poster's substitute for a spinner —
+            // three small points on the ring, not a rotating arc (§29).
+            if (orbitAlpha > 0.01f) {
+                drawOrbitDots(
+                    center = center,
+                    radius = baseRadius,
+                    angle = innerRotation,
+                    color = color,
+                    dotRadius = CoreGeometry.STROKE_RATIO * baseRadius * 0.62f,
+                    alpha = shape.opacity * orbitAlpha
                 )
             }
 
@@ -397,3 +424,42 @@ private fun DrawScope.drawAlertMark(
         alpha = progress
     )
 }
+
+/**
+ * Three dots riding the ring, 120° apart.
+ *
+ * They sit exactly on the ring's radius so they read as part of the Core
+ * rather than as orbiting satellites, and they are small enough that at the
+ * navigation-bar size they simply disappear instead of turning into noise.
+ */
+private fun DrawScope.drawOrbitDots(
+    center: Offset,
+    radius: Float,
+    angle: Float,
+    color: Color,
+    dotRadius: Float,
+    alpha: Float
+) {
+    if (dotRadius <= 0.35f) return
+
+    repeat(ORBIT_DOT_COUNT) { index ->
+        val theta = angle + index * ORBIT_STEP_RADIANS
+        // Trailing dots are dimmer, which is what gives the group a
+        // direction of travel without any motion blur.
+        val falloff = 1f - index * 0.28f
+        drawCircle(
+            color = color,
+            radius = dotRadius,
+            center = Offset(
+                x = center.x + radius * cos(theta),
+                y = center.y + radius * sin(theta)
+            ),
+            alpha = (alpha * falloff).coerceIn(0f, 1f)
+        )
+    }
+}
+
+private const val ORBIT_DOT_COUNT = 3
+
+/** 120° in radians. */
+private const val ORBIT_STEP_RADIANS = 2.0944f
