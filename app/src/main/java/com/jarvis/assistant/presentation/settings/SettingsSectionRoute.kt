@@ -41,10 +41,12 @@ fun SettingsSectionRoute(
     section: String,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
-    viewModel: SettingsViewModel = hiltViewModel()
+    viewModel: SettingsViewModel = hiltViewModel(),
+    appearanceViewModel: AppearanceViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val appearanceState by appearanceViewModel.uiState.collectAsState()
 
     when (section) {
         SECTION_VOICE -> VoiceSettingsScreen(
@@ -58,12 +60,13 @@ fun SettingsSectionRoute(
             // state; until that is surfaced, the toggle mirrors headset mode
             // rather than pretending to know.
             listeningActive = true,
-            voiceFeedback = true,
+            voiceFeedback = appearanceState.voiceFeedback,
             automationCount = state.automations.size,
             onSpeechRateChange = viewModel::onSpeechRateChanged,
             onSpeechPitchChange = viewModel::onSpeechPitchChanged,
             onWakeSensitivityChange = viewModel::onWakeWordSensitivityChanged,
             onHeadsetOnlyChange = viewModel::onHeadsetOnlyModeChanged,
+            onVoiceFeedbackChange = appearanceViewModel::setVoiceFeedback,
             onCommitChanges = viewModel::saveAllSettings
         )
 
@@ -79,9 +82,12 @@ fun SettingsSectionRoute(
         SECTION_APPEARANCE -> AppearanceScreen(
             modifier = modifier,
             onBack = onBack,
-            appearance = OmnixAppearance.System,
-            nightDimming = false,
-            reduceMotionOverride = REDUCE_MOTION_SYSTEM
+            appearance = appearanceState.appearance,
+            nightDimming = appearanceState.nightDimming,
+            reduceMotionOverride = appearanceState.reduceMotionOverride,
+            onAppearanceChange = appearanceViewModel::setAppearance,
+            onNightDimmingChange = appearanceViewModel::setNightDimming,
+            onReduceMotionChange = appearanceViewModel::setReduceMotionOverride
         )
 
         SECTION_ABOUT -> AboutScreen(
@@ -98,7 +104,14 @@ fun SettingsSectionRoute(
 
         SECTION_LANGUAGE -> LanguageSettingsScreen(modifier = modifier, onBack = onBack)
 
-        SECTION_NOTIFICATIONS -> NotificationsSettingsScreen(modifier = modifier, onBack = onBack)
+        SECTION_NOTIFICATIONS -> NotificationsSettingsScreen(
+            modifier = modifier,
+            onBack = onBack,
+            state = appearanceState,
+            onAssistantChange = appearanceViewModel::setNotifyAssistant,
+            onDeviceChange = appearanceViewModel::setNotifyDevice,
+            onRoutinesChange = appearanceViewModel::setNotifyRoutines
+        )
 
         SECTION_ADVANCED -> AdvancedSettingsScreen(
             modifier = modifier,
@@ -162,22 +175,29 @@ private fun LanguageSettingsScreen(modifier: Modifier = Modifier, onBack: (() ->
 }
 
 @Composable
-private fun NotificationsSettingsScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? = null) {
+private fun NotificationsSettingsScreen(
+    state: AppearanceUiState,
+    onAssistantChange: (Boolean) -> Unit,
+    onDeviceChange: (Boolean) -> Unit,
+    onRoutinesChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    onBack: (() -> Unit)? = null
+) {
     SectionScaffold(stringResource(R.string.omnix_notifications_settings_title), modifier, onBack) {
         OmnixToggleRow(
             title = stringResource(R.string.omnix_notifications_assistant),
-            checked = true,
-            onCheckedChange = {}
+            checked = state.notifyAssistant,
+            onCheckedChange = onAssistantChange
         )
         OmnixToggleRow(
             title = stringResource(R.string.omnix_notifications_device),
-            checked = true,
-            onCheckedChange = {}
+            checked = state.notifyDevice,
+            onCheckedChange = onDeviceChange
         )
         OmnixToggleRow(
             title = stringResource(R.string.omnix_notifications_routines),
-            checked = true,
-            onCheckedChange = {}
+            checked = state.notifyRoutines,
+            onCheckedChange = onRoutinesChange
         )
     }
 }

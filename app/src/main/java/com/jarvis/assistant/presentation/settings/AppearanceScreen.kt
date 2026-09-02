@@ -109,3 +109,10 @@ private fun AppearanceOption(
 
 const val REDUCE_MOTION_SYSTEM = "system"
 const val REDUCE_MOTION_ON = "on"
+
+/**
+ * Explicitly opts back into motion even when the OS asks to reduce it.
+ * Rare, but a user who turned the OS setting on for one bad app should not
+ * be locked out of OMNIX's motion forever.
+ */
+const val REDUCE_MOTION_OFF = "off"

@@ -18,7 +18,9 @@ import com.jarvis.assistant.data.preferences.OmnixExperienceStore
 import com.jarvis.assistant.presentation.core.CoreState
 import com.jarvis.assistant.presentation.firstrun.FirstRunRoute
 import com.jarvis.assistant.presentation.core.OmnixCore
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.jarvis.assistant.presentation.design.OmnixTheme
+import com.jarvis.assistant.presentation.settings.AppearanceViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -32,12 +34,35 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var experienceStore: OmnixExperienceStore
 
+    /** Guards the first frame while stored preferences are read. */
+    private var splashHeld: Boolean by mutableStateOf(true)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // Cheaper and more reliable than drawing a placeholder: the window
+        // simply does not draw until the theme is known.
+        window.decorView.findViewById<android.view.View>(android.R.id.content)?.let { content ->
+            content.viewTreeObserver.addOnPreDrawListener { !splashHeld }
+        }
+
         setContent {
-            OmnixTheme {
+            // Appearance is resolved above the theme so that the choice
+            // applies to every screen at once (§47).
+            val appearanceViewModel: AppearanceViewModel = hiltViewModel()
+            val appearanceState by appearanceViewModel.uiState.collectAsState()
+
+            // Hold the very first frame until the stored preferences have
+            // been read. Without this a dark-mode user sees a light flash on
+            // every cold start, because the default is resolved first.
+            SideEffect { splashHeld = !appearanceState.loaded }
+
+            OmnixTheme(
+                appearance = appearanceState.appearance,
+                nightMode = appearanceState.nightDimming,
+                reducedMotionOverride = appearanceState.reducedMotion
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = OmnixTheme.colors.background

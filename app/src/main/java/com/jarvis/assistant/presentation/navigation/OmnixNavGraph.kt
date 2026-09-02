@@ -59,6 +59,8 @@ fun OmnixNavGraph(
     omnixViewModel: OmnixViewModel = hiltViewModel()
 ) {
     val uiState by omnixViewModel.uiState.collectAsState()
+    val enterMs = OmnixTheme.motion.screenEnterMs
+    val exitMs = OmnixTheme.motion.screenExitMs
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
@@ -73,10 +75,13 @@ fun OmnixNavGraph(
             modifier = Modifier
                 .weight(1f)
                 .statusBarsPadding(),
-            enterTransition = { fadeIn(tween(OmnixMotionEnter)) },
-            exitTransition = { fadeOut(tween(OmnixMotionExit)) },
-            popEnterTransition = { fadeIn(tween(OmnixMotionEnter)) },
-            popExitTransition = { fadeOut(tween(OmnixMotionExit)) }
+            // Durations come from the motion tokens, which collapse when
+            // reduced motion is on — a transitionSpec lambda cannot read
+            // OmnixTheme, so they are hoisted here (§29).
+            enterTransition = { fadeIn(tween(enterMs)) },
+            exitTransition = { fadeOut(tween(exitMs)) },
+            popEnterTransition = { fadeIn(tween(enterMs)) },
+            popExitTransition = { fadeOut(tween(exitMs)) }
         ) {
             composable(OmnixDestination.Home.route) {
                 HomeScreen(
@@ -190,9 +195,6 @@ private fun NavHostController.navigateSingleTop(destination: OmnixDestination) {
         launchSingleTop = true
     }
 }
-
-private const val OmnixMotionEnter = 260
-private const val OmnixMotionExit = 200
 
 /** Section keys, re-exported so callers do not import the settings package. */
 internal val settingsSections = listOf(
