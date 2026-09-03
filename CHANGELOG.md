@@ -12,6 +12,21 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Policy Engine безопасности действий (`agent/policy/`): LLM только предлагает
+  действие (`ProposedAction` = toolId + arguments + origin), решение о риске и
+  подтверждении принимает `ActionPolicyEngine` — категория по toolId, детектор
+  денежных сумм (`MoneyAmountDetector`: «50 000», «50 тысяч», «$100», денежные
+  глаголы), сопоставление доверенных контактов (`TrustedContactMatcher`),
+  статический пол риска инструмента. Форсированные правила (нельзя отключить):
+  деньги в исходящих сообщениях/платёжных инструментах, DELETE, accessibility-
+  запись, AUTOMATION-происхождение для звонков/сообщений (S-3: триггер
+  автоматизации не звонит/не пишет сам). Настраиваемые политики звонков и
+  сообщений (ALWAYS/TRUSTED_ONLY/NEVER, MONEY_ONLY) + доверенные контакты
+  (`ActionPolicySettings`, in-memory провайдер; UI/DataStore — следующий шаг).
+  Интеграция: `ToolPermissionManager.preflight` (порядок capability →
+  разрешения → политика), `ActionOrigin` протянут через `ToolExecutor.execute/
+  executeAll`, `PersonalAutomationEngine` объявляет AUTOMATION. Документация —
+  `docs/ACTION_POLICY.md`; 20+ JVM-тестов контрактов политики.
 - Единый контракт Tool Registry 2.0 (`JarvisTool`): `requiredPermissions`
   (контрактный член; CapabilityAwareTool выводит его из capability-контракта,
   preflight блокирует plain-инструменты с невыданными разрешениями),

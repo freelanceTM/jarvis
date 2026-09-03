@@ -231,6 +231,23 @@ check "VERIFY: ToolExecutor maps exceptions through contract" \
       "tool.mapError(call.arguments, e)" \
       "$APP/java/com/jarvis/assistant/agent/executor/ToolExecutor.kt"
 
+# POLICY: решение о риске/подтверждении принимает Policy Engine, не LLM.
+check "POLICY: ToolPermissionManager consults ActionPolicyEngine" \
+      "policyEngine.evaluate" \
+      "$APP/java/com/jarvis/assistant/agent/safety/ToolPermissionManager.kt"
+check "POLICY: money amount detector exists" \
+      "object MoneyAmountDetector" \
+      "$APP/java/com/jarvis/assistant/agent/policy/MoneyAmountDetector.kt"
+check "POLICY: automation origin escalates communications" \
+      "origin == ActionOrigin.AUTOMATION" \
+      "$APP/java/com/jarvis/assistant/agent/policy/ActionPolicyEngine.kt"
+check "POLICY: automation engine declares non-bypass origin" \
+      "ActionOrigin.AUTOMATION" \
+      "$APP/java/com/jarvis/assistant/agent/automation/engine/PersonalAutomationEngine.kt"
+check "POLICY: forced confirmations cannot be disabled" \
+      "forced = true" \
+      "$APP/java/com/jarvis/assistant/agent/policy/ActionPolicyEngine.kt"
+
 if [ "$fail" = 1 ]; then
   echo ""
   echo "INVARIANT CHECKS FAILED"

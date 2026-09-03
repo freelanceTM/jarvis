@@ -7,6 +7,7 @@ import com.jarvis.assistant.agent.decision.PrivacyContent
 import com.jarvis.assistant.agent.decision.PrivacyLevel
 import com.jarvis.assistant.agent.model.ToolCall
 import com.jarvis.assistant.agent.model.ToolExecutionResult
+import com.jarvis.assistant.agent.policy.ActionOrigin
 import com.jarvis.assistant.agent.registry.ToolRegistry
 import com.jarvis.assistant.agent.safety.PreflightVerdict
 import com.jarvis.assistant.agent.safety.ToolPermissionManager
@@ -293,9 +294,16 @@ class ToolExecutor @Inject constructor(
     }
 
     /**
-     * Выполняет одиночный вызов инструмента с проверкой безопасности и таймаутом
+     * Выполняет одиночный вызов инструмента с проверкой безопасности и таймаутом.
+     *
+     * @param origin источник вызова для Policy Engine: прямые запросы —
+     *        USER_REQUEST, автоматизации обязаны передавать AUTOMATION
+     *        (коммуникации из автоматизации всегда требуют подтверждения).
      */
-    suspend fun execute(call: ToolCall): ToolExecutionResult = withContext(Dispatchers.IO) {
+    suspend fun execute(
+        call: ToolCall,
+        origin: ActionOrigin = ActionOrigin.USER_REQUEST
+    ): ToolExecutionResult = withContext(Dispatchers.IO) {
         val tool = registry.getTool(call.toolId)
             ?: return@withContext ToolExecutionResult.failure(
                 summary = "Инструмент '${call.toolId}' не зарегистрирован в системе",
@@ -303,7 +311,7 @@ class ToolExecutor @Inject constructor(
             )
         privacyBlockForExternalTool(tool, call)?.let { return@withContext it }
 
-        when (val preflight = permissionManager.preflight(tool, call)) {
+        when (val preflight = permissionManager.preflight(tool, call, origin)) {
             PreflightVerdict.Allowed -> Unit
 
             is PreflightVerdict.PermissionsMissing ->
@@ -376,8 +384,11 @@ class ToolExecutor @Inject constructor(
 
         // Между показом prompt и ответом пользователя состояние устройства
         // могло измениться. Повторяем capability-часть preflight; валидный
-        // одноразовый токен заменяет только confirmation, но не разрешения.
-        when (val preflight = permissionManager.preflight(tool, call)) {
+        // одноразовый токен заменяет только confirmation, но не разрешения
+        // (и не политику: форсированные правила возвращают ConfirmationRequired,
+        // который bypass легитимно consumes; origin — USER_REQUEST, т.к. без
+        // валидного подтверждения пользователя мы сюда не доходим).
+        when (val preflight = permissionManager.preflight(tool, call, ActionOrigin.USER_REQUEST)) {
             is PreflightVerdict.PermissionsMissing ->
                 return@withContext ToolExecutionResult.permissionRequired(
                     preflight.explanation,
@@ -399,14 +410,17 @@ class ToolExecutor @Inject constructor(
     /**
      * Выполняет цепочку инструментов с поддержкой параллелизма и транзакционного отката (Rollback)
      */
-    suspend fun executeAll(calls: List<ToolCall>): List<ToolExecutionResult> = withContext(Dispatchers.IO) {
+    suspend fun executeAll(
+        calls: List<ToolCall>,
+        origin: ActionOrigin = ActionOrigin.USER_REQUEST
+    ): List<ToolExecutionResult> = withContext(Dispatchers.IO) {
         val results = mutableListOf<ToolExecutionResult>()
         val executedHistory = mutableListOf<Pair<JarvisTool, ToolExecutionResult>>()
 
         try {
             for (call in calls) {
                 val tool = registry.getTool(call.toolId)
-                val result = execute(call)
+                val result = execute(call, origin)
                 results.add(result)
 
                 if (result.isSuccess && tool != null) {

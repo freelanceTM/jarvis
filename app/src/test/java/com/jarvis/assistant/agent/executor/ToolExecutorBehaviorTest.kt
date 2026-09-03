@@ -33,13 +33,14 @@ class ToolExecutorBehaviorTest {
         override val isOffline: Boolean = true,
         override val mayDiscloseUserContentExternally: Boolean = !isOffline,
         override val requiredPermissions: List<String> = emptyList(),
+        riskLevelForPolicy: ToolRisk = ToolRisk.SAFE,
         private val implicitPrivacyContext: List<String> = emptyList(),
         private val run: suspend () -> ToolExecutionResult
     ) : JarvisTool {
         override val description = toolId
         override val category = ToolCategory.SYSTEM
         override val parametersSchema: JsonObject = buildJsonObject { }
-        override val riskLevel = ToolRisk.SAFE
+        override val riskLevel = riskLevelForPolicy
         val rollbacks = AtomicInteger(0)
         val verifications = AtomicInteger(0)
 
@@ -243,6 +244,42 @@ class ToolExecutorBehaviorTest {
         assertEquals(ToolExecutionStatus.PERMISSION_REQUIRED, result.status)
         assertEquals(listOf("android.permission.SECURE"), result.missingPermissions)
         assertTrue(result.actionRequiresUser)
+    }
+
+    @Test
+    fun `automation origin forces confirmation for messaging even when user policy allows`() = runBlocking {
+        val sms = ScriptedTool("communication.sms", riskLevelForPolicy = ToolRisk.CONFIRMATION_REQUIRED) {
+            ToolExecutionResult.success("отправлено")
+        }
+        // Политика сообщений NEVER: прямой запрос пользователя выполняется.
+        val permissive = com.jarvis.assistant.agent.policy.ActionPolicySettings(
+            messagingPolicy = com.jarvis.assistant.agent.policy.MessagingConfirmationPolicy.NEVER
+        )
+        val provider = object : com.jarvis.assistant.agent.policy.ActionPolicySettingsProvider {
+            private val state = kotlinx.coroutines.flow.MutableStateFlow(permissive)
+            override val settings: kotlinx.coroutines.flow.StateFlow<com.jarvis.assistant.agent.policy.ActionPolicySettings> = state
+            override fun current() = state.value
+            override suspend fun update(transform: (com.jarvis.assistant.agent.policy.ActionPolicySettings) -> com.jarvis.assistant.agent.policy.ActionPolicySettings) {
+                state.value = transform(state.value)
+            }
+        }
+        val manager = ToolPermissionManager(
+            FakeCapabilityRegistry.create(),
+            com.jarvis.assistant.agent.policy.ActionPolicyEngine(provider)
+        )
+        val registry = ToolRegistry(setOf(sms), ToolDiscoveryEngine(SemanticTextMatcher()))
+        val executor = ToolExecutor(registry, manager)
+        val smsCall = ToolCall(
+            "communication.sms",
+            buildJsonObject { put("recipient", "Иван"); put("message", "привет") }
+        )
+
+        val direct = executor.execute(smsCall, com.jarvis.assistant.agent.policy.ActionOrigin.USER_REQUEST)
+        assertEquals(ToolExecutionStatus.SUCCESS, direct.status)
+
+        // Автоматизация с теми же настройками — обязательное подтверждение.
+        val automated = executor.execute(smsCall, com.jarvis.assistant.agent.policy.ActionOrigin.AUTOMATION)
+        assertEquals(ToolExecutionStatus.REQUIRES_USER_CONFIRMATION, automated.status)
     }
 
     @Test

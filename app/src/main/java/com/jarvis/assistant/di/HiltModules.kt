@@ -123,6 +123,12 @@ object DispatcherModule {
 abstract class SecurityAndNetworkBindingModule {
     @Binds
     @Singleton
+    abstract fun bindActionPolicySettingsProvider(
+        impl: com.jarvis.assistant.agent.policy.DefaultActionPolicySettingsProvider
+    ): com.jarvis.assistant.agent.policy.ActionPolicySettingsProvider
+
+    @Binds
+    @Singleton
     abstract fun bindSecurityManager(impl: SecurityManagerImpl): SecurityManager
 
     @Binds

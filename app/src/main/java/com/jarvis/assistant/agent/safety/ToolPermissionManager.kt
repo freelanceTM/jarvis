@@ -7,8 +7,10 @@ import com.jarvis.assistant.agent.core.CapabilityAwareTool
 import com.jarvis.assistant.agent.core.JarvisTool
 import com.jarvis.assistant.agent.model.ToolCall
 import com.jarvis.assistant.agent.model.ToolRisk
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
+import com.jarvis.assistant.agent.policy.ActionOrigin
+import com.jarvis.assistant.agent.policy.ActionPolicyEngine
+import com.jarvis.assistant.agent.policy.PolicyDecision
+import com.jarvis.assistant.agent.policy.ProposedAction
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -45,13 +47,29 @@ sealed interface PreflightVerdict {
  */
 @Singleton
 class ToolPermissionManager @Inject constructor(
-    private val capabilities: CapabilityChecker
+    private val capabilities: CapabilityChecker,
+    // Дефолт для тестов; в DI ActionPolicyEngine — @Singleton с привязанным
+    // ActionPolicySettingsProvider (HiltModules).
+    private val policyEngine: ActionPolicyEngine = ActionPolicyEngine(
+        com.jarvis.assistant.agent.policy.DefaultActionPolicySettingsProvider()
+    )
 ) {
 
     /**
-     * Полная предварительная проверка: capability + разрешения + подтверждение.
+     * Полная предварительная проверка: capability → разрешения → ПОЛИТИКА.
+     *
+     * Порядок осознанный: бессмысленно спрашивать подтверждение у действия,
+     * которое нельзя выполнить (нет разрешения/возможности). Policy Engine —
+     * финальный гейт перед постановкой в очередь подтверждений: LLM предлагает
+     * действие, решение о риске и подтверждении принимает [ActionPolicyEngine]
+     * (категория по toolId, детектор сумм, происхождение, статический пол
+     * риска инструмента).
      */
-    fun preflight(tool: JarvisTool, call: ToolCall): PreflightVerdict {
+    fun preflight(
+        tool: JarvisTool,
+        call: ToolCall,
+        origin: ActionOrigin = ActionOrigin.USER_REQUEST
+    ): PreflightVerdict {
         if (tool is CapabilityAwareTool) {
             val contract = tool.capabilityContract
 
@@ -89,10 +107,17 @@ class ToolPermissionManager @Inject constructor(
             }
         }
 
-        return if (requiresConfirmation(tool)) {
-            PreflightVerdict.ConfirmationRequired(buildConfirmationPrompt(tool, call))
-        } else {
-            PreflightVerdict.Allowed
+        // Политика — финальный гейт: решает подтверждение по категории,
+        // аргументам и происхождению; статический пол риска учтён внутри.
+        return when (
+            val decision = policyEngine.evaluate(
+                ProposedAction.of(call, origin),
+                tool
+            )
+        ) {
+            is PolicyDecision.RequireConfirmation ->
+                PreflightVerdict.ConfirmationRequired(decision.prompt)
+            is PolicyDecision.Allow -> PreflightVerdict.Allowed
         }
     }
 
@@ -110,29 +135,4 @@ class ToolPermissionManager @Inject constructor(
         }
     }
 
-    /**
-     * Формирует понятный текст запроса подтверждения для пользователя
-     */
-    fun buildConfirmationPrompt(tool: JarvisTool, call: ToolCall): String {
-        return when (tool.toolId) {
-            "communication.call" -> {
-                val recipient = call.arguments["recipient"]?.jsonPrimitive?.contentOrNull ?: "контакту"
-                "Вы подтверждаете звонок для $recipient, сэр?"
-            }
-            "communication.sms" -> {
-                val recipient = call.arguments["recipient"]?.jsonPrimitive?.contentOrNull ?: "контакту"
-                val preview = call.arguments["message"]?.jsonPrimitive?.contentOrNull?.take(60)
-                if (preview.isNullOrBlank()) {
-                    "Вы подтверждаете отправку SMS для $recipient, сэр?"
-                } else {
-                    "Отправить $recipient сообщение «$preview»? Подтвердите, сэр."
-                }
-            }
-            "accessibility.type_text" -> {
-                val preview = call.arguments["text"]?.jsonPrimitive?.contentOrNull?.take(60).orEmpty()
-                "Ввести в активное поле текст «$preview»? Подтвердите, сэр."
-            }
-            else -> "Действие «${tool.description}» требует подтверждения. Подтвердить выполнение, сэр?"
-        }
-    }
 }

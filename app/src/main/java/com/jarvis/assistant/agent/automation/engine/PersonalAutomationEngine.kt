@@ -127,7 +127,10 @@ class PersonalAutomationEngine @Inject constructor(
 
             Log.d(TAG, "Executing ${calls.size} actions for rule id=${rule.id}")
             try {
-                val results = toolExecutor.executeAll(calls)
+                // S-3: автоматизация НЕ имеет права выполнять действия в обход
+                // политики — origin=AUTOMATION заставляет Policy Engine требовать
+                // подтверждение для коммуникаций (звонки/сообщения).
+                val results = toolExecutor.executeAll(calls, com.jarvis.assistant.agent.policy.ActionOrigin.AUTOMATION)
                 val completedSuccessfully =
                     results.size == calls.size && results.all { it.isSuccess }
 
