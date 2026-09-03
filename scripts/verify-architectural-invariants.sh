@@ -416,6 +416,26 @@ check "VOICE-LATENCY: monotonic clock for latency math" \
       "SystemClock.elapsedRealtime" \
       "$APP/java/com/jarvis/assistant/agent/metrics/VoiceLatencyMetrics.kt"
 
+# ---- BATTERY: тяжёлая модель не держится активной постоянно ----
+check "BATTERY: idle-unload scheduler exists (noteUsed + onIdle)" \
+      "fun noteUsed()" \
+      "$APP/java/com/jarvis/assistant/agent/localai/mediapipe/IdleUnloadScheduler.kt"
+check "BATTERY: every model use extends the idle window" \
+      "idleUnloadScheduler.noteUsed()" \
+      "$APP/java/com/jarvis/assistant/agent/localai/mediapipe/MediaPipeModelManager.kt"
+check "BATTERY: idle window constant = 5 minutes" \
+      "val modelIdleUnloadMs: Long = 5 \* 60_000L" \
+      "$APP/java/com/jarvis/assistant/agent/localai/mediapipe/MediaPipeModelManager.kt"
+check "BATTERY: close() cancels the idle timer" \
+      "idleUnloadScheduler.cancel()" \
+      "$APP/java/com/jarvis/assistant/agent/localai/mediapipe/MediaPipeModelManager.kt"
+check "BATTERY: scheduler covered by virtual-time tests" \
+      "advanceTimeBy" \
+      "$APP_TEST/java/com/jarvis/assistant/agent/localai/mediapipe/IdleUnloadSchedulerTest.kt"
+check "BATTERY: battery phase documentation exists" \
+      "return idle" \
+      "$ROOT/docs/BATTERY.md"
+
 if [ "$fail" = 1 ]; then
   echo ""
   echo "INVARIANT CHECKS FAILED"

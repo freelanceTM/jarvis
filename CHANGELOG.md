@@ -12,6 +12,16 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Battery: idle-выгрузка тяжёлой модели («return idle»). `MediaPipeModelManager`
+  больше не держит модель (~529 МБ) резидентной навсегда после первого
+  инференса (раньше unload был только по memory pressure): новый
+  `IdleUnloadScheduler` выгружает её после 5 минут неактивности
+  (`modelIdleUnloadMs`); каждый запрос через `runtimeOrNull()` продлевает окно
+  (`noteUsed()`), следующий после паузы — лениво перезагружает (~1–3 c). Окно
+  больше худшего tool-таймаута (≤4 c) — выгрузка не может закрыть движок
+  посреди генерации; `close()` отменяет таймер. Тесты на виртуальном времени
+  (runTest). Фазовый аудит батареи (Idle/Wake/Listening/Local
+  inference/Bluetooth/TTS/Background): docs/BATTERY.md; 6 BATTERY-инвариантов.
 - Voice Latency (`VoiceLatencyMetrics`): сегменты голосового пайплайна
   Wake→STT→Router→AI→Tool→TTS с P50/P95/P99 (кольцевой буфер 256/серия,
   monotonic clock) и обязательным разрезом LOCAL/CLOUD для AI-фазы — видно

@@ -30,11 +30,18 @@ import javax.inject.Singleton
  * ```
  * первый Local AI запрос → загрузка (~1-3 с) → модель в памяти
  *          последующие запросы → инференс без перезагрузки
+ *          idle > modelIdleUnloadMs → unload() (return idle, Battery)
  *          memory pressure     → unload()
  * ```
  *
  * Модель НЕ грузится при старте приложения: это добавило бы секунды к startup
  * и ~1 ГБ RSS пользователям, которые локальной моделью не пользуются.
+ *
+ * Battery: модель НЕ держится активной постоянно. После последнего
+ * использования таймер ([IdleUnloadScheduler]) выгружает тяжёлую модель, и
+ * система возвращается в idle; следующий запрос лениво грузит её заново.
+ * Окно (5 минут) больше худшего инференса (инструментальные таймауты ≤ 4 с),
+ * поэтому выгрузка не может закрыть нативный движок посреди генерации.
  *
  * Файл модели (~529 МБ) НЕ входит в APK — он ожидается во внутреннем хранилище
  * приложения. Отсутствие файла — штатное состояние [LocalModelState.NotInstalled],
@@ -75,6 +82,30 @@ class MediaPipeModelManager @Inject constructor(
     private var trimMemoryCallback: ComponentCallbacks2? = null
 
     private val closed = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /**
+     * Battery: окно неактивности до выгрузки тяжёлой модели. 5 минут —
+     * компромисс: диалоговый сценарий (несколько запросов подряд) не платит
+     * перезагрузкой, а после паузы модель освобождает память и связанные
+     * ресурсы (см. docs/BATTERY.md).
+     */
+    val modelIdleUnloadMs: Long = 5 * 60_000L
+
+    /**
+     * Idle-планировщик выгрузки (часы monotonic). Объявлен ПОСЛЕ lifecycleScope
+     * и runtime — инициализаторы свойств исполняются по порядку объявления.
+     */
+    private val idleUnloadScheduler = IdleUnloadScheduler(
+        clock = { android.os.SystemClock.elapsedRealtime() },
+        idleMs = modelIdleUnloadMs,
+        scope = lifecycleScope,
+        onIdle = {
+            if (runtime != null) {
+                Log.i(TAG, "model idle > ${modelIdleUnloadMs}ms — выгружаю тяжёлую модель (return idle)")
+                unload()
+            }
+        }
+    )
 
     override val state: LocalModelState get() = currentState
 
@@ -125,6 +156,7 @@ class MediaPipeModelManager @Inject constructor(
     fun close() {
         if (!closed.compareAndSet(false, true)) return
         Log.d(TAG, "close: releasing MediaPipe resources")
+        idleUnloadScheduler.cancel()
         lifecycleJob.cancel()
         trimMemoryCallback?.let { cb ->
             runCatching { context.unregisterComponentCallbacks(cb) }
@@ -137,8 +169,12 @@ class MediaPipeModelManager @Inject constructor(
     override fun isReady(): Boolean = currentState is LocalModelState.Ready && runtime != null
 
     override suspend fun runtimeOrNull(): LocalModelRuntime? {
-        runtime?.let { return it }
+        runtime?.let {
+            idleUnloadScheduler.noteUsed()
+            return it
+        }
         initialize()
+        if (runtime != null) idleUnloadScheduler.noteUsed()
         return runtime
     }
 
@@ -188,6 +224,7 @@ class MediaPipeModelManager @Inject constructor(
             runtime = created
             createdDuringAttempt = null // ownership transferred to the manager
             currentState = LocalModelState.Ready(modelId = spec.modelId, loadTimeMs = loadTimeMs)
+            idleUnloadScheduler.noteUsed()
             Log.i(
                 TAG,
                 "model = ${spec.modelId} | runtime = ${created.runtimeId} | loaded = true | " +
