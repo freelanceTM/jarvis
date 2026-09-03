@@ -95,10 +95,18 @@ class JarvisApiHandler(
     fun healthSnapshot(): String = (healthProviderFunc ?: healthProvider)()
     companion object {
         const val PATH_EXECUTE = "/v1/ai/execute"
+
+        /** Заголовок идентификатора устройства для привязки токена (V007). */
+        const val HEADER_DEVICE_ID = "X-Jarvis-Device"
         const val PATH_HEALTH = "/v1/health"
         const val PATH_ADMIN_METRICS = "/v1/admin/metrics"
         const val PATH_ADMIN_METRICS_PROMETHEUS = "/v1/admin/metrics/prometheus"
     }
+
+    private fun HttpRequestContext.deviceIdHeader(): String? =
+        headers.entries
+            .firstOrNull { it.key.equals(HEADER_DEVICE_ID, ignoreCase = true) }
+            ?.value?.trim()?.takeIf { it.isNotEmpty() }
 
     suspend fun handle(request: HttpRequestContext): HttpResponseContext {
         // Порядок middleware тот же, но для POST /v1/ai/execute парсим
@@ -168,7 +176,14 @@ class JarvisApiHandler(
             ?: newRequestId()
 
         // ------------------------------------------------- 2. Authentication
-        val client = when (val auth = authenticator.authenticate(request.authorizationHeader)) {
+        // V007: enforcement-путь требует устройство — jrv_-токен сверяется
+        // с привязкой к X-Jarvis-Device (клиент не источник истины).
+        val client = when (
+            val auth = authenticator.authenticate(
+                request.authorizationHeader,
+                request.deviceIdHeader()
+            )
+        ) {
             is AuthResult.Success -> auth.client
             AuthResult.MissingCredentials, AuthResult.InvalidCredentials -> {
                 metrics.recordUnauthorized()

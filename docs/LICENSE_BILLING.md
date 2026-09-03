@@ -45,6 +45,38 @@ Authenticated account
   -> transactionally extend/revoke entitlement
 ```
 
+## Device binding (V007)
+
+The client is never the source of truth: a modified APK cannot grant itself
+anything. The server re-checks `user_id`, `device_id`, license state,
+subscription/billing status, expiration and revocation on every validation —
+and the AI execution path enforces device binding **per request**:
+
+```text
+redeem  -> api_tokens.device_hash = H(device_id)  (bound at issuance)
+AI call -> Bearer jrv_... + X-Jarvis-Device: <device_id>
+           LicenseTokenAuthenticator.authenticate(header, deviceHeader)
+           -> token row must be bound AND hash must match (constant-time)
+           -> then entitlementChecker(account) re-reads license/billing/expiry
+```
+
+Rules:
+
+- AI path without a device header is denied (fail-closed): a modified client
+  cannot "forget" the device.
+- A stolen token used from another device is denied even while the license is
+  active.
+- Tokens issued before V007 (unbound) are denied on the AI path and self-heal
+  at the first successful `POST /v1/license/validate` (the client always runs
+  it at process start, before the UI unlocks); the binding is one-time
+  (`device_hash IS NULL` guard), so a stolen legacy token cannot be rebound.
+- Tokens intentionally survive entitlement expiry so the account can validate
+  status and purchase a renewal; AI access stays gated separately by
+  `hasActiveEntitlement` (license status, plan, billing window, expiry).
+- `validate`/`checkout` keep the legacy token-only authentication: `validate`
+  verifies the device against the license body independently; `checkout`
+  operates on the caller's own account.
+
 ## Endpoints
 
 | Method | Path | Authentication | Purpose |

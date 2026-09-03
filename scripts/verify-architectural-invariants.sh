@@ -265,6 +265,26 @@ check "A11Y: bypass persistence scrubs screen content" \
       "ScreenContentPrivacy.isScreenReaderCall(pending.toolCall.toolId)" \
       "$APP/java/com/jarvis/assistant/presentation/chat/ChatViewModel.kt"
 
+# LICENSE: клиент не источник истины; сервер проверяет user/device/license/subscription/expiration/revocation.
+check "LICENSE: api_tokens bound to device (V007)" \
+      "ADD COLUMN device_hash" \
+      "server/src/main/resources/db/migration/V007__token_device_binding.sql"
+check "LICENSE: AI path enforces token device binding" \
+      "request.deviceIdHeader()" \
+      "server/src/main/kotlin/com/jarvis/server/http/JarvisApiHandler.kt"
+check "LICENSE: license authenticator requires device on enforcement path" \
+      "licenseService.authenticateAccessToken(token, deviceIdHeader.trim())" \
+      "server/src/main/kotlin/com/jarvis/server/auth/Auth.kt"
+check "LICENSE: validate self-heals legacy token binding" \
+      "licenseService.bindTokenDevice" \
+      "server/src/main/kotlin/com/jarvis/server/http/LicenseBillingHttpHandler.kt"
+check "LICENSE: client sends device header on trusted backend" \
+      "X-Jarvis-Device" \
+      "$APP/java/com/jarvis/assistant/data/remote/interceptor/AuthInterceptor.kt"
+check "LICENSE: entitlement gate is server-side per request" \
+      "Authentication alone never proves payment" \
+      "server/src/main/kotlin/com/jarvis/server/http/JarvisApiHandler.kt"
+
 if [ "$fail" = 1 ]; then
   echo ""
   echo "INVARIANT CHECKS FAILED"

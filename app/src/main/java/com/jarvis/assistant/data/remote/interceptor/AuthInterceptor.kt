@@ -21,7 +21,8 @@ import javax.inject.Inject
  * вызовов к api.jarvis.ai (лицензии, конфиг) и как страховка.
  */
 class AuthInterceptor @Inject constructor(
-    private val securityManager: SecurityManager
+    private val securityManager: SecurityManager,
+    private val licenseManager: com.jarvis.assistant.core.license.LicenseManager
 ) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -39,6 +40,13 @@ class AuthInterceptor @Inject constructor(
             val token = securityManager.getAccessToken().trim()
             if (token.isNotEmpty()) {
                 requestBuilder.header("Authorization", "Bearer $token")
+            }
+            // V007: enforcement-путь сервера требует устройство — jrv_-токен
+            // сверяется с привязкой по X-Jarvis-Device. Тот же ID, что в
+            // redeem/validate (сервер хранит хеш и решает сам).
+            val deviceId = licenseManager.getDeviceId()
+            if (deviceId.isNotBlank()) {
+                requestBuilder.header("X-Jarvis-Device", deviceId)
             }
         }
 

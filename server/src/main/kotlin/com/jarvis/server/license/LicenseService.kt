@@ -71,8 +71,16 @@ class LicenseService(
     fun validate(accountId: UUID, deviceId: String): LicenseValidationOutcome =
         repository.validate(accountId, deviceId, clock.instant())
 
-    fun authenticateAccessToken(token: String): AuthenticatedAccount? =
-        repository.authenticateAccessToken(token, clock.instant())
+    fun authenticateAccessToken(token: String, deviceId: String? = null): AuthenticatedAccount? =
+        repository.authenticateAccessToken(token, deviceId, clock.instant())
+
+    /**
+     * Привязка legacy-токена к устройству после успешного validate
+     * (V007 self-heal). Вызывается лицензионным handler'ом, который уже
+     * сверил device_id с лицензией.
+     */
+    fun bindTokenDevice(token: String, deviceId: String): Boolean =
+        repository.bindTokenDevice(token, deviceId)
 
     fun hasActiveEntitlement(accountId: UUID): Boolean =
         repository.hasActiveEntitlement(accountId, clock.instant())

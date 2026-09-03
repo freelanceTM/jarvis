@@ -193,7 +193,8 @@ class JdbcLicenseRepository(
             val accessToken = crypto.generateAccessToken()
             // Authentication survives entitlement expiry so the account can validate
             // status and purchase a renewal. AI access is gated separately.
-            insertApiToken(connection, accountId, accessToken, now, null)
+            // V007: токен сразу привязывается к устройству, с которого прошёл redeem.
+            insertApiToken(connection, accountId, accessToken, now, null, deviceHash)
             audit(
                 connection, "DEVICE", null, "LICENSE_REDEEMED", "LICENSE", row.id,
                 requestId, remoteAddress, "{}", now
@@ -211,12 +212,30 @@ class JdbcLicenseRepository(
         }
     }
 
-    fun authenticateAccessToken(token: String, now: Instant = Instant.now()): AuthenticatedAccount? {
+    /**
+     * Аутентификация jrv_-токена.
+     *
+     * @param deviceId идентификатор устройства. non-null — enforcement-путь
+     *        (AI-исполнение): строка токена ОБЯЗАНА быть привязана к
+     *        устройству (V007) и хеш обязан совпасть; legacy-токен без
+     *        привязки отвергается (fail-closed, само-залечивается через
+     *        /v1/license/validate → [bindTokenDevice]).
+     *        null — legacy-путь (validate/checkout): проверка устройства не
+     *        выполняется здесь (validate сверяет device_id с лицензией сам).
+     */
+    fun authenticateAccessToken(
+        token: String,
+        deviceId: String? = null,
+        now: Instant = Instant.now()
+    ): AuthenticatedAccount? {
         val tokenHash = crypto.accessTokenHash(token)
+        val expectedDeviceHash = deviceId?.let { id ->
+            runCatching { crypto.deviceHash(id) }.getOrElse { return null }
+        }
         return transaction { connection ->
             connection.prepareStatement(
                 """
-                SELECT t.id, t.account_id, a.external_ref
+                SELECT t.id, t.account_id, a.external_ref, t.device_hash
                 FROM api_tokens t
                 JOIN accounts a ON a.id = t.account_id
                 WHERE t.token_hash = ? AND t.status = 'ACTIVE' AND a.status = 'ACTIVE'
@@ -227,6 +246,13 @@ class JdbcLicenseRepository(
                 statement.setInstant(2, now)
                 statement.executeQuery().use { result ->
                     if (!result.next()) return@transaction null
+                    val rowDeviceHash = result.getBytes("device_hash")
+                    if (expectedDeviceHash != null &&
+                        (rowDeviceHash == null ||
+                            !crypto.constantTimeEquals(rowDeviceHash, expectedDeviceHash))
+                    ) {
+                        return@transaction null
+                    }
                     val tokenId = result.getObject("id", UUID::class.java)
                     val account = AuthenticatedAccount(
                         accountId = result.getObject("account_id", UUID::class.java),
@@ -459,12 +485,13 @@ class JdbcLicenseRepository(
         accountId: UUID,
         token: String,
         issuedAt: Instant,
-        expiresAt: Instant?
+        expiresAt: Instant?,
+        deviceHash: ByteArray?
     ) {
         connection.prepareStatement(
             """
-            INSERT INTO api_tokens(id, account_id, token_hash, status, issued_at, expires_at, created_at)
-            VALUES (?, ?, ?, 'ACTIVE', ?, ?, ?)
+            INSERT INTO api_tokens(id, account_id, token_hash, status, issued_at, expires_at, created_at, device_hash)
+            VALUES (?, ?, ?, 'ACTIVE', ?, ?, ?, ?)
             """.trimIndent()
         ).use {
             it.setObject(1, UUID.randomUUID())
@@ -473,7 +500,31 @@ class JdbcLicenseRepository(
             it.setInstant(4, issuedAt)
             it.setInstant(5, expiresAt)
             it.setInstant(6, issuedAt)
+            it.setBytes(7, deviceHash)
             it.executeUpdate()
+        }
+    }
+
+    /**
+     * Само-залечивание legacy-токенов (до V007): после успешного validate —
+     * когда device_id уже сверен с redeemed_device_hash лицензии — токен
+     * привязывается к устройству. Привязка одноразовая (device_hash IS NULL):
+     * перебиндить украденный токен на другое устройство нельзя.
+     */
+    fun bindTokenDevice(token: String, deviceId: String): Boolean {
+        val tokenHash = runCatching { crypto.accessTokenHash(token) }.getOrElse { return false }
+        val deviceHash = runCatching { crypto.deviceHash(deviceId) }.getOrElse { return false }
+        return transaction { connection ->
+            connection.prepareStatement(
+                """
+                UPDATE api_tokens SET device_hash = ?
+                WHERE token_hash = ? AND status = 'ACTIVE' AND device_hash IS NULL
+                """.trimIndent()
+            ).use {
+                it.setBytes(1, deviceHash)
+                it.setBytes(2, tokenHash)
+                it.executeUpdate() > 0
+            }
         }
     }
 

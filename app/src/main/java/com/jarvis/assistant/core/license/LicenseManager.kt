@@ -58,6 +58,14 @@ interface LicenseManager {
     fun isActivatedAndValid(): Boolean
     suspend fun refreshFromServer(): LicenseRefreshResult
     suspend fun activateWithCode(code: String): ActivationResult
+
+    /**
+     * Стабильный идентификатор устройства (тот же, что уходит в redeem/validate).
+     * Сервер сверяет его с привязкой jrv_-токена на enforcement-пути
+     * (заголовок X-Jarvis-Device); клиент — НЕ источник истины, сервер
+     * хранит хеш и решает сам.
+     */
+    fun getDeviceId(): String = ""
 }
 
 @Singleton
@@ -103,6 +111,8 @@ class LicenseManagerImpl @Inject constructor(
     }
 
     override fun getLicenseInfo(): LicenseInfo = _licenseFlow.value
+
+    override fun getDeviceId(): String = getDeviceHardwareId()
 
     override fun isActivatedAndValid(): Boolean {
         val info = _licenseFlow.value

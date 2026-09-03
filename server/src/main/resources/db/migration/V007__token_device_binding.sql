@@ -1,0 +1,16 @@
+-- V007: привязка API-токенов к устройству (Activation/Lockdown).
+--
+-- Правило: клиент не является источником истины. Ранее device binding
+-- проверялся только на /v1/license/validate (лицензия хранит
+-- redeemed_device_hash), но сам jrv_-токен работал с любого хоста:
+--.authenticateAccessToken() сверял токен только с аккаунтом, а
+-- hasActiveEntitlement() — уровневая проверка аккаунта. Украденный токен
+-- давал вечный AI-доступ в обход устройства.
+--
+-- Теперь токен привязывается к устройству при redeem; AI-путь
+-- (LicenseTokenAuthenticator.authenticate(header, deviceHeader)) сверяет
+-- X-Jarvis-Device с сохранённым хешем. NULL = legacy-токен до V007: на
+-- enforcement-пути отвергается (fail-closed) и само-залечивается при первом
+-- успешном /v1/license/validate (клиент всегда проходит его на старте
+-- процесса до разблокировки UI).
+ALTER TABLE api_tokens ADD COLUMN device_hash BYTEA;

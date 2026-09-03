@@ -218,24 +218,37 @@ class LicenseBillingHttpHandler(
         val requestId = validRequestId(parsed.requestId) ?: fallbackRequestId
         if (parsed.deviceId.length !in 8..128) return error(ApiErrorCode.INVALID_REQUEST, requestId)
         return when (val result = licenseService.validate(accountId, parsed.deviceId)) {
-            is LicenseValidationOutcome.Valid -> HttpResponseContext(
-                200,
-                json.encodeToString(
-                    LicenseValidateResponse.serializer(),
-                    LicenseValidateResponse(
-                        planId = result.planId,
-                        productId = result.productId,
-                        startsAt = result.startsAt.toString(),
-                        expiresAt = result.expiresAt.toString(),
-                        billingStatus = result.billingStatus.name,
-                        requestId = requestId
-                    )
-                ),
-                headers = mapOf("Cache-Control" to "no-store")
-            )
+            is LicenseValidationOutcome.Valid -> {
+                // V007 self-heal: device_id уже сверен с лицензией — привязываем
+                // legacy-токен (до миграции) к устройству, чтобы enforcement-путь
+                // (AI) начал его принимать. Одноразовая привязка (IS NULL).
+                bearerLicenseToken(request)?.let { licenseService.bindTokenDevice(it, parsed.deviceId) }
+                HttpResponseContext(
+                    200,
+                    json.encodeToString(
+                        LicenseValidateResponse.serializer(),
+                        LicenseValidateResponse(
+                            planId = result.planId,
+                            productId = result.productId,
+                            startsAt = result.startsAt.toString(),
+                            expiresAt = result.expiresAt.toString(),
+                            billingStatus = result.billingStatus.name,
+                            requestId = requestId
+                        )
+                    ),
+                    headers = mapOf("Cache-Control" to "no-store")
+                )
+            }
             is LicenseValidationOutcome.Invalid -> error(mapValidationFailure(result.reason), requestId)
         }
     }
+
+    /** Сырой jrv_-токен из заголовка (для одноразовой привязки устройства). */
+    private fun bearerLicenseToken(request: HttpRequestContext): String? =
+        request.authorizationHeader
+            ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
+            ?.substring("Bearer ".length)?.trim()
+            ?.takeIf { it.startsWith("jrv_") }
 
     private suspend fun checkout(request: HttpRequestContext, fallbackRequestId: String): HttpResponseContext {
         val client = authenticate(request, fallbackRequestId) ?: return unauthorized(fallbackRequestId)

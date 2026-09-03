@@ -62,6 +62,14 @@ sealed class AuthResult {
  */
 interface Authenticator {
     fun authenticate(authorizationHeader: String?): AuthResult
+
+    /**
+     * Вариант с контекстом устройства для enforcement-путей (AI-исполнение).
+     * Дефолт игнорирует устройство (статические/админ-токены не привязываются);
+     * [LicenseTokenAuthenticator] переопределяет и требует совпадение.
+     */
+    fun authenticate(authorizationHeader: String?, deviceIdHeader: String?): AuthResult =
+        authenticate(authorizationHeader)
 }
 
 class TokenAuthenticator(
@@ -113,7 +121,29 @@ class TokenAuthenticator(
 class LicenseTokenAuthenticator(
     private val licenseService: LicenseService
 ) : Authenticator {
-    override fun authenticate(authorizationHeader: String?): AuthResult {
+
+    /**
+     * Legacy-путь (validate/checkout): БЕЗ проверки устройства — validate
+     * сверяет device_id из тела с лицензией сам, checkout оперирует своим
+     * аккаунтом. Токен-как-таковой здесь не даёт AI-доступа.
+     */
+    override fun authenticate(authorizationHeader: String?): AuthResult =
+        authenticateInternal(authorizationHeader, enforceDevice = false, deviceIdHeader = null)
+
+    /**
+     * Enforcement-вариант (AI-путь, V007): заголовок устройства ОБЯЗАТЕЛЕН и
+     * обязан совпасть с привязкой токена. Отсутствие заголовка — deny
+     * (fail-closed): модифицированный клиент не может «забыть» устройство,
+     * украденный токен бесполезен с другого устройства.
+     */
+    override fun authenticate(authorizationHeader: String?, deviceIdHeader: String?): AuthResult =
+        authenticateInternal(authorizationHeader, enforceDevice = true, deviceIdHeader = deviceIdHeader)
+
+    private fun authenticateInternal(
+        authorizationHeader: String?,
+        enforceDevice: Boolean,
+        deviceIdHeader: String?
+    ): AuthResult {
         if (authorizationHeader.isNullOrBlank()) return AuthResult.MissingCredentials
         val prefix = "Bearer "
         if (!authorizationHeader.startsWith(prefix, ignoreCase = true)) {
@@ -123,8 +153,11 @@ class LicenseTokenAuthenticator(
         if (!token.startsWith("jrv_") || token.length !in 32..256) {
             return AuthResult.InvalidCredentials
         }
-        val account = licenseService.authenticateAccessToken(token)
-            ?: return AuthResult.InvalidCredentials
+        val account = when {
+            !enforceDevice -> licenseService.authenticateAccessToken(token)
+            deviceIdHeader.isNullOrBlank() -> null // enforcement без устройства — отказ
+            else -> licenseService.authenticateAccessToken(token, deviceIdHeader.trim())
+        } ?: return AuthResult.InvalidCredentials
         return AuthResult.Success(
             AuthenticatedClient(
                 clientId = account.accountId.toString(),
@@ -143,6 +176,19 @@ class CompositeAuthenticator(private vararg val delegates: Authenticator) : Auth
         var sawInvalid = false
         delegates.forEach { delegate ->
             when (val result = delegate.authenticate(authorizationHeader)) {
+                is AuthResult.Success -> return result
+                AuthResult.InvalidCredentials -> sawInvalid = true
+                AuthResult.MissingCredentials -> Unit
+            }
+        }
+        return if (sawInvalid) AuthResult.InvalidCredentials else AuthResult.MissingCredentials
+    }
+
+    override fun authenticate(authorizationHeader: String?, deviceIdHeader: String?): AuthResult {
+        if (authorizationHeader.isNullOrBlank()) return AuthResult.MissingCredentials
+        var sawInvalid = false
+        delegates.forEach { delegate ->
+            when (val result = delegate.authenticate(authorizationHeader, deviceIdHeader)) {
                 is AuthResult.Success -> return result
                 AuthResult.InvalidCredentials -> sawInvalid = true
                 AuthResult.MissingCredentials -> Unit

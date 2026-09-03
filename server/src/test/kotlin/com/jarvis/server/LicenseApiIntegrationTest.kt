@@ -5,6 +5,7 @@ import com.jarvis.server.api.BillingCheckoutResponse
 import com.jarvis.server.api.LicenseIssueResponse
 import com.jarvis.server.api.LicenseRedeemResponse
 import com.jarvis.server.api.LicenseValidateResponse
+import com.jarvis.server.auth.AuthResult
 import com.jarvis.server.auth.ClientTier
 import com.jarvis.server.auth.CompositeAuthenticator
 import com.jarvis.server.auth.LicenseTokenAuthenticator
@@ -46,6 +47,7 @@ class LicenseApiIntegrationTest : PostgresTestSupport() {
     private val adminToken = "a".repeat(64)
     private val userStaticToken = "u".repeat(64)
     private lateinit var handler: LicenseBillingHttpHandler
+    private lateinit var licenseService: LicenseService
     private val providerCalls = AtomicInteger()
     private var providerFailure: BillingProviderException? = null
 
@@ -55,7 +57,7 @@ class LicenseApiIntegrationTest : PostgresTestSupport() {
         providerFailure = null
         val crypto = LicenseCrypto("test-license-pepper-32-bytes-minimum-value")
         val licenseRepository = JdbcLicenseRepository(dataSource, crypto)
-        val licenseService = LicenseService(licenseRepository, crypto)
+        licenseService = LicenseService(licenseRepository, crypto)
         licenseService.upsertPlan(
             BillingPlan(
                 "earclip-monthly", "jarvis-earclip", "Monthly", 30, 1_400, "USD",
@@ -342,4 +344,74 @@ class LicenseApiIntegrationTest : PostgresTestSupport() {
         headers = headers,
         remoteAddress = "127.0.0.1"
     )
+    // ------------- V007: device binding токена на enforcement-пути -------------
+
+    @Test
+    fun `license token is device bound on AI enforcement path`() = runBlocking {
+        val token = json.decodeFromString(
+            LicenseRedeemResponse.serializer(),
+            redeemCode(issueCode()).body
+        ).accessToken
+        val auth = LicenseTokenAuthenticator(licenseService)
+
+        // Validate/checkout-путь (без устройства) работает как раньше.
+        assertTrue(auth.authenticate("Bearer $token") is AuthResult.Success)
+
+        // AI-путь: без заголовка устройства — отказ (fail-closed).
+        assertTrue(
+            auth.authenticate("Bearer $token", null) is AuthResult.InvalidCredentials
+        )
+        assertTrue(
+            auth.authenticate("Bearer $token", "") is AuthResult.InvalidCredentials
+        )
+
+        // Чужое устройство — отказ.
+        assertTrue(
+            auth.authenticate("Bearer $token", "device-other-99999") is AuthResult.InvalidCredentials
+        )
+
+        // Своё устройство (то же, что в redeem) — успех.
+        assertTrue(
+            auth.authenticate("Bearer $token", "device-abcdefgh") is AuthResult.Success
+        )
+    }
+
+    @Test
+    fun `legacy unbound token is denied on AI path and self heals through validate`() = runBlocking {
+        val token = json.decodeFromString(
+            LicenseRedeemResponse.serializer(),
+            redeemCode(issueCode()).body
+        ).accessToken
+        // Имитируем токен, выпущенный до V007: без device_hash.
+        dataSource.connection.use { connection ->
+            connection.prepareStatement("UPDATE api_tokens SET device_hash = NULL").executeUpdate()
+        }
+        val auth = LicenseTokenAuthenticator(licenseService)
+
+        // Enforcement-путь отвергает непривязанный токен (fail-closed)...
+        assertTrue(
+            auth.authenticate("Bearer $token", "device-abcdefgh") is AuthResult.InvalidCredentials
+        )
+
+        // ...но клиент всегда проходит validate на старте процесса — и это
+        // само-залечивает привязку (device_id сверён с лицензией).
+        val validate = handler.handle(
+            request(
+                path = LicenseBillingHttpHandler.PATH_VALIDATE,
+                token = token,
+                body = """{"device_id":"device-abcdefgh","request_id":"heal-1"}"""
+            )
+        )!!
+        assertEquals(200, validate.status)
+
+        // После само-залечивания AI-путь принимает своё устройство...
+        assertTrue(
+            auth.authenticate("Bearer $token", "device-abcdefgh") is AuthResult.Success
+        )
+        // ...а повторная привязка на чужое устройство невозможна (одноразовая).
+        assertTrue(
+            auth.authenticate("Bearer $token", "device-other-99999") is AuthResult.InvalidCredentials
+        )
+    }
+
 }

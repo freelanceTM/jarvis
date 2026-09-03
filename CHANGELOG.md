@@ -12,6 +12,18 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Device binding API-токенов (server V007): клиент — не источник истины.
+  jrv_-токен привязывается к устройству при redeem (`api_tokens.device_hash`);
+  AI-исполнение проверяет `X-Jarvis-Device` на КАЖДОМ запросе
+  (`LicenseTokenAuthenticator.authenticate(header, deviceHeader)`): нет
+  заголовка — отказ, чужое устройство — отказ, украденный токен бесполезен.
+  Legacy-токены (до V007) на AI-пути отвергаются и само-залечиваются при
+  первом успешном `/v1/license/validate` (клиент всегда проходит его до
+  разблокировки UI); привязка одноразовая. entitlement по-прежнему
+  перечитывается с сервера на каждом запросе (лицензия/план/биллинг/срок).
+  Клиент: `AuthInterceptor` шлёт `X-Jarvis-Device` (тот же device id, что в
+  redeem/validate). Тесты: биндинг + само-залечивание в
+  LicenseApiIntegrationTest; 6 LICENSE-инвариантов. См. docs/LICENSE_BILLING.md.
 - Accessibility Lockdown: экранный контент не покидает устройство — пайплайн
   Accessibility → capture UI → privacy filter → LLM вместо «полный экран →
   Cloud LLM». Слой 3: контентный санитайзер `ScreenTextSanitizer` (OTP 6–8
