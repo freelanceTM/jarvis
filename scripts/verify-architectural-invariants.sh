@@ -379,6 +379,26 @@ check "FALLBACK: worst-case time budget warned at startup" \
       "provider timeout budget exceeds request deadline" \
       "server/src/main/kotlin/com/jarvis/server/Main.kt"
 
+# COST CONTROL: Request -> Cost estimation -> Budget policy -> Provider.
+check "COST-CONTROL: request cost estimator is pure and deterministic" \
+      "object RequestCostEstimator" \
+      "server/src/main/kotlin/com/jarvis/server/cost/RequestCostEstimator.kt"
+check "COST-CONTROL: cost class flows through provider requirements" \
+      "costClass: com.jarvis.server.cost.CostClass" \
+      "server/src/main/kotlin/com/jarvis/server/provider/ProviderManager.kt"
+check "COST-CONTROL: simple class prefers cheapest provider" \
+      "SIMPLE -> Weights" \
+      "server/src/main/kotlin/com/jarvis/server/provider/SmartProviderSelectionPolicy.kt"
+check "COST-CONTROL: hard class routes to best quality, price-free" \
+      "reliability = 0.50, rateLimit = 0.15, cost = 0.0" \
+      "server/src/main/kotlin/com/jarvis/server/provider/SmartProviderSelectionPolicy.kt"
+check "COST-CONTROL: router estimates cost before provider call" \
+      "RequestCostEstimator.classify" \
+      "server/src/main/kotlin/com/jarvis/server/router/AiRouter.kt"
+check "COST-CONTROL: simple answers get capped output budget" \
+      "outputBudget(" \
+      "server/src/main/kotlin/com/jarvis/server/router/AiRouter.kt"
+
 if [ "$fail" = 1 ]; then
   echo ""
   echo "INVARIANT CHECKS FAILED"

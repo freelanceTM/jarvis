@@ -12,6 +12,18 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Cost Control (server): Request → Cost estimation → Budget policy →
+  Provider. Класс сложности запроса (SIMPLE/MEDIUM/HARD) детерминирован по
+  форме (длина промпта/истории, requiresWeb — `RequestCostEstimator`, без
+  LLM); класс через `ProviderRequirements.costClass` переключает веса
+  Smart-политики отбора: SIMPLE — цена доминирует (0.5, «cheapest
+  acceptable») + урезанный бюджет ответа (≤256 токенов), HARD — качество
+  доминирует (надёжность 0.5, цена исключена, «best quality»), MEDIUM —
+  прежний баланс. Полная картина «Simple → Local → $0»: короткие команды
+  остаются на устройстве (полосы LOCAL TOOL/AI), серверная классификация
+  защищает дошедшие запросы. Тесты: классификатор + переключение победителя
+  классом при одной и той же раскладке метрик (8 сценариев); 6
+  COST-CONTROL-инвариантов. См. docs/CLOUD_ROUTER.md.
 - Контракт Fallback-бюджета (server): худший случай платных вызовов на одну
   команду задокументирован и закреплён — maxProviderAttempts=2 ×
   (1+maxRetriesPerProvider=0) = 2 ≤ 3 (spec «max 2–3 attempts»); 429 не

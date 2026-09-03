@@ -144,7 +144,29 @@ class AiRouter(
         }
 
         // ------------------------------------------------ 3. Execution policy
-        val requirements = ProviderRequirements(requiresWeb = request.requiresWeb)
+        // --------------------------------------- 3.5 Cost estimation + budget
+        // Request → Cost estimation → Budget policy → Provider. Класс
+        // детерминирован по форме запроса (без LLM); влияет на веса отбора
+        // провайдера и бюджет ответа. Считается ДО менеджера — лог для
+        // наблюдаемости стоимости.
+        val historyChars = request.history.sumOf { it.content.length }
+        val costClass = com.jarvis.server.cost.RequestCostEstimator.classify(
+            promptChars = request.text.length,
+            historyChars = historyChars,
+            requiresWeb = request.requiresWeb
+        )
+        logger.info(
+            "cost estimation",
+            "requestId" to requestId,
+            "costClass" to costClass.name,
+            "approxInputTokens" to com.jarvis.server.cost.RequestCostEstimator.approximateInputTokens(
+                request.text.length, historyChars, request.systemContext?.length ?: 0
+            ).toString()
+        )
+        val requirements = ProviderRequirements(
+            requiresWeb = request.requiresWeb,
+            costClass = costClass
+        )
 
         logger.info(
             "ai request accepted",
@@ -172,7 +194,12 @@ class AiRouter(
                     }
                 },
             requiresWeb = request.requiresWeb,
-            maxTokens = generation.maxTokens,
+            // Cost Control: SIMPLE-класс получает урезанный бюджет ответа —
+            // короткая реплика не должна платить за длинный вывод.
+            maxTokens = com.jarvis.server.cost.RequestCostEstimator.outputBudget(
+                costClass,
+                generation.maxTokens
+            ),
             temperature = generation.temperature,
             // CR-06: прокидываем общий deadline до менеджера провайдеров,
             // чтобы он мог делать early-out между fallback'ами и подрезать

@@ -59,6 +59,32 @@ score = 0.35·latency + 0.35·reliability + 0.15·(1 − 429share) + 0.15·cost
 - `DefaultProviderSelectionPolicy` сохранён (используется тестами и как
   семантический эталон cold start).
 
+## Cost Control: Request → Cost estimation → Budget policy → Provider
+
+Класс стоимости определяется на сервере **детерминированно по форме
+запроса** (без LLM, бесплатно): длина промпта, объём истории, requiresWeb
+(`RequestCostEstimator`):
+
+| Класс | Критерий | Budget policy |
+|---|---|---|
+| SIMPLE | ≤140 символов, без истории, без web | самый дешёвый провайдер (цена 0.5 в score) + бюджет ответа ≤256 токенов |
+| MEDIUM | всё остальное | прежний баланс (0.35/0.35/0.15/0.15) — поведение по умолчанию |
+| HARD | web-research, промпт ≥2000 или история ≥4000 символов | best quality: надёжность 0.5, **цена 0** (из score) |
+
+Класс передаётся в `ProviderManager` через `ProviderRequirements.costClass`
+и переключает веса `SmartProviderSelectionPolicy`; SIMPLE дополнительно
+урезает `maxTokens` (короткая реплика не платит за длинный вывод).
+
+Полная картина «Simple → Local → $0 cloud»: короткие команды по большей
+части никогда не доходят до сервера — телефон исполняет их в полосах
+LOCAL TOOL / LOCAL AI (см. docs/LOCAL_AI.md §0 и ExecutionRouterMetrics).
+Серверная классификация защищает то, что всё-таки пришло: SIMPLE уходит
+самому дешёвому провайдеру с минимальным бюджетом, а не самой мощной модели.
+
+Эвристика-пороги — константы, тюнинг по наблюдениям; биллинг по-прежнему
+считает ФАКТИЧЕСКИЕ токены от провайдеров (CostModel), оценка — только для
+выбора полосы и логов (`cost estimation`, requestId + class + approxInputTokens).
+
 ## Fallback и бюджет попыток (не бесконечные retries)
 
 Ваша цепочка — существующее поведение `ProviderManager`:

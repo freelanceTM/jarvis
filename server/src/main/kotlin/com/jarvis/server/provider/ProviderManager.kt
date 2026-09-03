@@ -10,10 +10,16 @@ import kotlinx.coroutines.withTimeout
 
 /**
  * Требования запроса к провайдеру (пункт 16 ТЗ).
+ *
+ * @param costClass класс стоимости запроса (Cost Control): влияет на веса
+ *        Smart-политики отбора — SIMPLE хочет дешёвого, HARD — лучшего
+ *        (см. [com.jarvis.server.cost.RequestCostEstimator]). Дефолт MEDIUM
+ *        сохраняет прежнее поведение всем существующим вызовам/тестам.
  */
 data class ProviderRequirements(
     val requiresWeb: Boolean = false,
-    val requiresToolCalling: Boolean = false
+    val requiresToolCalling: Boolean = false,
+    val costClass: com.jarvis.server.cost.CostClass = com.jarvis.server.cost.CostClass.MEDIUM
 )
 
 /**

@@ -76,16 +76,47 @@ class SmartProviderSelectionPolicy(
         }
 
         val priceMap = prices()
+        val weights = weightsFor(requirements.costClass)
         return candidates.sortedWith(
-            compareByDescending<AiProvider> { score(it.id, perf, priceMap) }
+            compareByDescending<AiProvider> { score(it.id, perf, priceMap, weights) }
                 .thenBy(staticPriority)
         )
     }
 
+    /**
+     * Budget policy (Cost Control): веса score по классу запроса.
+     *  - SIMPLE — цена доминирует (0.5): короткая реплика должна уходить
+     *    самому дешёвому; качество коротких ответов у всех кандидатов
+     *    достаточное, переплачивать не за что;
+     *  - MEDIUM — прежний баланс (поведение по умолчанию не меняется);
+     *  - HARD — качество доминирует (reliability 0.5, цена 0): research
+     *    и большой контекст не экономят на модели.
+     */
+    private fun weightsFor(costClass: com.jarvis.server.cost.CostClass): Weights = when (costClass) {
+        com.jarvis.server.cost.CostClass.SIMPLE -> Weights(
+            latency = 0.20, reliability = 0.20, rateLimit = 0.10, cost = 0.50
+        )
+        com.jarvis.server.cost.CostClass.MEDIUM -> Weights(
+            latency = W_LATENCY, reliability = W_RELIABILITY,
+            rateLimit = W_RATE_LIMIT, cost = W_COST
+        )
+        com.jarvis.server.cost.CostClass.HARD -> Weights(
+            latency = 0.35, reliability = 0.50, rateLimit = 0.15, cost = 0.0
+        )
+    }
+
+    private data class Weights(
+        val latency: Double,
+        val reliability: Double,
+        val rateLimit: Double,
+        val cost: Double
+    )
+
     private fun score(
         id: ProviderId,
         perf: Map<ProviderId, ProviderPerformanceTracker.PerformanceSnapshot?>,
-        priceMap: Map<ProviderId, CostEstimate>
+        priceMap: Map<ProviderId, CostEstimate>,
+        weights: Weights
     ): Double {
         val snapshot = perf[id]
         val warm = snapshot != null && snapshot.samples >= ProviderPerformanceTracker.MIN_SAMPLES
@@ -93,8 +124,8 @@ class SmartProviderSelectionPolicy(
         val reliability = if (warm) snapshot!!.successRate else NEUTRAL
         val rateLimit = if (warm) 1.0 - snapshot!!.rateLimitedShare else NEUTRAL
         val cost = costScore(id, priceMap)
-        return W_LATENCY * latency + W_RELIABILITY * reliability +
-            W_RATE_LIMIT * rateLimit + W_COST * cost
+        return weights.latency * latency + weights.reliability * reliability +
+            weights.rateLimit * rateLimit + weights.cost * cost
     }
 
     /** Быстрейший измеренный кандидат = 1; нейтраль при недостатке данных. */
