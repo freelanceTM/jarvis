@@ -12,6 +12,42 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Execute → verify → SUCCESS: read-back верификация результатов инструментов.
+  Новый чистый модуль `agent/tools/verification/ExecutionVerification.kt`
+  (правила решения + поллинг) и покрытие в инструментах: громкость
+  (`SetVolumeTool`, `MediaControlTool` — read-back `getStreamVolume`),
+  яркость (`SetBrightnessTool` — возврат `putInt` + read-back), DND
+  (`DoNotDisturbTool` — applied + current interruption filter), фонарик
+  (`FlashlightTool` — подтверждение через `CameraManager.TorchCallback` +
+  выбор камеры по признаку вспышки вместо «первой в списке»), буфер обмена
+  (`ClipboardTool` — read-back записи, которая с API 29 может молча
+  игнорироваться в фоне), будильник (`AlarmTimerTool` — подтверждение через
+  `AlarmManager.nextAlarmClockInfo`, иначе `ALARM_UNVERIFIED`).
+
+### Changed
+
+- Инструменты больше не сообщают «готово» без подтверждения системы:
+  `DoNotDisturbTool` без policy-доступа возвращает `USER_ACTION_REQUIRED`
+  (раньше — `SUCCESS` с `actionRequiresUser = true`); громкость «громче» на
+  максимуме — `FAILURE VOLUME_AT_LIMIT` (раньше — «Громкость увеличена»);
+  `media.control` формулирует play/pause/next как отправленную команду
+  плееру, а не неподтверждаемый результат; таймер — «отправлен в приложение
+  часов» (публичного API верификации таймера нет); rollback громкости
+  подтверждается read-back'ом.
+- `FastCommandRouter`: предзаготовленные реплики для tool-путей переведены
+  в intent-формулировки («Включаю фонарик», «Ставлю музыку на паузу»,
+  «Устанавливаю громкость на N%») — итог всегда озвучивается из реального
+  `ToolExecutionResult`; `scripts/verify-architectural-invariants.sh` получил
+  VERIFY-гварды против регрессии (запрет result-формулировок до выполнения).
+- Инвариант H-04 актуализирован после удаления `ManualWakeWordTrigger`/
+  `MainViewModel` frontend-rebuild'ом `0e9bf4b` (до фикса CI-шаг инвариантов
+  падал на HEAD): проверка теперь требует, чтобы пайплайн запускался только
+  через `JarvisVoiceService`, а presentation-слой не вызывал его напрямую.
+- `docs/ANDROID_CAPABILITIES.md`: раздел «Верификация результата» с таблицей
+  механизма подтверждения и честного отказа по каждому инструменту.
+
+### Added
+
 - OMNIX Control Plane (merged from `feat/control-plane`): admin HTTP API with
   RBAC and audit log, admin sessions/passwords, settings and feature flags,
   provider runtime overrides, cost model, operational UI, `rawQuery` plumbing

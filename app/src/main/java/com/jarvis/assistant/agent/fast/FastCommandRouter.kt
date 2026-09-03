@@ -168,7 +168,7 @@ class FastCommandRouter @Inject constructor() {
 
             val voice = when (mediaIntent) {
                 MediaIntent.PLAY_MEDIA -> "Включаю музыку, сэр."
-                MediaIntent.PAUSE_MEDIA -> "Музыка поставлена на паузу, сэр."
+                MediaIntent.PAUSE_MEDIA -> "Ставлю музыку на паузу, сэр."
                 MediaIntent.RESUME_MEDIA -> "Продолжаю воспроизведение, сэр."
                 MediaIntent.NEXT_TRACK -> "Включаю следующий трек, сэр."
                 MediaIntent.PREVIOUS_TRACK -> "Переключаю назад, сэр."
@@ -214,7 +214,7 @@ class FastCommandRouter @Inject constructor() {
                             put("percent", percent)
                         }
                     ),
-                    immediateVoiceResponse = "Громкость установлена на $percent процентов, сэр."
+                    immediateVoiceResponse = "Устанавливаю громкость на $percent процентов, сэр."
                 )
             }
 

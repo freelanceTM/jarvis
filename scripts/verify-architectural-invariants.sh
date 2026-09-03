@@ -102,13 +102,20 @@ fi
 check "H-04: AWAITING_PRIVACY_CONSENT VoiceSessionState still exists (C-02 mode)" \
       "AWAITING_PRIVACY_CONSENT" \
       "$APP/java/com/jarvis/assistant/voice/orchestrator/VoiceInteractionOrchestrator.kt"
-check "H-04: ManualWakeWordTrigger calls JarvisVoiceService.start" \
-      "JarvisVoiceService.start" \
-      "$APP/java/com/jarvis/assistant/presentation/main/MainViewModel.kt"
-check "H-04: ManualWakeWordTrigger must NOT call orchestrator.startServicePipeline directly" \
-      "orchestrator.startServicePipeline()" \
-      "$APP/java/com/jarvis/assistant/presentation/main/MainViewModel.kt" \
-      hasnt
+# H-04 (актуализировано после 0e9bf4b: ManualWakeWordTrigger/MainViewModel
+# удалены frontend-rebuild'ом): голосовой пайплайн запускается ТОЛЬКО через
+# JarvisVoiceService (onServiceConnected → orchestrator.startServicePipeline),
+# UI-слой не дёргает пайплайн в обход сервиса.
+check "H-04: voice pipeline entry lives in JarvisVoiceService" \
+      "startServicePipeline" \
+      "$APP/java/com/jarvis/assistant/voice/service/JarvisVoiceService.kt"
+if grep -rn "startServicePipeline" "$APP/java/com/jarvis/assistant/presentation" >/dev/null 2>&1; then
+  echo "FAIL: H-04: presentation layer must not start voice pipeline directly (use JarvisVoiceService)"
+  echo "       matched: $(grep -rn "startServicePipeline" "$APP/java/com/jarvis/assistant/presentation" | head -3)"
+  fail=1
+else
+  echo "ok: H-04: presentation layer does not start voice pipeline directly"
+fi
 
 # H-05: dead code removed.
 check "H-05: AiRetryPolicy removed" \
@@ -181,6 +188,30 @@ check "M-10: SlidingWindowRateLimiter exists in server/test" \
 check "M-10: server/main retains RateLimiter interface" \
       "interface RateLimiter" \
       "$SERVER/kotlin/com/jarvis/server/ratelimit/RateLimiter.kt"
+
+# VERIFY (execute → verify → SUCCESS): FastCommandRouter не имеет права
+# формулировать результат ДО выполнения инструмента. immediateVoiceResponse —
+# только intent-формулировки («Включаю…», «Ставлю…»); итог озвучивается из
+# реального ToolExecutionResult в ExecutionDecisionEngine.
+check "VERIFY: FastCommandRouter has no pre-execution success claims" \
+      "immediateVoiceResponse.*(включён|выключен|установлена|готово|выполнено)" \
+      "$APP/java/com/jarvis/assistant/agent/fast/FastCommandRouter.kt" \
+      hasnt
+check "VERIFY: read-back verification module exists" \
+      "object ExecutionVerification" \
+      "$APP/java/com/jarvis/assistant/agent/tools/verification/ExecutionVerification.kt"
+check "VERIFY: SetVolumeTool reads volume back before success" \
+      "ExecutionVerification.pollFor" \
+      "$APP/java/com/jarvis/assistant/agent/tools/device/SetVolumeTool.kt"
+check "VERIFY: SetBrightnessTool verifies written brightness" \
+      "brightnessVerified" \
+      "$APP/java/com/jarvis/assistant/agent/tools/device/SetBrightnessTool.kt"
+check "VERIFY: DoNotDisturbTool verifies interruption filter" \
+      "dndVerified" \
+      "$APP/java/com/jarvis/assistant/agent/tools/device/DoNotDisturbTool.kt"
+check "VERIFY: AlarmTimerTool confirms alarm via nextAlarmClockInfo" \
+      "nextAlarmMatchesHour" \
+      "$APP/java/com/jarvis/assistant/agent/tools/productivity/AlarmTimerTool.kt"
 
 if [ "$fail" = 1 ]; then
   echo ""

@@ -2,6 +2,7 @@ package com.jarvis.assistant.agent.tools
 
 import android.content.Context
 import android.content.Intent
+import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.media.AudioManager
 import android.net.ConnectivityManager
@@ -105,7 +106,9 @@ class SystemAndDeviceToolsBehaviorTest {
         val audio = mockk<AudioManager>()
         every { context.getSystemService(Context.AUDIO_SERVICE) } returns audio
         every { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) } returns 15
-        every { audio.getStreamVolume(AudioManager.STREAM_MUSIC) } returns 4
+        every { audio.getStreamMinVolume(AudioManager.STREAM_MUSIC) } returns 0
+        // Read-back: 4 (до мутации) → 6 (система подтвердила set 40%) → 4 (подтверждение rollback)
+        every { audio.getStreamVolume(AudioManager.STREAM_MUSIC) } returnsMany listOf(4, 6, 4)
         every { audio.setStreamVolume(any(), any(), any()) } just runs
         val tool = SetVolumeTool(context)
 
@@ -114,8 +117,44 @@ class SystemAndDeviceToolsBehaviorTest {
 
         assertEquals(ToolExecutionStatus.SUCCESS, result.status)
         verify { audio.setStreamVolume(AudioManager.STREAM_MUSIC, 6, AudioManager.FLAG_SHOW_UI) }
-        verify { audio.setStreamVolume(AudioManager.STREAM_MUSIC, 4, AudioManager.FLAG_SHOW_UI) }
+        // Rollback применяет тишину (без FLAG_SHOW_UI) и подтверждается read-back'ом.
+        verify { audio.setStreamVolume(AudioManager.STREAM_MUSIC, 4, 0) }
         assertTrue(rolledBack)
+    }
+
+    @Test
+    fun `volume tool refuses success when system does not apply the change`() = runBlocking {
+        val context = mockk<Context>()
+        val audio = mockk<AudioManager>()
+        every { context.getSystemService(Context.AUDIO_SERVICE) } returns audio
+        every { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) } returns 15
+        every { audio.getStreamMinVolume(AudioManager.STREAM_MUSIC) } returns 0
+        // Система «не применила» изменение: read-back всегда возвращает прежний уровень.
+        every { audio.getStreamVolume(AudioManager.STREAM_MUSIC) } returns 4
+        every { audio.adjustStreamVolume(any(), any(), any()) } just runs
+
+        val result = SetVolumeTool(context).execute(buildJsonObject { put("action", "up") })
+
+        // Fake Success запрещён: без подтверждённого изменения громкости — FAILURE.
+        assertEquals(ToolExecutionStatus.FAILURE, result.status)
+        assertEquals("VOLUME_UNCHANGED", result.error)
+    }
+
+    @Test
+    fun `volume tool reports already at maximum instead of claiming increase`() = runBlocking {
+        val context = mockk<Context>()
+        val audio = mockk<AudioManager>()
+        every { context.getSystemService(Context.AUDIO_SERVICE) } returns audio
+        every { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) } returns 15
+        every { audio.getStreamMinVolume(AudioManager.STREAM_MUSIC) } returns 0
+        every { audio.getStreamVolume(AudioManager.STREAM_MUSIC) } returns 15
+        every { audio.adjustStreamVolume(any(), any(), any()) } just runs
+
+        val result = SetVolumeTool(context).execute(buildJsonObject { put("action", "up") })
+
+        assertEquals(ToolExecutionStatus.FAILURE, result.status)
+        assertEquals("VOLUME_AT_LIMIT", result.error)
+        assertTrue(result.summary.contains("максимуме"))
     }
 
     @Test
@@ -131,6 +170,7 @@ class SystemAndDeviceToolsBehaviorTest {
         val audio = mockk<AudioManager>()
         every { context.getSystemService(Context.AUDIO_SERVICE) } returns audio
         every { audio.getStreamMaxVolume(any()) } returns 10
+        every { audio.getStreamMinVolume(any()) } returns 0
         every { audio.getStreamVolume(any()) } returns 3
         val tool = SetVolumeTool(context)
         assertEquals(
@@ -143,21 +183,70 @@ class SystemAndDeviceToolsBehaviorTest {
     }
 
     @Test
-    fun `flashlight tool toggles real camera id and rolls back`() = runBlocking {
+    fun `flashlight verifies torch state through system callback and picks flash camera`() = runBlocking {
+        val context = mockk<Context>()
+        val camera = mockk<CameraManager>()
+        every { context.getSystemService(Context.CAMERA_SERVICE) } returns camera
+        every { camera.cameraIdList } returns arrayOf("front", "rear")
+
+        // «front» — без вспышки, «rear» — со вспышкой: камера выбирается по признаку.
+        val frontChars = mockk<CameraCharacteristics>()
+        val rearChars = mockk<CameraCharacteristics>()
+        every { camera.getCameraCharacteristics("front") } returns frontChars
+        every { camera.getCameraCharacteristics("rear") } returns rearChars
+        every { frontChars.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) } returns false
+        every { frontChars.get(CameraCharacteristics.LENS_FACING) } returns CameraCharacteristics.LENS_FACING_FRONT
+        every { rearChars.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) } returns true
+        every { rearChars.get(CameraCharacteristics.LENS_FACING) } returns CameraCharacteristics.LENS_FACING_BACK
+
+        var torchOn = false
+        var torchCallback: CameraManager.TorchCallback? = null
+        every { camera.registerTorchCallback(any(), any()) } answers {
+            torchCallback = firstArg<CameraManager.TorchCallback>()
+            if (torchOn) torchCallback?.onTorchModeChanged("rear", true)
+        }
+        every { camera.unregisterTorchCallback(any()) } just runs
+        every { camera.setTorchMode("rear", true) } answers {
+            torchOn = true
+            torchCallback?.onTorchModeChanged("rear", true)
+        }
+        every { camera.setTorchMode("rear", false) } answers {
+            torchOn = false
+            torchCallback?.onTorchModeChanged("rear", false)
+        }
+        val tool = FlashlightTool(context)
+
+        val result = tool.execute(buildJsonObject { put("enabled", true) })
+
+        assertEquals(ToolExecutionStatus.SUCCESS, result.status)
+        assertTrue(result.data?.get("verified")?.jsonPrimitive?.boolean == true)
+        verify { camera.setTorchMode("rear", true) }
+
+        val rolledBack = tool.rollback(JsonObject(emptyMap()), result.rollbackData)
+        assertTrue(rolledBack)
+        verify { camera.setTorchMode("rear", false) }
+    }
+
+    @Test
+    fun `flashlight refuses success when system never confirms torch state`() = runBlocking {
         val context = mockk<Context>()
         val camera = mockk<CameraManager>()
         every { context.getSystemService(Context.CAMERA_SERVICE) } returns camera
         every { camera.cameraIdList } returns arrayOf("rear")
+        val rearChars = mockk<CameraCharacteristics>()
+        every { camera.getCameraCharacteristics("rear") } returns rearChars
+        every { rearChars.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) } returns true
+        every { rearChars.get(CameraCharacteristics.LENS_FACING) } returns CameraCharacteristics.LENS_FACING_BACK
+        every { camera.registerTorchCallback(any(), any()) } just runs
+        every { camera.unregisterTorchCallback(any()) } just runs
         every { camera.setTorchMode(any(), any()) } just runs
-        val tool = FlashlightTool(context)
 
-        val result = tool.execute(buildJsonObject { put("enabled", true) })
-        val rollback = tool.rollback(JsonObject(emptyMap()), result.rollbackData)
+        val result = FlashlightTool(context).execute(buildJsonObject { put("enabled", true) })
 
-        assertEquals(ToolExecutionStatus.SUCCESS, result.status)
+        // Callback не подтвердил переход вспышки — SUCCESS запрещён.
+        assertEquals(ToolExecutionStatus.FAILURE, result.status)
+        assertEquals("TORCH_VERIFY_FAILED", result.error)
         verify { camera.setTorchMode("rear", true) }
-        verify { camera.setTorchMode("rear", false) }
-        assertTrue(rollback)
     }
 
     @Test
@@ -169,6 +258,12 @@ class SystemAndDeviceToolsBehaviorTest {
         assertEquals("NO_CAMERA_ID", FlashlightTool(context).execute(JsonObject(emptyMap())).error)
 
         every { camera.cameraIdList } returns arrayOf("rear")
+        val rearChars = mockk<CameraCharacteristics>()
+        every { camera.getCameraCharacteristics("rear") } returns rearChars
+        every { rearChars.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) } returns true
+        every { rearChars.get(CameraCharacteristics.LENS_FACING) } returns CameraCharacteristics.LENS_FACING_BACK
+        every { camera.registerTorchCallback(any(), any()) } just runs
+        every { camera.unregisterTorchCallback(any()) } just runs
         every { camera.setTorchMode("rear", any()) } throws SecurityException("denied")
         assertEquals("TORCH_ERROR", FlashlightTool(context).execute(JsonObject(emptyMap())).error)
     }

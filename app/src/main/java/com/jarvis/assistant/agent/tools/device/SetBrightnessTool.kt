@@ -13,6 +13,7 @@ import com.jarvis.assistant.agent.core.CapabilityAwareTool
 import com.jarvis.assistant.agent.core.ToolCategory
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
+import com.jarvis.assistant.agent.tools.verification.ExecutionVerification
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.*
 import javax.inject.Inject
@@ -122,16 +123,56 @@ class SetBrightnessTool @Inject constructor(
 
         return try {
             // Автояркость перетирает ручное значение — отключаем её перед записью.
-            Settings.System.putInt(
+            val modeWritten = Settings.System.putInt(
                 context.contentResolver,
                 Settings.System.SCREEN_BRIGHTNESS_MODE,
                 Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL
             )
-            Settings.System.putInt(
+            // putInt возвращает false при молчаливом отказе системы — это НЕ успех.
+            if (!modeWritten) {
+                return ToolExecutionResult.failure(
+                    summary = "Система отклонила отключение автояркости — яркость могла не измениться",
+                    error = "BRIGHTNESS_MODE_WRITE_REJECTED"
+                )
+            }
+            val expectedRaw = percentToRaw(targetPercent)
+            val valueWritten = Settings.System.putInt(
                 context.contentResolver,
                 Settings.System.SCREEN_BRIGHTNESS,
-                percentToRaw(targetPercent)
+                expectedRaw
             )
+            if (!valueWritten) {
+                return ToolExecutionResult.failure(
+                    summary = "Система отклонила изменение яркости",
+                    error = "BRIGHTNESS_WRITE_REJECTED"
+                )
+            }
+
+            // ---------------------------------------------------------- VERIFY
+            // Read-back: SUCCESS только если система подтвердила записанное
+            // значение. Молчаливый откат яркости системой/производителем —
+            // честный FAILURE, а не «готово».
+            val verifiedRaw = ExecutionVerification.pollFor(
+                read = {
+                    try {
+                        Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS)
+                    } catch (_: Settings.SettingNotFoundException) {
+                        null
+                    }
+                },
+                satisfied = { it == expectedRaw }
+            )
+            if (!ExecutionVerification.brightnessVerified(verifiedRaw, expectedRaw)) {
+                return ToolExecutionResult.failure(
+                    summary = "Не удалось подтвердить установку яркости" +
+                        (verifiedRaw?.let { raw -> " — фактический уровень ${rawToPercent(raw)}%" } ?: ""),
+                    error = "BRIGHTNESS_VERIFY_FAILED",
+                    data = buildJsonObject {
+                        put("requested_percent", targetPercent)
+                        put("actual_raw", verifiedRaw)
+                    }
+                )
+            }
 
             ToolExecutionResult.success(
                 summary = "Яркость экрана установлена на $targetPercent%",
@@ -191,11 +232,14 @@ class SetBrightnessTool @Inject constructor(
     }
 
     private fun currentBrightnessPercent(): Int = try {
-        val raw = Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS)
-        (raw * 100f / MAX_RAW_BRIGHTNESS).roundToInt().coerceIn(0, 100)
+        rawToPercent(Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS))
     } catch (_: Settings.SettingNotFoundException) {
         -1
     }
+
+    /** Чистое преобразование raw → percent (та же формула, что в read-back верификации). */
+    private fun rawToPercent(raw: Int): Int =
+        (raw * 100f / MAX_RAW_BRIGHTNESS).roundToInt().coerceIn(0, 100)
 
     private fun currentBrightnessMode(): Int = try {
         Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE)

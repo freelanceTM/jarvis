@@ -13,11 +13,22 @@ import com.jarvis.assistant.agent.media.MediaIntent
 import com.jarvis.assistant.agent.media.MediaIntentParser
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
+import com.jarvis.assistant.agent.tools.verification.ExecutionVerification
+import com.jarvis.assistant.agent.tools.verification.VolumeAction
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.*
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Управление медиа. Честность результатов:
+ *  - громкость: verify через read-back getStreamVolume (см. SetVolumeTool);
+ *  - media-клавиши: [AudioManager.dispatchMediaKeyEvent] не даёт обратной связи,
+ *    реально ли играет плеер (для этого нужен MediaSessionManager с доступом к
+ *    уведомлениям). Поэтому формулировки фиксируют СДЕЛАННОЕ ДЕЙСТВИЕ
+ *    («команда отправлена плееру»), а не неподтверждаемый результат
+ *    («поставлена на паузу») — без Fake Success.
+ */
 @Singleton
 class MediaControlTool @Inject constructor(
     @ApplicationContext private val context: Context
@@ -64,20 +75,37 @@ class MediaControlTool @Inject constructor(
         // AudioManager, а не media-клавишами.
         if (intent == MediaIntent.VOLUME_UP || intent == MediaIntent.VOLUME_DOWN) {
             return try {
+                val volumeAction = if (intent == MediaIntent.VOLUME_UP) VolumeAction.UP else VolumeAction.DOWN
                 val direction = if (intent == MediaIntent.VOLUME_UP) {
                     AudioManager.ADJUST_RAISE
                 } else {
                     AudioManager.ADJUST_LOWER
                 }
+                val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                val prevVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
                 audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0)
-                ToolExecutionResult.success(
-                    summary = if (intent == MediaIntent.VOLUME_UP) {
-                        "Громкость музыки увеличена"
-                    } else {
-                        "Громкость музыки уменьшена"
-                    },
-                    data = buildJsonObject { put("intent", intent.name) }
+
+                // ------------------------------------------------------ VERIFY
+                val actual = ExecutionVerification.pollFor(
+                    read = { audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) },
+                    satisfied = { it != prevVol }
                 )
+                val outcome = ExecutionVerification.verifyVolumeChange(
+                    action = volumeAction,
+                    previousIndex = prevVol,
+                    actualIndex = actual,
+                    maxIndex = maxVol
+                )
+                val data = buildJsonObject {
+                    put("intent", intent.name)
+                    put("volume", actual)
+                    put("max", maxVol)
+                }
+                if (outcome.verified) {
+                    ToolExecutionResult.success(outcome.summary, data = data)
+                } else {
+                    ToolExecutionResult.failure(outcome.summary, outcome.reason ?: "MEDIA_VOLUME_VERIFY_FAILED", data = data)
+                }
             } catch (e: Exception) {
                 ToolExecutionResult.failure("Ошибка регулировки громкости: ${e.localizedMessage}", "MEDIA_ERROR")
             }
@@ -100,14 +128,16 @@ class MediaControlTool @Inject constructor(
             audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
             audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
 
+            // dispatchMediaKeyEvent не сообщает, применил ли плеер команду:
+            // формулировка фиксирует действие, а не неподтверждаемый результат.
             val actionLabel = when (intent) {
-                MediaIntent.PAUSE_MEDIA -> "Музыка поставлена на паузу"
-                MediaIntent.PLAY_MEDIA -> "Воспроизведение запущено"
-                MediaIntent.RESUME_MEDIA -> "Воспроизведение продолжено"
-                MediaIntent.NEXT_TRACK -> "Переключено на следующий трек"
-                MediaIntent.PREVIOUS_TRACK -> "Переключено на предыдущий трек"
-                MediaIntent.STOP_MEDIA -> "Воспроизведение остановлено"
-                MediaIntent.TOGGLE_PLAY_PAUSE -> "Воспроизведение переключено"
+                MediaIntent.PAUSE_MEDIA -> "Команда паузы отправлена медиаплееру"
+                MediaIntent.PLAY_MEDIA -> "Команда воспроизведения отправлена медиаплееру"
+                MediaIntent.RESUME_MEDIA -> "Команда продолжения отправлена медиаплееру"
+                MediaIntent.NEXT_TRACK -> "Команда следующего трека отправлена медиаплееру"
+                MediaIntent.PREVIOUS_TRACK -> "Команда предыдущего трека отправлена медиаплееру"
+                MediaIntent.STOP_MEDIA -> "Команда остановки отправлена медиаплееру"
+                MediaIntent.TOGGLE_PLAY_PAUSE -> "Команда play/pause отправлена медиаплееру"
                 MediaIntent.VOLUME_UP, MediaIntent.VOLUME_DOWN -> "Громкость изменена"
             }
 

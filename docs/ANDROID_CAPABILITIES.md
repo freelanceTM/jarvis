@@ -9,12 +9,42 @@ Android. Правило проекта:
 
 | Статус | Смысл | Состояние устройства изменилось? |
 |---|---|---|
-| `SUCCESS` | действие выполнено | да (если `actionRequiresUser = false`) |
+| `SUCCESS` | действие выполнено **и подтверждено read-back'ом** | да (если `actionRequiresUser = false`) |
 | `PERMISSION_REQUIRED` | не хватает runtime-разрешения | **нет** |
 | `USER_ACTION_REQUIRED` | Android требует действия пользователя в системном UI | **нет** |
 | `UNSUPPORTED` | возможность недоступна на этом устройстве / API-level | **нет** |
 | `FAILURE` / `TIMEOUT` | техническая ошибка | **нет** |
 | `REQUIRES_USER_CONFIRMATION` | нужно подтверждение перед выполнением | ещё нет |
+
+---
+
+## Верификация результата (execute → verify → SUCCESS)
+
+Доктрина проекта: инструмент **не имеет права** возвращать `SUCCESS`, пока
+Android фактически не подтвердил изменение состояния. Никогда
+`Tool → exception → «Готово»`; только `Tool → execute → verify → SUCCESS`
+или `Tool → execute → failure → ERROR`.
+
+Механика: мутирующие инструменты после записи **читают состояние обратно**
+(read-back) и сверяют его с целевым. Чистые правила решения — в
+`agent/tools/verification/ExecutionVerification.kt` (покрыты JVM-тестами),
+чтение реального состояния — в самих инструментах.
+
+| Инструмент | Мутация | Чем подтверждается | Что при отказе системы |
+|---|---|---|---|
+| `device.volume` | громкость STREAM_MUSIC | `getStreamVolume` после поллинга | `FAILURE` (`VOLUME_UNCHANGED` / `VOLUME_AT_LIMIT` / `VOLUME_VERIFY_FAILED`) |
+| `media.control` (volume) | громкость | то же | то же |
+| `device.brightness` | `SCREEN_BRIGHTNESS` | возврат `putInt` + `getInt` read-back | `FAILURE` (`BRIGHTNESS_WRITE_REJECTED` / `BRIGHTNESS_VERIFY_FAILED`) |
+| `device.dnd` | interruption filter | возврат `setInterruptionFilter` + `currentInterruptionFilter` | `FAILURE` (`DND_VERIFY_FAILED`); без policy-доступа — `USER_ACTION_REQUIRED` |
+| `device.flashlight` | torch | `CameraManager.TorchCallback` (состояние подтверждено системой) | `FAILURE` (`TORCH_VERIFY_FAILED`) |
+| `productivity.clipboard` (copy) | буфер обмена | чтение `primaryClip` и сравнение текста | `FAILURE` (`CLIPBOARD_VERIFY_FAILED`) — с API 29 фоновая запись игнорируется |
+| `productivity.alarm_timer` (alarm) | будильник | `AlarmManager.nextAlarmClockInfo` (час совпал) | `USER_ACTION_REQUIRED` (`ALARM_UNVERIFIED`) — «проверьте в часах» |
+| `productivity.alarm_timer` (timer) | таймер | публичного API верификации НЕТ | формулировка ограничена действием: «отправлен в приложение часов» |
+| `media.control` (play/pause/…) | media-клавиши | обратной связи нет (нужен MediaSessionManager) | формулировка ограничена действием: «команда отправлена медиаплееру» |
+| `device.bluetooth` / `device.wifi` | переключение | недоступно приложениям на Android 13+/10+ | `USER_ACTION_REQUIRED` + системный экран (без имитации) |
+
+Поллинг read-back ограничен (по умолчанию 5×60 мс — много меньше
+tool-таймаута 4 с), чтобы не ловить асинхронность применения как отказ.
 
 ---
 
