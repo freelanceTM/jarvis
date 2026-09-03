@@ -285,6 +285,32 @@ check "LICENSE: entitlement gate is server-side per request" \
       "Authentication alone never proves payment" \
       "server/src/main/kotlin/com/jarvis/server/http/JarvisApiHandler.kt"
 
+# CLIP: идентичность OMNIX Clip = пара ключей (challenge/response), не имя/MAC.
+check "CLIP: device identity table with public key registry (V008)" \
+      "public_key BYTEA NOT NULL" \
+      "server/src/main/resources/db/migration/V008__clip_device_identity.sql"
+check "CLIP: challenges are single-use and expiring" \
+      "used_at IS NULL AND expires_at > ?" \
+      "server/src/main/kotlin/com/jarvis/server/clip/JdbcClipDeviceRepository.kt"
+check "CLIP: canonical attestation message is version-domain separated" \
+      "JARVIS-CLIP-ATTEST-v1" \
+      "server/src/main/kotlin/com/jarvis/server/clip/ClipAttestationService.kt"
+check "CLIP: attestation verifies against registered public key" \
+      "verifier.initVerify(decodePublicKey(clip.publicKey))" \
+      "server/src/main/kotlin/com/jarvis/server/clip/ClipAttestationService.kt"
+check "CLIP: owner binding is first-come and immutable for others" \
+      "owner_account_id IS NULL AND status <> 'REVOKED'" \
+      "server/src/main/kotlin/com/jarvis/server/clip/JdbcClipDeviceRepository.kt"
+check "CLIP: android verifier is fail-closed pure ECDSA" \
+      "getOrDefault(false)" \
+      "$APP/java/com/jarvis/assistant/core/clip/ClipIdentityVerifier.kt"
+check "CLIP: trust store anchored in server responses only" \
+      "ТОЛЬКО из ответов сервера" \
+      "$APP/java/com/jarvis/assistant/core/clip/ClipTrustStore.kt"
+check "CLIP: no fake transport success - firmware contract is honest" \
+      "ClipTransportResult.Unavailable" \
+      "$APP/java/com/jarvis/assistant/core/clip/ClipAttestationApi.kt"
+
 if [ "$fail" = 1 ]; then
   echo ""
   echo "INVARIANT CHECKS FAILED"

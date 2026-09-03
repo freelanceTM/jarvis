@@ -381,6 +381,21 @@ object ServerBootstrap {
             LicenseTokenAuthenticator(licenseService)
         )
         val authorizer = TierAuthorizer()
+        // OMNIX Clip: криптографическая привязка устройства (V008) — тот же
+        // composite authenticator; challenge/attest привязывают клип к аккаунту.
+        val clipHttpHandler = com.jarvis.server.clip.ClipHttpHandler(
+            authenticator = authenticator,
+            authorizer = authorizer,
+            attestationService = com.jarvis.server.clip.ClipAttestationService(
+                com.jarvis.server.clip.JdbcClipDeviceRepository(dataSource)
+            ),
+            rateLimiter = PostgresRateLimiter(
+                dataSource, "clip_attest", licenseConfig.authenticatedRateLimit
+            ),
+            validation = config.validation,
+            logger = logger,
+            json = json
+        )
         val licenseHttpHandler = LicenseBillingHttpHandler(
             authenticator = authenticator,
             authorizer = authorizer,
@@ -493,7 +508,9 @@ object ServerBootstrap {
             // Control Plane: admin-маршруты /v1/admin/… первым слоем,
             // лицензионные (issue/revoke, redeem, checkout, webhooks) — следом.
             extensionHandler = { request ->
-                adminHttpHandler.handle(request) ?: licenseHttpHandler.handle(request)
+                adminHttpHandler.handle(request) ?:
+                    licenseHttpHandler.handle(request) ?:
+                    clipHttpHandler.handle(request)
             },
             // Публикуем healthProvider для внешнего kickoff в main().
             healthProviderFunc = healthProvider

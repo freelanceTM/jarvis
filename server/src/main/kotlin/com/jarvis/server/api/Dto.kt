@@ -155,6 +155,12 @@ enum class ApiErrorCode(val httpStatus: Int, val safeMessage: String) {
     PROVIDER_ERROR(502, "AI provider error"),
     ALL_PROVIDERS_UNAVAILABLE(503, "No AI provider is currently available"),
     PAYLOAD_TOO_LARGE(413, "Request payload too large"),
+    CLIP_UNKNOWN(404, "Clip is not provisioned"),
+    CLIP_ALREADY_PROVISIONED(409, "Clip identity is already provisioned"),
+    CLIP_REVOKED(403, "Clip identity is revoked"),
+    CLIP_CHALLENGE_INVALID(401, "Attestation challenge expired, used or unknown"),
+    CLIP_BAD_SIGNATURE(401, "Attestation signature verification failed"),
+    CLIP_OWNER_MISMATCH(403, "Clip is bound to another account"),
     INTERNAL_ERROR(500, "Internal server error");
 
     fun toResponse(requestId: String, overrideMessage: String? = null) = ApiErrorResponse(

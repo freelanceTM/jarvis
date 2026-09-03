@@ -12,6 +12,20 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Криптографическая привязка OMNIX Clip (server V008 + Android core/clip):
+  идентичность = пара ключей EC P-256 (не имя/MAC). Производство регистрирует
+  публичный ключ (`/v1/admin/clips/provision`; serial, public key, owner,
+  license/account, status в clip_devices). Подключение: server-challenge
+  (single-use, TTL 120s) → Clip подписывает каноническое сообщение
+  (JARVIS-CLIP-ATTEST-v1) → сервер проверяет подпись зарегистрированным
+  ключом → VALID + первая привязка владельца; revoked/чужой аккаунт/чужой
+  ключ/replay — отказ. Android: ClipAttestationProtocol/ClipIdentityVerifier
+  (fail-closed ECDSA), EncryptedClipTrustStore (ключ закрепляется только из
+  серверных ответов), ClipAttestationManager (онлайн-сервер / офлайн-локально
+  со свежестью), ClipTransport — честный контракт для firmware (фейковой
+  реализации нет: TransportUnavailable, никогда не фейковый VALID). Тесты:
+  интеграция на реальном Postgres (6 сценариев), JVM-тесты Android-стека;
+  8 CLIP-инвариантов. См. docs/OMNIX_CLIP_BINDING.md.
 - Device binding API-токенов (server V007): клиент — не источник истины.
   jrv_-токен привязывается к устройству при redeem (`api_tokens.device_hash`);
   AI-исполнение проверяет `X-Jarvis-Device` на КАЖДОМ запросе
