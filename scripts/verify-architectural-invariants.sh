@@ -328,6 +328,19 @@ check "LOCAL-FIRST: device lane routes without any LLM" \
       "DecisionReason.FAST_ROUTER_CONFIDENT" \
       "$APP/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt"
 
+check "LOCAL-FIRST: router metrics singleton exists" \
+      "class ExecutionRouterMetrics" \
+      "$APP/java/com/jarvis/assistant/agent/metrics/ExecutionRouterMetrics.kt"
+check "LOCAL-FIRST: engine counts every request" \
+      "metrics.noteTotalRequest()" \
+      "$APP/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt"
+check "LOCAL-FIRST: escalation requires local lane attempt" \
+      "noteCloudExecution(escalated = trace.localTried)" \
+      "$APP/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt"
+check "LOCAL-FIRST: target is a metric, not routing policy" \
+      "МЕТРИКА, а не жёсткое требование" \
+      "$APP/java/com/jarvis/assistant/agent/metrics/ExecutionRouterMetrics.kt"
+
 if [ "$fail" = 1 ]; then
   echo ""
   echo "INVARIANT CHECKS FAILED"

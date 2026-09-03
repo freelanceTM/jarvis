@@ -12,6 +12,14 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Метрики Local-first ExecutionRouter (`ExecutionRouterMetrics`):
+  total_requests / tool_requests / local_requests (+agent/direct) /
+  cloud_requests / failed_local / cloud_escalations и проценты
+  Local Execution % / Cloud Execution %; целевой ориентир первой версии
+  60–70%+ — метрика, не жёсткое правило (на роутинг не влияет). Сводка в лог
+  каждые 25 запросов; эскалация считается только когда локальная полоса была
+  реально опрошена (skip по requiresWeb — не эскалация). 7 JVM-тестов
+  подсчёта в ExecutionDecisionEngineTest.
 - Local-first перевод (`LocalLlmTranslationProvider`): короткие реплики
   живого переводчика обрабатываются on-device Gemma (полоса LOCAL AI
   ExecutionRouter), длинные документы (>500 символов) и «модель не готова»

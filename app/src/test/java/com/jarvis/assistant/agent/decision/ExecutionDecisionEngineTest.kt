@@ -10,6 +10,7 @@ import com.jarvis.assistant.agent.memory.WorkingMemory
 import com.jarvis.assistant.agent.memory.context.AnaphoraContextEngine
 import com.jarvis.assistant.agent.memory.context.ReferenceResolver
 import com.jarvis.assistant.agent.memory.semantic.SemanticTextMatcher
+import com.jarvis.assistant.agent.metrics.ExecutionRouterMetrics
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
 import com.jarvis.assistant.agent.planner.ExecutionPlan
@@ -116,7 +117,8 @@ class ExecutionDecisionEngineTest {
         tools: Set<JarvisTool> = emptySet(),
         localAi: LocalAiExecutor = FakeLocalAi(LocalAiOutcome.Uncertain),
         cloudAi: CloudAiExecutor = FakeCloudAi(),
-        agent: AgentExecutor = FakeAgent()
+        agent: AgentExecutor = FakeAgent(),
+        metrics: ExecutionRouterMetrics = ExecutionRouterMetrics()
     ): ExecutionDecisionEngine {
         val registry = ToolRegistry(tools, ToolDiscoveryEngine(SemanticTextMatcher()))
         val toolExecutor = ToolExecutor(registry, ToolPermissionManager(FakeCapabilityRegistry.create()))
@@ -129,7 +131,8 @@ class ExecutionDecisionEngineTest {
             localAi = localAi,
             cloudAi = cloudAi,
             workingMemory = workingMemory,
-            config = ExecutionDecisionConfig()
+            config = ExecutionDecisionConfig(),
+            metrics = metrics
         )
     }
 
@@ -564,4 +567,133 @@ class ExecutionDecisionEngineTest {
         assertFalse(private.loggableText.contains("секретный"))
         assertTrue(private.loggableText.startsWith("<redacted:"))
     }
+    // ---------------- Local-first метрики ExecutionRouter ----------------
+
+    @Test
+    fun `tool lane is counted with local percent and no escalation`() = runBlocking {
+        val tool = ScriptedTool("device.flashlight", ToolExecutionResult.success("Фонарик включен"))
+        val local = FakeLocalAi(LocalAiOutcome.Uncertain)
+        val cloud = FakeCloudAi()
+        val metrics = ExecutionRouterMetrics()
+        val engine = buildEngine(tools = setOf(tool), localAi = local, cloudAi = cloud, metrics = metrics)
+
+        engine.execute(request("включи фонарик"))
+
+        val snap = metrics.snapshot()
+        assertEquals(1L, snap.totalRequests)
+        assertEquals(1L, snap.toolRequests)
+        assertEquals(0L, snap.cloudRequests)
+        assertEquals(0L, snap.cloudEscalations)
+        assertEquals(0L, snap.failedLocal)
+        assertEquals(100.0, snap.localExecutionPercent, 0.01)
+        assertEquals(0.0, snap.cloudExecutionPercent, 0.01)
+    }
+
+    @Test
+    fun `local handled counts as local execution`() = runBlocking {
+        val local = FakeLocalAi(LocalAiOutcome.Handled("Сценарий выполнен, сэр."))
+        val cloud = FakeCloudAi()
+        val metrics = ExecutionRouterMetrics()
+        val engine = buildEngine(localAi = local, cloudAi = cloud, metrics = metrics)
+
+        engine.execute(request("активируй мой личный сценарий"))
+
+        val snap = metrics.snapshot()
+        assertEquals(1L, snap.localRequests)
+        assertEquals(0L, snap.cloudRequests)
+        assertEquals(100.0, snap.localExecutionPercent, 0.01)
+    }
+
+    @Test
+    fun `local failure counts failed_local without escalation or cloud`() = runBlocking {
+        val local = FakeLocalAi(LocalAiOutcome.Failed("локальный сценарий упал"))
+        val cloud = FakeCloudAi()
+        val metrics = ExecutionRouterMetrics()
+        val engine = buildEngine(localAi = local, cloudAi = cloud, metrics = metrics)
+
+        val result = engine.execute(request("активируй мой личный сценарий"))
+
+        assertTrue(result is ExecutionResult.Error)
+        val snap = metrics.snapshot()
+        assertEquals(1L, snap.failedLocal)
+        assertEquals(0L, snap.cloudRequests)
+        assertEquals(0L, snap.cloudEscalations)
+    }
+
+    @Test
+    fun `uncertain local escalates and is counted as escalation`() = runBlocking {
+        val local = FakeLocalAi(LocalAiOutcome.Uncertain)
+        val cloud = FakeCloudAi(Resource.Success("Ответ облака"))
+        val metrics = ExecutionRouterMetrics()
+        val engine = buildEngine(localAi = local, cloudAi = cloud, metrics = metrics)
+
+        engine.execute(request("расскажи что-нибудь интересное про космос"))
+
+        val snap = metrics.snapshot()
+        assertEquals(1L, snap.cloudRequests)
+        assertEquals(1L, snap.cloudEscalations)
+        assertEquals(0.0, snap.localExecutionPercent, 0.01)
+        assertEquals(100.0, snap.cloudExecutionPercent, 0.01)
+    }
+
+    @Test
+    fun `requiresWeb skip is not an escalation`() = runBlocking {
+        // Локальная полоса не опрашивалась (skip) — облако взяло запрос
+        // само, эскалацией это не считается.
+        val local = FakeLocalAi(LocalAiOutcome.Uncertain, hasWebCapability = false)
+        val cloud = FakeCloudAi(Resource.Success("веб-ответ"))
+        val metrics = ExecutionRouterMetrics()
+        val engine = buildEngine(localAi = local, cloudAi = cloud, metrics = metrics)
+
+        engine.execute(request("найди в интернете погоду в Ашхабаде", requiresWeb = true))
+
+        val snap = metrics.snapshot()
+        assertEquals(1L, snap.cloudRequests)
+        assertEquals(0L, snap.cloudEscalations)
+    }
+
+    @Test
+    fun `clarifications count in total but not in any lane`() = runBlocking {
+        val metrics = ExecutionRouterMetrics()
+        val engine = buildEngine(metrics = metrics)
+
+        engine.execute(request("   "))
+        engine.execute(request("открой"))
+
+        val snap = metrics.snapshot()
+        assertEquals(2L, snap.totalRequests)
+        assertEquals(0L, snap.toolRequests)
+        assertEquals(0L, snap.localRequests)
+        assertEquals(0L, snap.cloudRequests)
+        assertEquals(2L, snap.notExecuted)
+        assertEquals(0.0, snap.localExecutionPercent, 0.01)
+    }
+
+    @Test
+    fun `mixed lanes produce target-style percentages`() = runBlocking {
+        val tool = ScriptedTool("device.flashlight", ToolExecutionResult.success("Фонарик включен"))
+        val metrics = ExecutionRouterMetrics()
+        // 2 запроса → tool; 1 → облако (локальный Uncertain).
+        val local = FakeLocalAi(LocalAiOutcome.Uncertain)
+        val engine = buildEngine(
+            tools = setOf(tool),
+            localAi = local,
+            cloudAi = FakeCloudAi(Resource.Success("облако")),
+            metrics = metrics
+        )
+
+        engine.execute(request("включи фонарик"))
+        engine.execute(request("включи фонарик"))
+        engine.execute(request("расскажи что-нибудь интересное про космос"))
+
+        val snap = metrics.snapshot()
+        assertEquals(3L, snap.totalRequests)
+        assertEquals(2L, snap.localExecuted)
+        assertEquals(1L, snap.cloudRequests)
+        assertEquals(66.6, snap.localExecutionPercent, 0.1)
+        assertEquals(33.3, snap.cloudExecutionPercent, 0.1)
+        // Ориентир — метрика, не правило: при выборке 20+ он просто читается.
+        assertFalse(snap.meetsFirstVersionTarget) // выборка < 20
+    }
+
 }

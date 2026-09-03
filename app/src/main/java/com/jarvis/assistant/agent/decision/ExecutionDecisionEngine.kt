@@ -4,6 +4,7 @@ import android.util.Log
 import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.fast.FastCommandRouter
 import com.jarvis.assistant.agent.memory.WorkingMemory
+import com.jarvis.assistant.agent.metrics.ExecutionRouterMetrics
 import com.jarvis.assistant.agent.model.ToolExecutionStatus
 import com.jarvis.assistant.core.result.Resource
 import kotlinx.coroutines.CancellationException
@@ -52,8 +53,18 @@ class ExecutionDecisionEngine @Inject constructor(
     private val localAi: LocalAiExecutor,
     private val cloudAi: CloudAiExecutor,
     private val workingMemory: WorkingMemory,
-    private val config: ExecutionDecisionConfig = ExecutionDecisionConfig()
+    private val config: ExecutionDecisionConfig = ExecutionDecisionConfig(),
+    // Local-first метрики: подсчёт полос маршрутизации (Local %/Cloud %),
+    // НЕ политика — на роутинг не влияет (spec: «метрика, а не жёсткое
+    // требование»). Дефолт — только для тестов; в DI это @Singleton.
+    private val metrics: ExecutionRouterMetrics = ExecutionRouterMetrics()
 ) {
+
+    /** След полос внутри ОДНОГО запроса (локальная переменная — без гонок). */
+    private class RouterTrace {
+        /** Локальная полоса реально опрашивалась (не skip по requiresWeb). */
+        var localTried: Boolean = false
+    }
     companion object {
         private const val TAG = "DecisionEngine"
 
@@ -74,6 +85,9 @@ class ExecutionDecisionEngine @Inject constructor(
      */
     suspend fun execute(request: ExecutionRequest): ExecutionResult {
         logRequest(request)
+        // Метрики: считается КАЖДЫЙ запрос — включая отказы/уточнения
+        // (они честно понижают Local %/Cloud %, остаток виден в snapshot).
+        metrics.noteTotalRequest()
         if (request.text.isBlank()) {
             return ExecutionResult.Error(
                 message = EMPTY_REQUEST_MESSAGE,
@@ -112,6 +126,7 @@ class ExecutionDecisionEngine @Inject constructor(
     }
 
     private suspend fun decide(request: ExecutionRequest): ExecutionResult {
+        val trace = RouterTrace()
         // ------------------------------------------------ PRIORITY 1: DEVICE TOOL
         val routing = FastRouteConfidence.from(fastCommandRouter.route(request.text))
         val deviceResult = tryDeviceTool(request, routing)
@@ -140,14 +155,16 @@ class ExecutionDecisionEngine @Inject constructor(
                 return privacyBlocked(DecisionReason.EXTERNAL_TOOL_BLOCKED_BY_PRIVACY)
             }
             logRoute(ExecutionType.AGENT, DecisionReason.COMPLEX_MULTI_STEP, routing.confidence)
+            metrics.noteAgentExecution()
             return agentExecutor.run(plan)
         }
 
         // ------------------------------------------------ PRIORITY 2: LOCAL AI
-        val localOutcome = tryLocalAi(request, routing)
+        val localOutcome = tryLocalAi(request, routing, trace)
         when (localOutcome) {
             is LocalAiOutcome.Handled -> {
                 logRoute(ExecutionType.LOCAL_AI, DecisionReason.LOCAL_AI_HANDLED, routing.confidence)
+                metrics.noteLocalHandled()
                 return ExecutionResult.Success(
                     text = localOutcome.text,
                     executionType = ExecutionType.LOCAL_AI,
@@ -157,6 +174,7 @@ class ExecutionDecisionEngine @Inject constructor(
 
             is LocalAiOutcome.Failed -> {
                 Log.w(TAG, "route=LOCAL_AI outcome=FAILED — не эскалируем в облако")
+                metrics.noteLocalFailed()
                 return ExecutionResult.Error(
                     message = localOutcome.message,
                     reason = DecisionReason.LOCAL_AI_UNCERTAIN
@@ -167,7 +185,7 @@ class ExecutionDecisionEngine @Inject constructor(
         }
 
         // ------------------------------------------------ PRIORITY 3: CLOUD AI
-        return runCloud(request, routing)
+        return runCloud(request, routing, trace)
     }
 
     // =====================================================================
@@ -189,6 +207,7 @@ class ExecutionDecisionEngine @Inject constructor(
         return when (routing) {
             is CommandRoutingResult.DeviceCommand -> {
                 logRoute(ExecutionType.DEVICE_TOOL, DecisionReason.FAST_ROUTER_CONFIDENT, routing.confidence)
+                metrics.noteToolExecution()
                 executeDeviceTool(request, routing)
             }
 
@@ -196,6 +215,7 @@ class ExecutionDecisionEngine @Inject constructor(
             // путь, просто без вызова инструмента.
             is CommandRoutingResult.DirectResponse -> {
                 logRoute(ExecutionType.DEVICE_TOOL, DecisionReason.FAST_ROUTER_CONFIDENT, routing.confidence)
+                metrics.noteDirectResponse()
                 ExecutionResult.Success(
                     text = routing.text,
                     executionType = ExecutionType.DEVICE_TOOL,
@@ -287,10 +307,12 @@ class ExecutionDecisionEngine @Inject constructor(
     // =====================================================================
     private suspend fun tryLocalAi(
         request: ExecutionRequest,
-        routing: CommandRoutingResult
+        routing: CommandRoutingResult,
+        trace: RouterTrace
     ): LocalAiOutcome {
         // Пункт 8 ТЗ: локальный слой без web-возможности не имеет права
-        // притворяться, что выполнил web-запрос.
+        // притворяться, что выполнил web-запрос. SKIP — это НЕ попытка:
+        // уход в облако после skip не считается эскалацией.
         if (request.requiresWeb && !localAi.hasWebCapability) {
             Log.d(
                 TAG,
@@ -300,6 +322,7 @@ class ExecutionDecisionEngine @Inject constructor(
         }
 
         logRoute(ExecutionType.LOCAL_AI, DecisionReason.FAST_ROUTER_UNCERTAIN, routing.confidence)
+        trace.localTried = true
         return localAi.tryHandle(request)
     }
 
@@ -308,7 +331,8 @@ class ExecutionDecisionEngine @Inject constructor(
     // =====================================================================
     private suspend fun runCloud(
         request: ExecutionRequest,
-        routing: CommandRoutingResult
+        routing: CommandRoutingResult,
+        trace: RouterTrace
     ): ExecutionResult {
         // Privacy gate: приватный/чувствительный запрос НИКОГДА не уходит
         // в облако без явного разрешения (пункт 7 ТЗ).
@@ -336,6 +360,10 @@ class ExecutionDecisionEngine @Inject constructor(
         }
         logRoute(ExecutionType.CLOUD_AI, reason, routing.confidence)
 
+        // Метрики: cloud_requests — реально отправленные запросы (attempt);
+        // эскалация — только когда локальная полоса БЫЛА опрошена и не взяла
+        // (skip по requiresWeb эскалацией не считается).
+        metrics.noteCloudExecution(escalated = trace.localTried)
         return when (val cloudResult = cloudAi.complete(request)) {
             is Resource.Success -> {
                 val rawOutput = cloudResult.data.trim()

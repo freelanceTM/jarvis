@@ -52,6 +52,28 @@ CompositeLocalAiExecutor
   честно сообщают `Unsupported`/`ModelUnavailable`, продукт работает через
   облако как раньше.
 
+### Метрики ExecutionRouter (`ExecutionRouterMetrics`)
+
+Считается каждый запрос через `ExecutionDecisionEngine.execute`:
+
+| Счётчик | Что это |
+|---|---|
+| `total_requests` | все запросы (включая отказы/уточнения) |
+| `tool_requests` | полоса LOCAL TOOL |
+| `local_requests` | полоса LOCAL AI (+`agent_requests`, +`direct_requests`) |
+| `cloud_requests` | реально отправленные в облако (attempt) |
+| `failed_local` | LOCAL AI честно отказал (без эскалации) |
+| `cloud_escalations` | облако взяло запрос, который локальная полоса опросила и не взяла (skip по `requiresWeb` — НЕ эскалация) |
+
+**Local Execution %** = (tool + agent + local + direct) / total · 100
+**Cloud Execution %** = cloud / total · 100
+
+Целевой ориентир первой версии — **Tool/local execution 60–70%+**. Это
+метрика, а не жёсткое требование: на роутинг она не влияет; 80%+ без
+ухудшения качества — отлично; деградация качества ради процента запрещена.
+Проценты за период — в логе (`ExecRouterMetrics`, каждые 25 запросов) и в
+`snapshot()` для будущего экрана диагностики.
+
 ---
 
 ## 1. Выбор runtime
