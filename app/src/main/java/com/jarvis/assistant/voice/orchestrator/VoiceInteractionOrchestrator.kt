@@ -11,6 +11,7 @@ import com.jarvis.assistant.agent.decision.PrivacyContent
 import com.jarvis.assistant.agent.decision.PrivacyReason
 import com.jarvis.assistant.agent.decision.PrivacyLevel
 import com.jarvis.assistant.agent.decision.RequestSource
+import com.jarvis.assistant.agent.metrics.VoiceLatencyMetrics
 import com.jarvis.assistant.agent.executor.ConfirmationOwner
 import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.model.ToolCall
@@ -61,7 +62,8 @@ class VoiceInteractionOrchestrator @Inject constructor(
     private val sendPromptUseCase: SendPromptUseCase,
     private val getSettingsUseCase: GetSettingsUseCase,
     private val toolExecutor: ToolExecutor,
-    private val translatorEngine: LiveTranslatorEngine
+    private val translatorEngine: LiveTranslatorEngine,
+    private val latencyMetrics: VoiceLatencyMetrics
 ) {
     companion object {
         private const val TAG = "VoiceOrchestrator"
@@ -344,8 +346,15 @@ class VoiceInteractionOrchestrator @Inject constructor(
         textToSpeechManager.speak(msg, speechRate, speechPitch)
     }
 
+    /** Voice Latency: момент детекта wake-word (monotonic clock). */
+    private var wakeDetectedAtMs: Long = 0L
+
+    /** Voice Latency: момент финального STT-результата текущего запроса. */
+    private var sttFinalAtMs: Long = 0L
+
     private fun startKeywordVerification() {
         wakeWordDetector.stopListening()
+        wakeDetectedAtMs = latencyMetrics.nowMs()
         _currentMode.value = OrchestratorMode.VERIFYING_KEYWORD
         _assistantState.value = VoiceAssistantState.Listening
         speechRecognizerManager.startListening()
@@ -361,6 +370,7 @@ class VoiceInteractionOrchestrator @Inject constructor(
 
     private fun switchToSpeechRecognition() {
         wakeWordDetector.stopListening()
+        wakeDetectedAtMs = latencyMetrics.nowMs()
         _currentMode.value = OrchestratorMode.LISTENING_USER_QUERY
         _assistantState.value = VoiceAssistantState.Listening
         speechRecognizerManager.startListening()
@@ -527,6 +537,16 @@ class VoiceInteractionOrchestrator @Inject constructor(
     }
 
     private fun processUserQuery(query: String) {
+        // Voice Latency: финальный STT — точка отсчёта «STT → Router»
+        // (originTimestampMs протаскивается в ExecutionRequest) и конец
+        // сегмента «Wake → STT».
+        sttFinalAtMs = latencyMetrics.nowMs()
+        if (wakeDetectedAtMs > 0L) {
+            latencyMetrics.record(
+                VoiceLatencyMetrics.VoiceStage.WAKE_TO_STT,
+                sttFinalAtMs - wakeDetectedAtMs
+            )
+        }
         val clean = query.trim()
         if (clean.isBlank()) {
             _privacyClassification.value =
@@ -580,8 +600,10 @@ class VoiceInteractionOrchestrator @Inject constructor(
                 val result = sendPromptUseCase(
                     clean,
                     source = RequestSource.VOICE,
-                    privacyLevel = quickClassification.level
+                    privacyLevel = quickClassification.level,
+                    originTimestampMs = sttFinalAtMs
                 )
+                val resultReceivedAt = latencyMetrics.nowMs()
 
                 // CR-07: вторая точка проверки эпохи — после сетевого/AI-вызова.
                 if (sessionEpoch.get() != captureEpoch) {
@@ -637,6 +659,12 @@ class VoiceInteractionOrchestrator @Inject constructor(
                             is PromptExecutionResult.DirectAnswer -> {
                                 val answer = execution.text
                                 _lastAnswer.value = answer
+                                // Voice Latency «Tool → TTS»: от получения
+                                // результата до вызова озвучки.
+                                latencyMetrics.record(
+                                    VoiceLatencyMetrics.VoiceStage.TOOL_TO_TTS,
+                                    latencyMetrics.nowMs() - resultReceivedAt
+                                )
                                 _currentMode.value = OrchestratorMode.TTS_SPEAKING
                                 _assistantState.value = VoiceAssistantState.Speaking(answer)
                                 textToSpeechManager.speak(answer, speechRate, speechPitch)

@@ -74,6 +74,28 @@ CompositeLocalAiExecutor
 Проценты за период — в логе (`ExecRouterMetrics`, каждые 25 запросов) и в
 `snapshot()` для будущего экрана диагностики.
 
+### Voice Latency (`VoiceLatencyMetrics`): P50/P95/P99 по сегментам
+
+```
+Wake → STT → Router → AI → Tool → TTS
+```
+
+| Сегмент | Точка измерения |
+|---|---|
+| WAKE→STT | `VoiceInteractionOrchestrator`: детект wake-word → финальный STT |
+| STT→Router | execution engine: `ExecutionRequest.originTimestampMs` → вход в роутинг (включает классификацию приватности и память) |
+| Router→(dispatch) | execution engine: вход → выбрана полоса (FastCommandRouter + planner + preflight) |
+| **AI** | длительность AI-фазы — **всегда с разрезом LOCAL/CLOUD** (LOCAL_AI/AGENT → LOCAL; CLOUD_AI → CLOUD) |
+| Tool | исполнение DEVICE_TOOL-команды (LOCAL) |
+| Tool→TTS | оркестратор: результат → вызов озвучки |
+
+Хранение — кольцевой буфер 256 значений на серию; перцентили P50/P95/P99 в
+`snapshot()` и периодической лог-сводке (AI LOCAL против AI CLOUD —
+«реальная разница» из постановки). Часы — monotonic
+(`SystemClock.elapsedRealtime`). Мусорные значения (>120 c) отбрасываются.
+Цель «Simple command → local → response максимально быстро» проверяется
+этими цифрами напрямую: local p95 против cloud p50.
+
 ---
 
 ## 1. Выбор runtime

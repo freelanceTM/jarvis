@@ -11,6 +11,7 @@ import com.jarvis.assistant.agent.memory.context.AnaphoraContextEngine
 import com.jarvis.assistant.agent.memory.context.ReferenceResolver
 import com.jarvis.assistant.agent.memory.semantic.SemanticTextMatcher
 import com.jarvis.assistant.agent.metrics.ExecutionRouterMetrics
+import com.jarvis.assistant.agent.metrics.VoiceLatencyMetrics
 import com.jarvis.assistant.agent.model.ToolExecutionResult
 import com.jarvis.assistant.agent.model.ToolRisk
 import com.jarvis.assistant.agent.planner.ExecutionPlan
@@ -118,7 +119,8 @@ class ExecutionDecisionEngineTest {
         localAi: LocalAiExecutor = FakeLocalAi(LocalAiOutcome.Uncertain),
         cloudAi: CloudAiExecutor = FakeCloudAi(),
         agent: AgentExecutor = FakeAgent(),
-        metrics: ExecutionRouterMetrics = ExecutionRouterMetrics()
+        metrics: ExecutionRouterMetrics = ExecutionRouterMetrics(),
+        latency: VoiceLatencyMetrics = VoiceLatencyMetrics()
     ): ExecutionDecisionEngine {
         val registry = ToolRegistry(tools, ToolDiscoveryEngine(SemanticTextMatcher()))
         val toolExecutor = ToolExecutor(registry, ToolPermissionManager(FakeCapabilityRegistry.create()))
@@ -132,7 +134,8 @@ class ExecutionDecisionEngineTest {
             cloudAi = cloudAi,
             workingMemory = workingMemory,
             config = ExecutionDecisionConfig(),
-            metrics = metrics
+            metrics = metrics,
+            latency = latency
         )
     }
 
@@ -694,6 +697,61 @@ class ExecutionDecisionEngineTest {
         assertEquals(33.3, snap.cloudExecutionPercent, 0.1)
         // Ориентир — метрика, не правило: при выборке 20+ он просто читается.
         assertFalse(snap.meetsFirstVersionTarget) // выборка < 20
+    }
+
+    // ---------------- Voice Latency: сегменты пайплайна ----------------
+
+    @Test
+    fun `voice segments recorded per lane - device tool path`() = runBlocking {
+        val tool = ScriptedTool("device.flashlight", ToolExecutionResult.success("Фонарик включен"))
+        val latency = VoiceLatencyMetrics()
+        val engine = buildEngine(tools = setOf(tool), latency = latency)
+        val sttFinal = latency.nowMs()
+        Thread.sleep(5) // ощутимый STT→Router интервал
+
+        val result = engine.execute(request("включи фонарик", source = RequestSource.VOICE).copy(originTimestampMs = sttFinal))
+
+        assertTrue(result is ExecutionResult.Success)
+        val snap = latency.snapshot()
+        // STT→Router зафиксирован (голосовой запрос с origin).
+        assertTrue(snap.containsKey(VoiceLatencyMetrics.SeriesKey(VoiceLatencyMetrics.VoiceStage.STT_TO_ROUTER, VoiceLatencyMetrics.VoiceLane.UNSPECIFIED)))
+        // ROUTER_DISPATCH и TOOL — в LOCAL-разрезе.
+        assertTrue(snap.containsKey(VoiceLatencyMetrics.SeriesKey(VoiceLatencyMetrics.VoiceStage.ROUTER_DISPATCH, VoiceLatencyMetrics.VoiceLane.LOCAL)))
+        assertTrue(snap.containsKey(VoiceLatencyMetrics.SeriesKey(VoiceLatencyMetrics.VoiceStage.TOOL, VoiceLatencyMetrics.VoiceLane.LOCAL)))
+        // AI-сегмента у device-полосы нет — честно.
+        assertFalse(snap.containsKey(VoiceLatencyMetrics.SeriesKey(VoiceLatencyMetrics.VoiceStage.AI, VoiceLatencyMetrics.VoiceLane.CLOUD)))
+    }
+
+    @Test
+    fun `cloud lane latency is recorded separately from local`() = runBlocking {
+        val local = FakeLocalAi(LocalAiOutcome.Uncertain)
+        val cloud = FakeCloudAi(Resource.Success("Ответ облака"))
+        val latency = VoiceLatencyMetrics()
+        val engine = buildEngine(localAi = local, cloudAi = cloud, latency = latency)
+
+        engine.execute(request("расскажи что-нибудь интересное про космос"))
+
+        val snap = latency.snapshot()
+        assertTrue(snap.containsKey(VoiceLatencyMetrics.SeriesKey(VoiceLatencyMetrics.VoiceStage.AI, VoiceLatencyMetrics.VoiceLane.CLOUD)))
+        // Локальная AI-фаза тоже записана (попытка была — Uncertain).
+        assertTrue(snap.containsKey(VoiceLatencyMetrics.SeriesKey(VoiceLatencyMetrics.VoiceStage.AI, VoiceLatencyMetrics.VoiceLane.LOCAL)))
+        // ROUTER_DISPATCH в CLOUD-разрезе (полоса выбрана облачная).
+        assertTrue(snap.containsKey(VoiceLatencyMetrics.SeriesKey(VoiceLatencyMetrics.VoiceStage.ROUTER_DISPATCH, VoiceLatencyMetrics.VoiceLane.CLOUD)))
+    }
+
+    @Test
+    fun `chat request without origin has no stt segment`() = runBlocking {
+        val local = FakeLocalAi(LocalAiOutcome.Handled("локально"))
+        val latency = VoiceLatencyMetrics()
+        val engine = buildEngine(localAi = local, latency = latency)
+
+        engine.execute(request("активируй мой личный сценарий")) // CHAT, origin == null
+
+        assertFalse(
+            latency.snapshot().containsKey(
+                VoiceLatencyMetrics.SeriesKey(VoiceLatencyMetrics.VoiceStage.STT_TO_ROUTER, VoiceLatencyMetrics.VoiceLane.UNSPECIFIED)
+            )
+        )
     }
 
 }

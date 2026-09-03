@@ -12,6 +12,14 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Voice Latency (`VoiceLatencyMetrics`): сегменты голосового пайплайна
+  Wake→STT→Router→AI→Tool→TTS с P50/P95/P99 (кольцевой буфер 256/серия,
+  monotonic clock) и обязательным разрезом LOCAL/CLOUD для AI-фазы — видно
+  реальную разницу локального и облачного ответа. Точки: оркестратор
+  (wake/STT/TTS), execution engine (STT→Router через новый
+  `ExecutionRequest.originTimestampMs`, dispatch полосы, длительность AI и
+  Tool). На роутинг не влияет. 8 тестов (перцентили, разрез, кольцо,
+  интеграция по полосам); 5 VOICE-LATENCY-инвариантов. См. docs/LOCAL_AI.md.
 - Cost Control (server): Request → Cost estimation → Budget policy →
   Provider. Класс сложности запроса (SIMPLE/MEDIUM/HARD) детерминирован по
   форме (длина промпта/истории, requiresWeb — `RequestCostEstimator`, без

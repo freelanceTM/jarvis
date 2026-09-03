@@ -399,6 +399,23 @@ check "COST-CONTROL: simple answers get capped output budget" \
       "outputBudget(" \
       "server/src/main/kotlin/com/jarvis/server/router/AiRouter.kt"
 
+# VOICE LATENCY: сегменты пайплайна с P50/P95/P99 и разрезом LOCAL/CLOUD.
+check "VOICE-LATENCY: percentile store exists" \
+      "class VoiceLatencyMetrics" \
+      "$APP/java/com/jarvis/assistant/agent/metrics/VoiceLatencyMetrics.kt"
+check "VOICE-LATENCY: wake to stt measured at the orchestrator" \
+      "VoiceStage.WAKE_TO_STT" \
+      "$APP/java/com/jarvis/assistant/voice/orchestrator/VoiceInteractionOrchestrator.kt"
+check "VOICE-LATENCY: stt to router via request origin timestamp" \
+      "VoiceStage.STT_TO_ROUTER" \
+      "$APP/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt"
+check "VOICE-LATENCY: ai segment always carries a lane (LOCAL/CLOUD)" \
+      "VoiceLane.CLOUD" \
+      "$APP/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt"
+check "VOICE-LATENCY: monotonic clock for latency math" \
+      "SystemClock.elapsedRealtime" \
+      "$APP/java/com/jarvis/assistant/agent/metrics/VoiceLatencyMetrics.kt"
+
 if [ "$fail" = 1 ]; then
   echo ""
   echo "INVARIANT CHECKS FAILED"

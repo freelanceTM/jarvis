@@ -5,6 +5,7 @@ import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.fast.FastCommandRouter
 import com.jarvis.assistant.agent.memory.WorkingMemory
 import com.jarvis.assistant.agent.metrics.ExecutionRouterMetrics
+import com.jarvis.assistant.agent.metrics.VoiceLatencyMetrics
 import com.jarvis.assistant.agent.model.ToolExecutionStatus
 import com.jarvis.assistant.core.result.Resource
 import kotlinx.coroutines.CancellationException
@@ -57,8 +58,15 @@ class ExecutionDecisionEngine @Inject constructor(
     // Local-first метрики: подсчёт полос маршрутизации (Local %/Cloud %),
     // НЕ политика — на роутинг не влияет (spec: «метрика, а не жёсткое
     // требование»). Дефолт — только для тестов; в DI это @Singleton.
-    private val metrics: ExecutionRouterMetrics = ExecutionRouterMetrics()
+    private val metrics: ExecutionRouterMetrics = ExecutionRouterMetrics(),
+    // Voice Latency: сегменты пайплайна (Router→AI→Tool) с разрезом
+    // LOCAL/CLOUD; P50/P95/P99 — в snapshot(). Дефолт — только для тестов.
+    private val latency: VoiceLatencyMetrics = VoiceLatencyMetrics()
 ) {
+
+    private fun recordLaneStage(lane: VoiceLatencyMetrics.VoiceLane, stage: VoiceLatencyMetrics.VoiceStage, fromMs: Long) {
+        latency.record(stage, latency.nowMs() - fromMs, lane)
+    }
 
     /** След полос внутри ОДНОГО запроса (локальная переменная — без гонок). */
     private class RouterTrace {
@@ -88,6 +96,16 @@ class ExecutionDecisionEngine @Inject constructor(
         // Метрики: считается КАЖДЫЙ запрос — включая отказы/уточнения
         // (они честно понижают Local %/Cloud %, остаток виден в snapshot).
         metrics.noteTotalRequest()
+        val routerEnteredAt = latency.nowMs()
+        // Voice Latency «STT → Router»: от финального STT до входа в роутинг
+        // (классификация приватности + память происходят ДО движка — этот
+        // сегмент честно их включает). Для чат-запросов origin == null.
+        request.originTimestampMs?.let { sttFinal ->
+            latency.record(
+                VoiceLatencyMetrics.VoiceStage.STT_TO_ROUTER,
+                routerEnteredAt - sttFinal
+            )
+        }
         if (request.text.isBlank()) {
             return ExecutionResult.Error(
                 message = EMPTY_REQUEST_MESSAGE,
@@ -127,9 +145,10 @@ class ExecutionDecisionEngine @Inject constructor(
 
     private suspend fun decide(request: ExecutionRequest): ExecutionResult {
         val trace = RouterTrace()
+        val decidedAt = latency.nowMs()
         // ------------------------------------------------ PRIORITY 1: DEVICE TOOL
         val routing = FastRouteConfidence.from(fastCommandRouter.route(request.text))
-        val deviceResult = tryDeviceTool(request, routing)
+        val deviceResult = tryDeviceTool(request, routing, decidedAt)
         if (deviceResult != null) return deviceResult
 
         // ------------------------------------------------ PRIORITY 4*: AGENT
@@ -156,11 +175,33 @@ class ExecutionDecisionEngine @Inject constructor(
             }
             logRoute(ExecutionType.AGENT, DecisionReason.COMPLEX_MULTI_STEP, routing.confidence)
             metrics.noteAgentExecution()
-            return agentExecutor.run(plan)
+            recordLaneStage(
+                VoiceLatencyMetrics.VoiceLane.LOCAL,
+                VoiceLatencyMetrics.VoiceStage.ROUTER_DISPATCH,
+                decidedAt
+            )
+            // AGENT — локальная полоса: план исполняется on-device.
+            val agentStartedAt = latency.nowMs()
+            val agentResult = agentExecutor.run(plan)
+            latency.record(
+                VoiceLatencyMetrics.VoiceStage.AI,
+                latency.nowMs() - agentStartedAt,
+                VoiceLatencyMetrics.VoiceLane.LOCAL
+            )
+            return agentResult
         }
 
         // ------------------------------------------------ PRIORITY 2: LOCAL AI
+        recordLaneStage(VoiceLatencyMetrics.VoiceLane.LOCAL, VoiceLatencyMetrics.VoiceStage.ROUTER_DISPATCH, decidedAt)
+        val localAiStartedAt = latency.nowMs()
         val localOutcome = tryLocalAi(request, routing, trace)
+        // AI-фаза локальной полосы (модель не установлена → попытка мгновенна
+        // и попадает в перцентили как «local почти нулевой» — честно).
+        latency.record(
+            VoiceLatencyMetrics.VoiceStage.AI,
+            latency.nowMs() - localAiStartedAt,
+            VoiceLatencyMetrics.VoiceLane.LOCAL
+        )
         when (localOutcome) {
             is LocalAiOutcome.Handled -> {
                 logRoute(ExecutionType.LOCAL_AI, DecisionReason.LOCAL_AI_HANDLED, routing.confidence)
@@ -185,6 +226,7 @@ class ExecutionDecisionEngine @Inject constructor(
         }
 
         // ------------------------------------------------ PRIORITY 3: CLOUD AI
+        recordLaneStage(VoiceLatencyMetrics.VoiceLane.CLOUD, VoiceLatencyMetrics.VoiceStage.ROUTER_DISPATCH, decidedAt)
         return runCloud(request, routing, trace)
     }
 
@@ -193,7 +235,8 @@ class ExecutionDecisionEngine @Inject constructor(
     // =====================================================================
     private suspend fun tryDeviceTool(
         request: ExecutionRequest,
-        routing: CommandRoutingResult
+        routing: CommandRoutingResult,
+        decidedAt: Long
     ): ExecutionResult? {
         // requiresDeviceControl — подсказка вызывающего слоя: если роутер уже
         // собрал вызов инструмента, порог не должен мешать device-пути.
@@ -208,7 +251,21 @@ class ExecutionDecisionEngine @Inject constructor(
             is CommandRoutingResult.DeviceCommand -> {
                 logRoute(ExecutionType.DEVICE_TOOL, DecisionReason.FAST_ROUTER_CONFIDENT, routing.confidence)
                 metrics.noteToolExecution()
-                executeDeviceTool(request, routing)
+                recordLaneStage(
+                    VoiceLatencyMetrics.VoiceLane.LOCAL,
+                    VoiceLatencyMetrics.VoiceStage.ROUTER_DISPATCH,
+                    decidedAt
+                )
+                val toolStartedAt = latency.nowMs()
+                val result = executeDeviceTool(request, routing)
+                // «AI → Tool»: у DEVICE_TOOL-полосы AI-фазы нет — Tool-сегмент
+                // показывает чистую стоимость исполнения команды устройства.
+                latency.record(
+                    VoiceLatencyMetrics.VoiceStage.TOOL,
+                    latency.nowMs() - toolStartedAt,
+                    VoiceLatencyMetrics.VoiceLane.LOCAL
+                )
+                result
             }
 
             // Готовая локальная реплика («привет») — тоже устройство-локальный
@@ -364,7 +421,14 @@ class ExecutionDecisionEngine @Inject constructor(
         // эскалация — только когда локальная полоса БЫЛА опрошена и не взяла
         // (skip по requiresWeb эскалацией не считается).
         metrics.noteCloudExecution(escalated = trace.localTried)
-        return when (val cloudResult = cloudAi.complete(request)) {
+        val cloudStartedAt = latency.nowMs()
+        val cloudOutcome = cloudAi.complete(request)
+        latency.record(
+            VoiceLatencyMetrics.VoiceStage.AI,
+            latency.nowMs() - cloudStartedAt,
+            VoiceLatencyMetrics.VoiceLane.CLOUD
+        )
+        return when (val cloudResult = cloudOutcome) {
             is Resource.Success -> {
                 val rawOutput = cloudResult.data.trim()
 

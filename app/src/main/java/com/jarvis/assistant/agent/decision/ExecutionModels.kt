@@ -61,6 +61,12 @@ data class ExecutionRequest(
     val cloudExplicitlyAllowed: Boolean = false,
     val history: List<Message> = emptyList(),
     /**
+     * Voice Latency: timestamp финального STT-результата
+     * ([android.os.SystemClock.elapsedRealtime]) — точка «STT → Router».
+     * null = запрос не голосовой (чат) — сегмент не измеряется.
+     */
+    val originTimestampMs: Long? = null,
+    /**
      * Privacy classification result that accompanies this request.
      *
      * H-02 / Refactor #3: this is the SINGLE source of truth for privacy
@@ -125,7 +131,8 @@ data class ExecutionRequest(
             history: List<Message> = emptyList(),
             requiresWeb: Boolean = false,
             requiresDeviceControl: Boolean = false,
-            cloudExplicitlyAllowed: Boolean = false
+            cloudExplicitlyAllowed: Boolean = false,
+            originTimestampMs: Long? = null
         ): ExecutionRequest {
             val classification = PrivacyClassifier.classifySafely(
                 PrivacyContent(
@@ -141,7 +148,8 @@ data class ExecutionRequest(
                 privacyLevel = declaredLevel,
                 cloudExplicitlyAllowed = cloudExplicitlyAllowed,
                 history = history,
-                privacyClassification = classification
+                privacyClassification = classification,
+                originTimestampMs = originTimestampMs
             )
         }
 
