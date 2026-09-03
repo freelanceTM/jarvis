@@ -23,6 +23,37 @@ CompositeLocalAiExecutor
 
 ---
 
+## 0. ExecutionRouter: локальная обработка там, где cloud не нужен
+
+Цель — **НЕ** «локальная LLM решает всё». Цель — каждая полоса получает
+ровно тот класс запросов, для которого облако не требуется. Роутер — это
+уже существующие `FastCommandRouter` + `ExecutionDecisionEngine` (новых
+слоёв не вводилось):
+
+| Полоса (spec) | Реализация в коде | Примеры |
+|---|---|---|
+| **LOCAL TOOL** | `FastCommandRouter.route()` → `ExecutionDecisionEngine.tryDeviceTool()` (P1, `DecisionReason.FAST_ROUTER_CONFIDENT`); без LLM вообще | «Открой Telegram», «Громкость 50%», «Поставь таймер», «Включи Bluetooth» |
+| **LOCAL AI** | `OnDeviceLocalAi` (Gemma, user-installed) + `WorkflowExecutor` (процедурные макросы) через `LocalAiExecutorAdapter` (P2); AGENT-полоса (P4, `CognitivePlanner` + локальные tools) — многошаговые планы тоже исполняются локально | классификация, простая интерпретация, **короткий перевод** (`LocalLlmTranslationProvider`), разрешение контекста (`WorkingMemory`/`AnaphoraContextEngine`), memory retrieval (локальная Room) |
+| **CLOUD** | `runCloud()` (P3) + облачный `LlmTranslationProvider` | reasoning, research, long documents (перевод >500 символов), требует сеть (`requiresWeb`), большой контекст, всё, что локальные полосы честно не взяли |
+
+Ключевые свойства (все закреплены тестами/инвариантами):
+
+- **Local-first с честным fallback**: локальные полосы пробуются первыми;
+  их неуспех (`Uncertain`/`Unsupported`/`ModelUnavailable`) передаётся
+  следующей полосе — никакая не изображает успех (doctrine Fake-Success).
+- **Перевод**: `LiveTranslatorEngine` сортирует провайдеры
+  `sortedByDescending { isOffline }` — локальная модель (`local_llm`) отвечает
+  первой, облако (`llm`) — fallback. Бонус приватности: PRIVATE/SENSITIVE
+  тексты, которые облако блокирует (C-02), локальный провайдер переводит
+  на устройстве.
+- **Приватность сохраняет приоритет**: PRIVATE/SENSITIVE без согласия
+  не доходят до облака в любой полосе (privacy-гейты engine'а).
+- **Модель не в APK** (~529 МБ, user-installed): без модели локальные полосы
+  честно сообщают `Unsupported`/`ModelUnavailable`, продукт работает через
+  облако как раньше.
+
+---
+
 ## 1. Выбор runtime
 
 | Runtime | Android | CPU | GPU/NPU | Модели | Интеграция с Kotlin | APK impact | Сложность | Лицензия | Вывод |

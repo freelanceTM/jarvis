@@ -169,8 +169,10 @@ abstract class SecurityAndNetworkBindingModule {
     @Multibinds
     abstract fun bindTranslationProviders(): Set<TranslationProvider>
 
-    // Провайдеры перевода. Офлайн-модели в v0.2 нет — регистрируем только
-    // реально работающий онлайн-провайдер, а не заглушку.
+    // Провайдеры перевода: local-first — on-device Gemma (если пользователь
+    // установил модель) пробуется первым, облако — fallback (длинный текст,
+    // модель не готова). Оба реально работающие, заглушек нет.
+    @Binds @IntoSet abstract fun bindLocalLlmTranslationProvider(provider: com.jarvis.assistant.agent.translator.LocalLlmTranslationProvider): TranslationProvider
     @Binds @IntoSet abstract fun bindLlmTranslationProvider(provider: LlmTranslationProvider): TranslationProvider
 
     // 1. Системные инструменты (System)

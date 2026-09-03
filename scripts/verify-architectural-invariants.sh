@@ -311,6 +311,23 @@ check "CLIP: no fake transport success - firmware contract is honest" \
       "ClipTransportResult.Unavailable" \
       "$APP/java/com/jarvis/assistant/core/clip/ClipAttestationApi.kt"
 
+# LOCAL-FIRST: локальная обработка там, где cloud не нужен.
+check "LOCAL-FIRST: translation has an on-device provider" \
+      "class LocalLlmTranslationProvider" \
+      "$APP/java/com/jarvis/assistant/agent/translator/LocalLlmTranslationProvider.kt"
+check "LOCAL-FIRST: on-device translation provider claims offline priority" \
+      "override val isOffline: Boolean = true" \
+      "$APP/java/com/jarvis/assistant/agent/translator/LocalLlmTranslationProvider.kt"
+check "LOCAL-FIRST: engine prefers offline providers (local-first order)" \
+      "sortedByDescending { it.isOffline }" \
+      "$APP/java/com/jarvis/assistant/agent/translator/LiveTranslatorEngine.kt"
+check "LOCAL-FIRST: long documents yield to the cloud lane honestly" \
+      "MAX_LOCAL_CHARS" \
+      "$APP/java/com/jarvis/assistant/agent/translator/LocalLlmTranslationProvider.kt"
+check "LOCAL-FIRST: device lane routes without any LLM" \
+      "DecisionReason.FAST_ROUTER_CONFIDENT" \
+      "$APP/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt"
+
 if [ "$fail" = 1 ]; then
   echo ""
   echo "INVARIANT CHECKS FAILED"

@@ -107,4 +107,33 @@ class LiveTranslatorEngineTest {
         val codes = LiveTranslatorEngine.SUPPORTED_LANGUAGES.map { it.code }
         assertTrue(codes.containsAll(listOf("ru", "en", "tk", "tr")))
     }
+    @Test
+    fun `local-first cascade - local failure falls through to cloud`() = runBlocking {
+        // Локальный провайдер «есть, но модель не готова» — движок обязан
+        // дойти до облачного и вернуть его успех (fallback, не заглушка).
+        val local = FakeProvider("local_llm", isOffline = true, available = false)
+        val cloud = FakeProvider("llm", isOffline = false)
+        val engine = LiveTranslatorEngine(setOf(cloud, local))
+
+        val result = engine.translateStructured("Hello", "en", "ru")
+
+        assertTrue(result is TranslationResult.Success)
+        // Вызовов у недоступного локального не было; облачный отработал.
+        assertEquals(0, local.translateCalls)
+        assertEquals(1, cloud.translateCalls)
+    }
+
+    @Test
+    fun `local provider answers first when ready - cloud is not called`() = runBlocking {
+        val local = FakeProvider("local_llm", isOffline = true)
+        val cloud = FakeProvider("llm", isOffline = false)
+        val engine = LiveTranslatorEngine(setOf(cloud, local))
+
+        val result = engine.translateStructured("Hello", "en", "ru")
+
+        assertTrue(result is TranslationResult.Success)
+        assertEquals(1, local.translateCalls)
+        assertEquals(0, cloud.translateCalls)
+    }
+
 }

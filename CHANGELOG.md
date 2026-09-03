@@ -12,6 +12,14 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Local-first перевод (`LocalLlmTranslationProvider`): короткие реплики
+  живого переводчика обрабатываются on-device Gemma (полоса LOCAL AI
+  ExecutionRouter), длинные документы (>500 символов) и «модель не готова»
+  честно уступают облаку (движок провайдеров уже сортирует offline-first).
+  Приватный бонус: PRIVATE/SENSITIVE тексты, заблокированные облачным
+  провайдером (C-02), локально переводятся без сети. ExecutionRouter-маппинг
+  (LOCAL TOOL / LOCAL AI / CLOUD) задокументирован в docs/LOCAL_AI.md §0;
+  тесты локального провайдера и каскада local→cloud; инварианты.
 - Криптографическая привязка OMNIX Clip (server V008 + Android core/clip):
   идентичность = пара ключей EC P-256 (не имя/MAC). Производство регистрирует
   публичный ключ (`/v1/admin/clips/provision`; serial, public key, owner,
