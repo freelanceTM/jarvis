@@ -455,4 +455,52 @@ class ProviderManagerTest {
         )
         assertEquals(1, hang.calls.get())
     }
+    // ------------- Бюджет попыток: одна команда ≠ бесконечные платные вызовы -------------
+
+    /**
+     * Комбинированная граница: fallback (maxProviderAttempts=2) × retry
+     * (maxRetriesPerProvider=1) на retryable-сбоях — ровно 2+2 вызова и СТОП.
+     * Доказательство конечности: попытки не могут длиться бесконечно ни при
+     * каком скрипте сбоев.
+     */
+    @Test
+    fun `combined retry and fallback attempts are finite and capped`() = runBlocking {
+        val groq = FakeAiProvider.failing(ProviderId.GROQ, ProviderFailureKind.TIMEOUT)
+        val gemini = FakeAiProvider.failing(ProviderId.GEMINI, ProviderFailureKind.TIMEOUT)
+        val mgr = manager(
+            listOf(groq, gemini),
+            policy = ExecutionPolicyConfig(maxProviderAttempts = 2, maxRetriesPerProvider = 1, retryBackoffMs = 1)
+        )
+
+        val outcome = mgr.execute(request(), ProviderRequirements())
+
+        assertTrue(outcome is ManagerOutcome.Failure)
+        // Ровно maxProviderAttempts × (1 + maxRetriesPerProvider) = 4 попытки.
+        assertEquals(2, groq.calls.get())
+        assertEquals(2, gemini.calls.get())
+        assertEquals(2, (outcome as ManagerOutcome.Failure).attempted.size)
+    }
+
+    /**
+     * SHIPPED DEFAULTS (maxProviderAttempts=2, maxRetriesPerProvider=0):
+     * худший случай для ОДНОЙ команды пользователя — ровно 2 платных вызова,
+     * третий провайдер не трогается (правило spec: max 2–3 attempts).
+     */
+    @Test
+    fun `shipped defaults cap one user command at two paid attempts`() = runBlocking {
+        val providers = listOf(
+            FakeAiProvider.failing(ProviderId.GROQ, ProviderFailureKind.RATE_LIMITED, 429),
+            FakeAiProvider.failing(ProviderId.GEMINI, ProviderFailureKind.TIMEOUT),
+            FakeAiProvider.ok(ProviderId.OPENROUTER, "не должен вызваться")
+        )
+        val mgr = manager(providers) // дефолтная политика харнесса = продовая
+
+        val outcome = mgr.execute(request(), ProviderRequirements())
+
+        assertTrue(outcome is ManagerOutcome.Failure)
+        assertEquals(1, providers[0].calls.get())
+        assertEquals(1, providers[1].calls.get())
+        assertEquals("третий провайдер вне дефолтного бюджета", 0, providers[2].calls.get())
+    }
+
 }

@@ -361,6 +361,24 @@ check "SMART-ROUTER: prices come from admin cost settings" \
       "costEstimates" \
       "server/src/main/kotlin/com/jarvis/server/Main.kt"
 
+# FALLBACK: bounded attempts — одна команда пользователя не превращается
+# в бесконечные платные запросы.
+check "FALLBACK: default provider attempts bounded (2)" \
+      "val maxProviderAttempts: Int = 2" \
+      "server/src/main/kotlin/com/jarvis/server/config/ServerConfig.kt"
+check "FALLBACK: same-provider retries off by default" \
+      "val maxRetriesPerProvider: Int = 0" \
+      "server/src/main/kotlin/com/jarvis/server/config/ServerConfig.kt"
+check "FALLBACK: 429 is never retried on the same provider" \
+      "this == TIMEOUT || this == CONNECTION || this == SERVER_ERROR" \
+      "server/src/main/kotlin/com/jarvis/server/provider/AiProvider.kt"
+check "FALLBACK: fallback chain hard-capped by maxProviderAttempts" \
+      "attempted.size >= maxProviderAttempts" \
+      "server/src/main/kotlin/com/jarvis/server/provider/ProviderManager.kt"
+check "FALLBACK: worst-case time budget warned at startup" \
+      "provider timeout budget exceeds request deadline" \
+      "server/src/main/kotlin/com/jarvis/server/Main.kt"
+
 if [ "$fail" = 1 ]; then
   echo ""
   echo "INVARIANT CHECKS FAILED"

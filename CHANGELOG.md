@@ -12,6 +12,15 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Контракт Fallback-бюджета (server): худший случай платных вызовов на одну
+  команду задокументирован и закреплён — maxProviderAttempts=2 ×
+  (1+maxRetriesPerProvider=0) = 2 ≤ 3 (spec «max 2–3 attempts»); 429 не
+  ретраится у того же провайдера (fallback к следующему), retry только для
+  TIMEOUT/CONNECTION/SERVER_ERROR, AUTH/NOT_CONFIGURED permanent; клиент
+  повторов не делает (не умножает платные вызовы). Новые тесты: конечность
+  комбинированных retry×fallback (2×2), дефолт = ровно 2 платных попытки
+  (третий провайдер не трогается); 5 FALLBACK-инвариантов.
+  См. docs/CLOUD_ROUTER.md «Fallback и бюджет попыток».
 - Smart Cloud Router (server): выбор лучшего провайдера по измерениям, а не
   random/статический приоритет. `ProviderPerformanceTracker` хранит на каждого
   провайдера latency (EMA успешных вызовов), errors (success rate), 429

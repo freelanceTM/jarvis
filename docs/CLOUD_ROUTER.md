@@ -59,6 +59,39 @@ score = 0.35·latency + 0.35·reliability + 0.15·(1 − 429share) + 0.15·cost
 - `DefaultProviderSelectionPolicy` сохранён (используется тестами и как
   семантический эталон cold start).
 
+## Fallback и бюджет попыток (не бесконечные retries)
+
+Ваша цепочка — существующее поведение `ProviderManager`:
+
+```
+Groq ──429 (RATE_LIMITED, не ретраится у того же)──▶  Gemini ──timeout──▶  ...
+```
+
+| Параметр | Дефолт | Смысл |
+|---|---|---|
+| `maxProviderAttempts` | **2** | максимум провайдеров на ОДИН запрос (fallback-цепочка обрезается) |
+| `maxRetriesPerProvider` | **0** | повторов у одного провайдера нет; включать только осознанно |
+| retry только для | TIMEOUT/CONNECTION/SERVER_ERROR | `isRetryable`; 429 у того же провайдера НЕ повторяется, AUTH/NOT_CONFIGURED — permanent (вывод из ротации) |
+| backoff | пропускается, если deadline истечёт | CR-06 |
+
+**Худший случай платных вызовов на одну команду пользователя:**
+
+```
+maxProviderAttempts × (1 + maxRetriesPerProvider) = 2 × 1 = 2   (дефолт ≤ 3 ✓)
+```
+
+Временной бюджет проверяется на старте (`provider timeout budget exceeds
+request deadline` warning в Main.kt) и перед каждой попыткой (CR-06 deadline
+guard). Клиент повторов НЕ делает («локальный повтор снят: сервер уже делает
+controlled retry») — платные попытки не умножаются между слоями.
+
+Тесты-доказательства: `fallback chain respects max provider attempts`,
+`rate limited provider is not retried but falls back`,
+`invalid api key disables provider without pointless retries`,
+`combined retry and fallback attempts are finite and capped` (2×2=4 при
+осознанно включённых retry — верхняя граница, не бесконечность),
+`shipped defaults cap one user command at two paid attempts`.
+
 ## Тесты и инварианты
 
 `SmartProviderSelectionPolicyTest` (JVM): cold start = статический порядок,
