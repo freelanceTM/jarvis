@@ -12,6 +12,18 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Smart Cloud Router (server): выбор лучшего провайдера по измерениям, а не
+  random/статический приоритет. `ProviderPerformanceTracker` хранит на каждого
+  провайдера latency (EMA успешных вызовов), errors (success rate), 429
+  (RATE_LIMITED счётчик и доля); availability — circuit breaker
+  (`ProviderHealthTracker`), cost — конфигурируемые цены USD/1М токенов из
+  admin settings (секция cost, читаются на каждый отбор без рестарта).
+  `SmartProviderSelectionPolicy`: score = 0.35·latency + 0.35·reliability +
+  0.15·(1−429share) + 0.15·cost, min-max нормализация, нейтраль при
+  недостатке данных, tie-break и cold start — статический приоритет
+  (поведение до порога 5 измерений не меняется). `ProviderManager` —
+  единственная точка записи исходов. Тесты: 9 сценариев Smart Router;
+  6 SMART-ROUTER-инвариантов. См. docs/CLOUD_ROUTER.md.
 - Метрики Local-first ExecutionRouter (`ExecutionRouterMetrics`):
   total_requests / tool_requests / local_requests (+agent/direct) /
   cloud_requests / failed_local / cloud_escalations и проценты

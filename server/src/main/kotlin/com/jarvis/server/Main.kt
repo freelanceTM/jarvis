@@ -275,7 +275,19 @@ object ServerBootstrap {
         val health = ProviderHealthTracker(config.circuitBreaker)
         // Control Plane §12: runtime-overrides (priority/enabled) поверх startup-конфига.
         val providerOverrides = com.jarvis.server.admin.ProviderRuntimeOverrides()
-        val selectionPolicy = DefaultProviderSelectionPolicy(configsById, health, providerOverrides)
+
+        // Smart Provider Router: выбор лучшего провайдера по измеренным
+        // latency/errors/429 и конфигурируемым ценам (USD/1М токенов из admin
+        // settings), а не только по статическому приоритету. Cold start —
+        // прежний статический порядок.
+        val performanceTracker = com.jarvis.server.provider.ProviderPerformanceTracker()
+        val costPriceSource = com.jarvis.server.provider.CostPriceSource()
+        val selectionPolicy = com.jarvis.server.provider.SmartProviderSelectionPolicy(
+            configsById, health, providerOverrides, performanceTracker,
+            prices = {
+                com.jarvis.server.provider.SmartProviderSelectionPolicy.costEstimates(costPriceSource.get())
+            }
+        )
 
         val providerManager = ProviderManager(
             providers = providers,
@@ -284,7 +296,8 @@ object ServerBootstrap {
             policy = config.executionPolicy,
             selectionPolicy = selectionPolicy,
             logger = logger,
-            metrics = metrics
+            metrics = metrics,
+            performance = performanceTracker
         )
 
         val licenseConfig = requireNotNull(config.licenseSubsystem) {
@@ -438,6 +451,10 @@ object ServerBootstrap {
         val adminSessionRepository = com.jarvis.server.admin.AdminSessionRepository(dataSource)
         val adminAuditLog = com.jarvis.server.admin.AdminAuditLog(dataSource)
         val adminSettings = com.jarvis.server.admin.AdminSettingsService(dataSource, json)
+        // Smart Router: цены провайдеров теперь читаются из admin settings
+        // (USD за 1М токенов, секция cost) — обновления подхватываются на
+        // каждый отбор без рестарта.
+        costPriceSource.set { adminSettings.cost() }
         val featureFlags = com.jarvis.server.admin.FeatureFlagService(dataSource)
         val adminPolicy = com.jarvis.server.admin.AdminSecurityPolicy()
         val adminAuthService = com.jarvis.server.admin.AdminAuthService(

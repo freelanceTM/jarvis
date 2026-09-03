@@ -126,7 +126,13 @@ class ProviderManager(
     private val selectionPolicy: ProviderSelectionPolicy,
     private val logger: StructuredLogger,
     private val metrics: Metrics,
-    private val clock: () -> Long = System::currentTimeMillis
+    private val clock: () -> Long = System::currentTimeMillis,
+    /**
+     * Smart Router: измеренные latency/errors/429 (питают
+     * SmartProviderSelectionPolicy). Здесь ЕДИНСТВЕННОЕ место, где проходят
+     * реальные исходы вызовов провайдеров.
+     */
+    private val performance: ProviderPerformanceTracker = ProviderPerformanceTracker()
 ) {
 
     suspend fun execute(
@@ -257,6 +263,7 @@ class ProviderManager(
                 is ProviderResult.Success -> {
                     health.recordSuccess(provider.id)
                     metrics.recordProviderSuccess(provider.id, latency)
+                    performance.recordSuccess(provider.id, latency)
                     logger.info(
                         "provider success",
                         "requestId" to request.requestId,
@@ -280,6 +287,7 @@ class ProviderManager(
                     lastKind = result.kind
                     health.recordFailure(provider.id, result.kind, result.detail)
                     metrics.recordProviderFailure(provider.id, result.kind)
+                    performance.recordFailure(provider.id, result.kind)
                     logger.warn(
                         "provider failure",
                         "requestId" to request.requestId,
@@ -321,4 +329,8 @@ class ProviderManager(
     }
 
     fun healthSnapshot(): Map<ProviderId, HealthSnapshot> = health.snapshot()
+
+    /** Измеренные показатели провайдеров (админ-диагностика, тесты). */
+    fun performanceSnapshot(): Map<ProviderId, ProviderPerformanceTracker.PerformanceSnapshot> =
+        performance.snapshotAll()
 }

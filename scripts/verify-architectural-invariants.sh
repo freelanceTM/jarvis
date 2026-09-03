@@ -341,6 +341,26 @@ check "LOCAL-FIRST: target is a metric, not routing policy" \
       "МЕТРИКА, а не жёсткое требование" \
       "$APP/java/com/jarvis/assistant/agent/metrics/ExecutionRouterMetrics.kt"
 
+# SMART CLOUD ROUTER: best provider по измерениям, а не random/статика.
+check "SMART-ROUTER: measured performance tracker exists" \
+      "class ProviderPerformanceTracker" \
+      "server/src/main/kotlin/com/jarvis/server/provider/ProviderPerformanceTracker.kt"
+check "SMART-ROUTER: 429 counted per provider" \
+      "ProviderFailureKind.RATE_LIMITED" \
+      "server/src/main/kotlin/com/jarvis/server/provider/ProviderPerformanceTracker.kt"
+check "SMART-ROUTER: manager feeds measured outcomes" \
+      "performance.recordSuccess(provider.id, latency)" \
+      "server/src/main/kotlin/com/jarvis/server/provider/ProviderManager.kt"
+check "SMART-ROUTER: smart policy selects best provider by score" \
+      "class SmartProviderSelectionPolicy" \
+      "server/src/main/kotlin/com/jarvis/server/provider/SmartProviderSelectionPolicy.kt"
+check "SMART-ROUTER: cold start falls back to static priority" \
+      "Cold start" \
+      "server/src/main/kotlin/com/jarvis/server/provider/SmartProviderSelectionPolicy.kt"
+check "SMART-ROUTER: prices come from admin cost settings" \
+      "costEstimates" \
+      "server/src/main/kotlin/com/jarvis/server/Main.kt"
+
 if [ "$fail" = 1 ]; then
   echo ""
   echo "INVARIANT CHECKS FAILED"
