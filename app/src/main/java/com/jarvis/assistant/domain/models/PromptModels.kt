@@ -7,7 +7,9 @@ import com.jarvis.assistant.agent.model.ToolCall
  */
 sealed interface PromptExecutionResult {
     data class DirectAnswer(
-        val text: String
+        val text: String,
+        /** Accessibility Lockdown: текст прочитан с экрана — в историю идёт placeholder. */
+        val containsScreenContent: Boolean = false
     ) : PromptExecutionResult
 
     data class ConfirmationRequired(

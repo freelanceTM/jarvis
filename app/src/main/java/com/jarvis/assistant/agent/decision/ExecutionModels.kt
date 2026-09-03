@@ -201,6 +201,13 @@ sealed class ExecutionResult {
     data class Success(
         val text: String,
         val executionType: ExecutionType,
+        /**
+         * Accessibility Lockdown: true, когда текст получен чтением экрана
+         * (accessibility.screen_reader). Точки персистентности обязаны
+         * сохранить placeholder вместо текста — экральный контент не течёт
+         * в историю чата и дальше в облачный LLM. См. ScreenContentPrivacy.
+         */
+        val containsScreenContent: Boolean = false,
         /** Технические детали (reason, tool_id, confidence) — не для пользователя. */
         val metadata: Map<String, String> = emptyMap()
     ) : ExecutionResult()

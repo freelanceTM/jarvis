@@ -251,6 +251,9 @@ class ExecutionDecisionEngine @Inject constructor(
             result.isSuccess -> ExecutionResult.Success(
                 text = "${result.summary}, сэр.",
                 executionType = ExecutionType.DEVICE_TOOL,
+                // Accessibility Lockdown: summary screen_reader — экральный
+                // контент, в историю чата пойдёт placeholder.
+                containsScreenContent = com.jarvis.assistant.agent.tools.accessibility.ScreenContentPrivacy.isScreenReaderCall(call.toolId),
                 metadata = mapOf(
                     "tool_id" to call.toolId,
                     "confidence" to routing.confidence.toString()

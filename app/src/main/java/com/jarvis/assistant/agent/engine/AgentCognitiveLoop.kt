@@ -95,6 +95,11 @@ class AgentCognitiveLoop @Inject constructor(
         var isAllSuccessful = true
         var currentStepIdx = 0
 
+        // Accessibility Lockdown: успешное чтение экрана означает, что
+        // summaries содержат экральный контент — персистентность обязана
+        // сохранить placeholder вместо текста (ScreenContentPrivacy).
+        var screenContentSeen = false
+
         while (currentStepIdx < currentPlan.steps.size) {
             if (executedSteps >= MAX_TOTAL_STEPS) {
                 Log.w(TAG, "Step budget exhausted ($MAX_TOTAL_STEPS). Halting loop.")
@@ -152,6 +157,9 @@ class AgentCognitiveLoop @Inject constructor(
                 }
 
                 if (verified) {
+                    if (com.jarvis.assistant.agent.tools.accessibility.ScreenContentPrivacy.isScreenReaderCall(step.toolCall.toolId)) {
+                        screenContentSeen = true
+                    }
                     summaries.add(observation.summary)
                     currentStepIdx++
                     continue
@@ -241,7 +249,8 @@ class AgentCognitiveLoop @Inject constructor(
             observations = stepObservations,
             finalVoiceSummary = buildVoiceSummary(summaries, blockedNotices, isAllSuccessful),
             isAllSuccessful = isAllSuccessful,
-            pendingConfirmation = null
+            pendingConfirmation = null,
+            containsScreenContent = screenContentSeen
         )
     }
 

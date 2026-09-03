@@ -148,9 +148,17 @@ class AccessibilityPrivacyPolicy(
          * allow-лист (явное разрешение перекрывает эвристику).
          */
         val SENSITIVE_PACKAGE_HINTS: List<String> = listOf(
+            // Универсальные слова.
             "bank", "wallet", "authenticator", "password",
-            "2fa", "twofactor", "lastpass", "dashlane", "bitwarden", "1password",
-            "keystore", "vpn"
+            "2fa", "twofactor", "otp", "keystore", "vpn",
+            // Пароль-менеджеры.
+            "lastpass", "dashlane", "bitwarden", "1password", "aegis", "authy",
+            // Финтех: слова, которых нет в «bank», но это банки/платёжки
+            // (реальные сценарии; false positive лечится user allow-листом).
+            "paypal", "coinbase", "binance", "revolut", "venmo", "cashapp",
+            "cash.app", "alipay", "paisa", "spay", "steam",
+            // Банки с брендовыми пакетами без слова «bank».
+            "tinkoff", "sber", "privat24", "monobank", "yoomoney", "qiwi"
         )
     }
 }

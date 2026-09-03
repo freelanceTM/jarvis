@@ -176,4 +176,64 @@ class AccessibilityPrivacyPolicyTest {
     fun `never-accessible set is non-empty and contains lock screen`() {
         assertTrue(AccessibilityPrivacyPolicy.NEVER_ACCESSIBLE_PACKAGES.contains("com.android.systemui"))
     }
+    // ---------------- Реальные сценарии (Accessibility Lockdown) ----------------
+
+    @Test
+    fun `real banking packages are blocked by heuristic`() {
+        val policy = policy()
+        // Банки, чьи пакеты НЕ содержат «bank».
+        listOf(
+            "com.chase.sig.android",               // Chase
+            "com.tinkoff.app",                     // Тинькофф
+            "com.sber.android",                    // СберБанк (современный пакет)
+            "privat24",                            // Приват24
+            "com.paypal.android",                  // PayPal
+            "com.coinbase.android",                // Coinbase
+            "com.binance.dev",                     // Binance
+            "com.revolut.revolut",                 // Revolut
+            "com.venmo",                           // Venmo
+            "cash.app",                            // Cash App
+            "com.eg.android.AlipayGphone",         // Alipay
+            "com.samsung.android.spay",            // Samsung Pay
+            "com.google.android.apps.nbu.paisa.user" // Google Pay (Индия)
+        ).forEach { pkg ->
+            val decision = policy.decidePackage(pkg)
+            assertTrue("ожидали Block для $pkg, получили $decision", decision is PolicyDecision.Blocked)
+            assertEquals(BlockedReason.SENSITIVE_CATEGORY, (decision as PolicyDecision.Blocked).reason)
+        }
+    }
+
+    @Test
+    fun `real 2fa and password manager packages are blocked`() {
+        val policy = policy()
+        listOf(
+            "com.google.android.apps.authenticator2", // Google Authenticator
+            "com.azure.authenticator",                 // Microsoft Authenticator
+            "com.authy.authy",                         // Authy
+            "org.freeotp.app",                         // FreeOTP
+            "com.beemdevelopment.aegis",               // Aegis
+            "com.valvesoftware.android.steam.community" // Steam Guard
+        ).forEach { pkg ->
+            val decision = policy.decidePackage(pkg)
+            assertTrue("ожидали Block для $pkg, получили $decision", decision is PolicyDecision.Blocked)
+        }
+    }
+
+    @Test
+    fun `ordinary apps remain allowed`() {
+        val policy = policy()
+        listOf(
+            "com.spotify.music",
+            "com.whatsapp",
+            "org.telegram.messenger",
+            "ru.yandex.searchplugin",
+            "com.google.android.apps.maps",
+            "com.instagram.android",
+            "com.android.chrome"
+        ).forEach { pkg ->
+            val decision = policy.decidePackage(pkg)
+            assertTrue("ожидали Allowed для $pkg, получили $decision", decision is PolicyDecision.Allowed)
+        }
+    }
+
 }

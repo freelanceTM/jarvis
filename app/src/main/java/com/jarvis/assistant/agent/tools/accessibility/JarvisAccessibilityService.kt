@@ -120,6 +120,7 @@ class JarvisAccessibilityService : AccessibilityService() {
             queue.add(rootNode)
             var visited = 0
             var passwordFieldsSkipped = 0
+            var sanitizedValues = 0
 
             while (queue.isNotEmpty() && visited < MAX_SCREEN_NODES && sb.length < MAX_SCREEN_TEXT_CHARS) {
                 val node = queue.removeFirst()
@@ -139,8 +140,13 @@ class JarvisAccessibilityService : AccessibilityService() {
                         ?.takeIf { it.isNotEmpty() }
                         ?: node.contentDescription?.toString()?.trim()?.takeIf { it.isNotEmpty() }
                     if (value != null) {
+                        // Слой 3 (контентный): OTP-коды/картоподобные номера,
+                        // всплывшие в обычном приложении, маскируются ДО выхода
+                        // из capture — в LLM они не попадают в любом виде.
+                        val (safeValue, maskedCount) = ScreenTextSanitizer.sanitize(value)
+                        sanitizedValues += maskedCount
                         val remaining = MAX_SCREEN_TEXT_CHARS - sb.length
-                        sb.append(value.take(remaining)).append(". ")
+                        sb.append(safeValue.take(remaining)).append(". ")
                     }
                 }
                 for (i in 0 until node.childCount) {
@@ -152,10 +158,11 @@ class JarvisAccessibilityService : AccessibilityService() {
             return if (fullText.isNotBlank()) {
                 AccessibilityReadResult.Content(
                     text = fullText,
-                    passwordFieldsSkipped = passwordFieldsSkipped
+                    passwordFieldsSkipped = passwordFieldsSkipped,
+                    sanitizedValues = sanitizedValues
                 )
             } else {
-                AccessibilityReadResult.Empty(passwordFieldsSkipped)
+                AccessibilityReadResult.Empty(passwordFieldsSkipped, sanitizedValues)
             }
         }
 
@@ -330,10 +337,19 @@ class JarvisAccessibilityService : AccessibilityService() {
 /** Результат чтения экрана с учётом privacy-границы. */
 sealed interface AccessibilityReadResult {
     /** Экран прочитан. */
-    data class Content(val text: String, val passwordFieldsSkipped: Int) : AccessibilityReadResult
+    data class Content(
+        val text: String,
+        val passwordFieldsSkipped: Int,
+        /** Значений, замаскированных контентным санитайзером (OTP/карты). */
+        val sanitizedValues: Int = 0
+    ) : AccessibilityReadResult
 
     /** Экран пуст (или только парольные поля, которые мы не читаем). */
-    data class Empty(val passwordFieldsSkipped: Int) : AccessibilityReadResult
+    data class Empty(
+        val passwordFieldsSkipped: Int,
+        /** Значений, замаскированных контентным санитайзером. */
+        val sanitizedValues: Int = 0
+    ) : AccessibilityReadResult
 
     /** Чтение запрещено privacy-политикой. Контент НЕ извлекается. */
     data class PrivacyBlocked(val decision: PolicyDecision.Blocked) : AccessibilityReadResult

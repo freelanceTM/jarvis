@@ -248,6 +248,23 @@ check "POLICY: forced confirmations cannot be disabled" \
       "forced = true" \
       "$APP/java/com/jarvis/assistant/agent/policy/ActionPolicyEngine.kt"
 
+# ACCESSIBILITY LOCKDOWN: capture → privacy filter → LLM; экран не течёт в облако.
+check "A11Y: package policy covers real fintech" \
+      '"paypal", "coinbase", "binance", "revolut", "venmo", "cashapp",' \
+      "$APP/java/com/jarvis/assistant/agent/tools/accessibility/AccessibilityPrivacyPolicy.kt"
+check "A11Y: content sanitizer masks OTP/cards at capture" \
+      "ScreenTextSanitizer.sanitize(value)" \
+      "$APP/java/com/jarvis/assistant/agent/tools/accessibility/JarvisAccessibilityService.kt"
+check "A11Y: screen content marker flows through plan summary" \
+      "containsScreenContent = screenContentSeen" \
+      "$APP/java/com/jarvis/assistant/agent/engine/AgentCognitiveLoop.kt"
+check "A11Y: pipeline persistence scrubs screen content" \
+      "ScreenContentPrivacy.PLACEHOLDER" \
+      "$APP/java/com/jarvis/assistant/domain/usecases/SendPromptUseCase.kt"
+check "A11Y: bypass persistence scrubs screen content" \
+      "ScreenContentPrivacy.isScreenReaderCall(pending.toolCall.toolId)" \
+      "$APP/java/com/jarvis/assistant/presentation/chat/ChatViewModel.kt"
+
 if [ "$fail" = 1 ]; then
   echo ""
   echo "INVARIANT CHECKS FAILED"

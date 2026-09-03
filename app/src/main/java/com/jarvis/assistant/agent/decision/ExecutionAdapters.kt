@@ -108,6 +108,7 @@ class CognitiveAgentExecutor @Inject constructor(
         return ExecutionResult.Success(
             text = summary.finalVoiceSummary,
             executionType = ExecutionType.AGENT,
+            containsScreenContent = summary.containsScreenContent,
             metadata = mapOf(
                 "plan_goal" to plan.goal,
                 "steps" to plan.steps.size.toString(),

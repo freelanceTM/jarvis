@@ -324,4 +324,34 @@ class AgentCognitiveLoopTest {
             summary.finalVoiceSummary.contains("не найден", ignoreCase = true)
         )
     }
+    // ---------------- Accessibility Lockdown: screen content flag ----------------
+
+    @Test
+    fun `successful screen reader step marks summary as screen content`() = runBlocking {
+        val tool = ScriptedTool(
+            "accessibility.screen_reader",
+            listOf(ToolExecutionResult.success("Баланс 150 000 на экране"))
+        )
+        val loop = buildLoop(setOf(tool), AlwaysReplanPlanner("device.fallback", ToolCallParser(Json { ignoreUnknownKeys = true })))
+
+        val summary = loop.runPlan(planOf("accessibility.screen_reader"))
+
+        assertTrue(summary.isAllSuccessful)
+        assertTrue(
+            "summary обязан быть помечен как экральный контент",
+            summary.containsScreenContent
+        )
+    }
+
+    @Test
+    fun `non screen steps do not mark screen content`() = runBlocking {
+        val tool = ScriptedTool("device.volume", listOf(ToolExecutionResult.success("Громкость установлена")))
+        val loop = buildLoop(setOf(tool), AlwaysReplanPlanner("device.fallback", ToolCallParser(Json { ignoreUnknownKeys = true })))
+
+        val summary = loop.runPlan(planOf("device.volume"))
+
+        assertTrue(summary.isAllSuccessful)
+        assertFalse(summary.containsScreenContent)
+    }
+
 }

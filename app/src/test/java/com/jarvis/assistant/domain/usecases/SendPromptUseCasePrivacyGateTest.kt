@@ -2,6 +2,7 @@ package com.jarvis.assistant.domain.usecases
 
 import android.content.Context
 import com.jarvis.assistant.agent.decision.*
+import com.jarvis.assistant.agent.tools.accessibility.ScreenContentPrivacy
 import com.jarvis.assistant.agent.memory.manager.JarvisMemoryManager
 import com.jarvis.assistant.agent.pipeline.AgentPipeline
 import com.jarvis.assistant.core.result.Resource
@@ -118,4 +119,40 @@ class SendPromptUseCasePrivacyGateTest {
                 it.source == RequestSource.VOICE
         }) }
     }
+    // ---------------------- Accessibility Lockdown: persistence scrub ----------------------
+
+    @Test
+    fun `screen content answer is NOT persisted raw - placeholder goes to history`() = runTest {
+        val screenText = "Баланс карты 4276 1600 1234 5678, код подтверждения 482913"
+        coEvery { pipeline.process(any<ExecutionRequest>()) } returns
+            Resource.Success(
+                PromptExecutionResult.DirectAnswer(screenText, containsScreenContent = true)
+            )
+
+        val result = useCase("что на экране", RequestSource.CHAT, PrivacyLevel.NORMAL, false)
+        assertTrue(result is Resource.Success)
+
+        // В БД сообщений — placeholder, экрального текста нет.
+        coVerify(exactly = 1) {
+            messageRepo.insertMessage(match { msg ->
+                msg.role == com.jarvis.assistant.domain.models.MessageRole.ASSISTANT &&
+                    msg.text == ScreenContentPrivacy.PLACEHOLDER &&
+                    !msg.text.contains("4276") &&
+                    !msg.text.contains("482913")
+            })
+        }
+    }
+
+    @Test
+    fun `regular answer is persisted as-is`() = runTest {
+        coEvery { pipeline.process(any<ExecutionRequest>()) } returns
+            Resource.Success(PromptExecutionResult.DirectAnswer("Громкость установлена на 40 процентов, сэр."))
+
+        useCase("сделай громкость 40", RequestSource.CHAT, PrivacyLevel.NORMAL, false)
+
+        coVerify(exactly = 1) {
+            messageRepo.insertMessage(match { it.text == "Громкость установлена на 40 процентов, сэр." })
+        }
+    }
+
 }

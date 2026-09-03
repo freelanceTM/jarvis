@@ -7,6 +7,7 @@ import com.jarvis.assistant.agent.decision.ExecutionRequest
 import com.jarvis.assistant.agent.decision.PrivacyLevel
 import com.jarvis.assistant.agent.decision.RequestSource
 import com.jarvis.assistant.agent.pipeline.AgentPipeline
+import com.jarvis.assistant.agent.tools.accessibility.ScreenContentPrivacy
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.domain.models.Message
 import com.jarvis.assistant.domain.models.MessageRole
@@ -127,8 +128,17 @@ class SendPromptUseCase @Inject constructor(
         if (result is Resource.Success) {
             when (val exec = result.data) {
                 is PromptExecutionResult.DirectAnswer -> {
-                    saveAssistantMessage(exec.text)
-                    memoryManager.workingMemory.updateEntityFromResponse(exec.text)
+                    // Accessibility Lockdown: экральный контент показывается
+                    // и озвучивается, но НЕ сохраняется в историю — иначе
+                    // getRecentMessages() вернёт его в следующий облачный
+                    // запрос (relatedContent/history). См. ScreenContentPrivacy.
+                    val persistedText = if (exec.containsScreenContent) {
+                        ScreenContentPrivacy.PLACEHOLDER
+                    } else {
+                        exec.text
+                    }
+                    saveAssistantMessage(persistedText)
+                    memoryManager.workingMemory.updateEntityFromResponse(persistedText)
                 }
                 is PromptExecutionResult.ConfirmationRequired -> {
                     saveAssistantMessage(exec.promptMessage)

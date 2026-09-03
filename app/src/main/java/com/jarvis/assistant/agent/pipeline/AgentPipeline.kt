@@ -85,7 +85,12 @@ class AgentPipeline @Inject constructor(
     suspend fun process(request: ExecutionRequest): Resource<PromptExecutionResult> =
         when (val result = decisionEngine.execute(request)) {
             is ExecutionResult.Success ->
-                Resource.Success(PromptExecutionResult.DirectAnswer(result.text))
+                Resource.Success(
+                    PromptExecutionResult.DirectAnswer(
+                        text = result.text,
+                        containsScreenContent = result.containsScreenContent
+                    )
+                )
 
             is ExecutionResult.ClarificationRequired ->
                 Resource.Success(PromptExecutionResult.DirectAnswer(result.promptMessage))

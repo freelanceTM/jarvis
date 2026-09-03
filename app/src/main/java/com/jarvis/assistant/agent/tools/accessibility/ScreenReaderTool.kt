@@ -97,6 +97,9 @@ class ScreenReaderTool @Inject constructor(
                             if (readResult.passwordFieldsSkipped > 0) {
                                 put("password_fields_skipped", readResult.passwordFieldsSkipped)
                             }
+                            if (readResult.sanitizedValues > 0) {
+                                put("sanitized_values", readResult.sanitizedValues)
+                            }
                         }
                     )
                 }

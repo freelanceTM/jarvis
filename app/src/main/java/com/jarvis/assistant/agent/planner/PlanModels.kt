@@ -50,6 +50,13 @@ data class PlanExecutionSummary(
     val isAllSuccessful: Boolean,
     val pendingConfirmation: Pair<ToolCall, String>? = null,
     /**
+     * Accessibility Lockdown: хотя бы один успешный шаг читал экран
+     * (accessibility.screen_reader) — finalVoiceSummary содержит экральный
+     * контент, персистентность обязана заменить его placeholder'ом
+     * (ScreenContentPrivacy).
+     */
+    val containsScreenContent: Boolean = false,
+    /**
      * AR-03: true, когда цикл был прерван по таймауту (LOOP_BUDGET_MS).
      * В этом случае наблюдения могут быть пустыми / частичными, а
      * finalVoiceSummary содержит пользовательское сообщение о таймауте.

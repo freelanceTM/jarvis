@@ -12,6 +12,19 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Accessibility Lockdown: экранный контент не покидает устройство — пайплайн
+  Accessibility → capture UI → privacy filter → LLM вместо «полный экран →
+  Cloud LLM». Слой 3: контентный санитайзер `ScreenTextSanitizer` (OTP 6–8
+  цифр, короткие коды в код-контексте, картоподобные 13–19 цифр → «••••» на
+  этапе capture; время/суммы/телефоны не трогает). Слой 4: маркер
+  `containsScreenContent` через PlanExecutionSummary → ExecutionResult →
+  PromptExecutionResult; в БД сообщений (SendPromptUseCase + bypass в
+  ChatViewModel) пишется placeholder вместо текста экрана — история чата
+  больше не несёт экральный контент в облачный запрос. `SENSITIVE_PACKAGE_HINTS`
+  расширен реальными пакетами: Chase/Tinkoff/Sber/Privat24 (банки без «bank»),
+  PayPal/Coinbase/Binance/Revolut/Venmo/CashApp/Alipay/Samsung Pay/GPay,
+  Authy/FreeOTP/Aegis/Steam Guard. Документация — `docs/ACCESSIBILITY_PRIVACY.md`;
+  5 A11Y-инвариантов; тесты реальных сценариев.
 - Policy Engine безопасности действий (`agent/policy/`): LLM только предлагает
   действие (`ProposedAction` = toolId + arguments + origin), решение о риске и
   подтверждении принимает `ActionPolicyEngine` — категория по toolId, детектор

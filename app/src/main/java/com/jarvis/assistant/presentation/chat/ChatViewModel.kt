@@ -8,6 +8,7 @@ import com.jarvis.assistant.agent.decision.PrivacyClassification
 import com.jarvis.assistant.agent.decision.PrivacyClassifier
 import com.jarvis.assistant.agent.decision.PrivacyContent
 import com.jarvis.assistant.agent.decision.PrivacyLevel
+import com.jarvis.assistant.agent.tools.accessibility.ScreenContentPrivacy
 import com.jarvis.assistant.agent.decision.PrivacyReason
 import com.jarvis.assistant.agent.executor.ToolExecutor
 import com.jarvis.assistant.agent.model.ToolCall
@@ -421,10 +422,19 @@ class ChatViewModel @Inject constructor(
                 result.isBlockedByAndroid -> result.summary
                 else -> context.getString(R.string.ne_udalos_vypolnit, result.error ?: result.summary)
             }
+            // Accessibility Lockdown: подтверждённое чтение экрана озвучивается,
+            // но в историю пишется placeholder — иначе bypass-результат утёк бы
+            // в следующий облачный запрос через history (ScreenContentPrivacy).
+            val persistedText =
+                if (result.isSuccess && ScreenContentPrivacy.isScreenReaderCall(pending.toolCall.toolId)) {
+                    ScreenContentPrivacy.PLACEHOLDER
+                } else {
+                    voiceResponse
+                }
             messageRepository.insertMessage(
                 Message(
                     role = MessageRole.ASSISTANT,
-                    text = voiceResponse,
+                    text = persistedText,
                     timestamp = System.currentTimeMillis()
                 )
             )
