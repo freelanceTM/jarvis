@@ -262,6 +262,37 @@ class ToolExecutor @Inject constructor(
     }
 
     /**
+     * Единая фаза Execution → Verification пайплайна Tool Registry 2.0.
+     *
+     * withTimeout накрывает ОБЕ фазы: верификация не может выйти за пределы
+     * [com.jarvis.assistant.agent.core.JarvisTool.executionTimeoutMs].
+     * Verification — обязательный шаг после КАЖДОГО успешного execute
+     * (инструменты без собственной верификации наследуют pass-through из
+     * контракта). Неожиданные исключения проходят через контрактный
+     * [com.jarvis.assistant.agent.core.JarvisTool.mapError] (единый error
+     * mapping реестра), CancellationException пробрасывается
+     * (structured concurrency).
+     */
+    private suspend fun runVerified(
+        tool: JarvisTool,
+        call: ToolCall,
+        startTime: Long
+    ): ToolExecutionResult = try {
+        withTimeout(tool.executionTimeoutMs) {
+            val draft = tool.execute(call.arguments)
+            val verified = if (draft.isSuccess) tool.verify(call.arguments, draft) else draft
+            verified.copy(executionTimeMs = System.currentTimeMillis() - startTime)
+        }
+    } catch (e: TimeoutCancellationException) {
+        ToolExecutionResult.timeout(tool.name, tool.executionTimeoutMs)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        val duration = System.currentTimeMillis() - startTime
+        tool.mapError(call.arguments, e).copy(executionTimeMs = duration)
+    }
+
+    /**
      * Выполняет одиночный вызов инструмента с проверкой безопасности и таймаутом
      */
     suspend fun execute(call: ToolCall): ToolExecutionResult = withContext(Dispatchers.IO) {
@@ -303,25 +334,7 @@ class ToolExecutor @Inject constructor(
             }
         }
 
-        val startTime = System.currentTimeMillis()
-        try {
-            withTimeout(tool.executionTimeoutMs) {
-                val result = tool.execute(call.arguments)
-                val duration = System.currentTimeMillis() - startTime
-                result.copy(executionTimeMs = duration)
-            }
-        } catch (e: TimeoutCancellationException) {
-            ToolExecutionResult.timeout(tool.name, tool.executionTimeoutMs)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            val duration = System.currentTimeMillis() - startTime
-            ToolExecutionResult.failure(
-                summary = e.localizedMessage ?: "Ошибка выполнения ${tool.name}",
-                error = e.javaClass.simpleName,
-                executionTimeMs = duration
-            )
-        }
+        runVerified(tool, call, System.currentTimeMillis())
     }
 
     /**
@@ -380,24 +393,7 @@ class ToolExecutor @Inject constructor(
         }
 
         val startTime = System.currentTimeMillis()
-        try {
-            withTimeout(tool.executionTimeoutMs) {
-                val result = tool.execute(call.arguments)
-                val duration = System.currentTimeMillis() - startTime
-                result.copy(executionTimeMs = duration)
-            }
-        } catch (e: TimeoutCancellationException) {
-            ToolExecutionResult.timeout(tool.name, tool.executionTimeoutMs)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            val duration = System.currentTimeMillis() - startTime
-            ToolExecutionResult.failure(
-                summary = e.localizedMessage ?: "Ошибка выполнения ${tool.name}",
-                error = e.javaClass.simpleName,
-                executionTimeMs = duration
-            )
-        }
+        runVerified(tool, call, startTime)
     }
 
     /**

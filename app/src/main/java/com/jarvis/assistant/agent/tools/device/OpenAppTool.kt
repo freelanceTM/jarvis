@@ -29,6 +29,10 @@ import javax.inject.Singleton
  *  - приложение известно, но не стоит    → FAILURE (APP_NOT_INSTALLED) + предложение установить
  *  - несколько похожих кандидатов        → FAILURE (AMBIGUOUS) с уточняющим вопросом
  *  - совпадений нет                      → FAILURE (APP_UNKNOWN)
+ *
+ * Единый контракт: публичного API «приложение в фокусе» без специального
+ * доступа НЕТ, поэтому verify() — pass-through; формулировка результата —
+ * сделанное действие («Открываю…»), а не результат («Открыл»).
  */
 @Singleton
 class OpenAppTool @Inject constructor(

@@ -16,8 +16,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Будильники/таймеры С ВЕРИФИКАЦИЕЙ результата (execute → verify → SUCCESS).
+ * Будильники/таймеры по единому контракту (execute → verify → SUCCESS).
  *
+ * Фазы: [execute] доставляет интент; [verify] подтверждает результат.
  * [AlarmClock.ACTION_SET_ALARM] с EXTRA_SKIP_UI — fire-and-forget: startActivity
  * проходит, а приложение часов МОЖЕТ молча не сохранить будильник (права,
  * политика приложения). Для будильника, на который пользователь рассчитывает
@@ -80,7 +81,7 @@ class AlarmTimerTool @Inject constructor(
         }
 
         return try {
-            if (isAlarm) setVerifiedAlarm(value, label) else setHonestTimer(value, label)
+            if (isAlarm) setAlarmDraft(value, label) else setHonestTimer(value, label)
         } catch (e: android.content.ActivityNotFoundException) {
             ToolExecutionResult.failure("Приложение часов не найдено на этом устройстве", "CLOCK_APP_NOT_FOUND")
         } catch (e: Exception) {
@@ -88,9 +89,11 @@ class AlarmTimerTool @Inject constructor(
         }
     }
 
-    /** Будильник: intent → read-back nextAlarmClockInfo → SUCCESS только при подтверждении. */
-    private suspend fun setVerifiedAlarm(hour: Int, label: String): ToolExecutionResult {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+    /**
+     * Будильник — фаза Execution: интент доставлен приложению часов, draft
+     * SUCCESS. Финальный вердикт — [verify] по read-back nextAlarmClockInfo.
+     */
+    private fun setAlarmDraft(hour: Int, label: String): ToolExecutionResult {
         val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
             putExtra(AlarmClock.EXTRA_HOUR, hour)
             putExtra(AlarmClock.EXTRA_MINUTES, 0)
@@ -108,20 +111,45 @@ class AlarmTimerTool @Inject constructor(
             )
         }
 
-        val now = System.currentTimeMillis()
         context.startActivity(intent)
+        return ToolExecutionResult.success(
+            summary = "Устанавливаю будильник на $hour:00",
+            data = buildJsonObject {
+                put("hour", hour)
+                put("label", label)
+            }
+        )
+    }
 
-        // -------------------------------------------------------------- VERIFY
-        // Приложению часов нужно время применить будильник — поллинг read-back.
-        val verifiedTrigger: Long? = alarmManager?.let { am ->
-            ExecutionVerification.pollFor(
-                attempts = ALARM_VERIFY_ATTEMPTS,
-                stepMs = ALARM_VERIFY_STEP_MS,
-                read = { am.nextAlarmClockInfo?.triggerTime },
-                satisfied = { ExecutionVerification.nextAlarmMatchesHour(it, now, hour) }
+    // ------------------------------------------------------------ verify
+
+    override suspend fun verify(arguments: JsonObject, draft: ToolExecutionResult): ToolExecutionResult {
+        val type = arguments["type"]?.jsonPrimitive?.contentOrNull?.lowercase()?.trim() ?: "timer"
+        val isAlarm = type == "alarm" || type == "будильник"
+
+        // Таймер: публичного API верификации системного таймера НЕТ —
+        // формулировка execute() уже честно ограничена сделанным действием
+        // («отправлен в приложение часов»), pass-through.
+        if (!isAlarm) return draft
+
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+            ?: return ToolExecutionResult.failure("Служба будильников недоступна", "NO_ALARM_SERVICE")
+        val hour = draft.data?.get("hour")?.jsonPrimitive?.intOrNull
+            ?: return ToolExecutionResult.failure(
+                "Не удалось подтвердить будильник: нет целевого часа",
+                "ALARM_VERIFY_FAILED"
             )
-        }
+        val label = draft.data?.get("label")?.jsonPrimitive?.contentOrNull ?: "JARVIS"
 
+        // ---------------------------------------------------------- VERIFY
+        // Приложению часов нужно время применить будильник — поллинг read-back.
+        val now = System.currentTimeMillis()
+        val verifiedTrigger: Long? = ExecutionVerification.pollFor(
+            attempts = ALARM_VERIFY_ATTEMPTS,
+            stepMs = ALARM_VERIFY_STEP_MS,
+            read = { alarmManager.nextAlarmClockInfo?.triggerTime },
+            satisfied = { ExecutionVerification.nextAlarmMatchesHour(it, now, hour) }
+        )
         val verified = ExecutionVerification.nextAlarmMatchesHour(verifiedTrigger, now, hour)
 
         val data = buildJsonObject {

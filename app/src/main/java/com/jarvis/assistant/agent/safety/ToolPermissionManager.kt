@@ -75,6 +75,20 @@ class ToolPermissionManager @Inject constructor(
             }
         }
 
+        // Единый контракт permissions: plain-инструменты (без capability-контракта)
+        // тоже объявляют requiredPermissions — preflight блокирует выполнение,
+        // пока разрешения не выданы. CapabilityAware-инструменты проверены выше
+        // через capabilityContract.
+        if (tool !is CapabilityAwareTool && tool.requiredPermissions.isNotEmpty()) {
+            val missing = capabilities.missingPermissions(tool.requiredPermissions)
+            if (missing.isNotEmpty()) {
+                return PreflightVerdict.PermissionsMissing(
+                    permissions = missing,
+                    explanation = "Для «${tool.description}» нужны разрешения: ${missing.joinToString()}"
+                )
+            }
+        }
+
         return if (requiresConfirmation(tool)) {
             PreflightVerdict.ConfirmationRequired(buildConfirmationPrompt(tool, call))
         } else {

@@ -32,6 +32,9 @@ import javax.inject.Singleton
  * Поэтому:
  *  - 'status'  → реальные данные о состоянии и подключении (SUCCESS);
  *  - 'toggle'  → USER_ACTION_REQUIRED + открытие системной панели.
+ *
+ * Единый контракт: как и Bluetooth, переключение недоступно приложениям —
+ * USER_ACTION_REQUIRED без имитации; verify() — pass-through из контракта.
  */
 @Singleton
 class WifiTool @Inject constructor(

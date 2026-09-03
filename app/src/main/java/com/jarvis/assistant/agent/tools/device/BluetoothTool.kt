@@ -33,6 +33,10 @@ import javax.inject.Singleton
  *
  * Поэтому запрос на переключение возвращает USER_ACTION_REQUIRED и открывает
  * системный UI, где пользователь переключает Bluetooth сам.
+ *
+ * Единый контракт: чтения самодостаточны, переключение никогда не даёт
+ * SUCCESS — verify() наследует pass-through из контракта (верифицировать
+ * нечего: мутаций инструмент не выполняет).
  */
 @Singleton
 class BluetoothTool @Inject constructor(

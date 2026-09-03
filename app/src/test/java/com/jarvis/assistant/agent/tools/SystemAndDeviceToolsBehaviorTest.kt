@@ -101,22 +101,31 @@ class SystemAndDeviceToolsBehaviorTest {
     }
 
     @Test
-    fun `volume tool handles exact percentage and rollback`() = runBlocking {
+    fun `volume tool handles exact percentage through execute then verify and rollback`() = runBlocking {
         val context = mockk<Context>()
         val audio = mockk<AudioManager>()
         every { context.getSystemService(Context.AUDIO_SERVICE) } returns audio
         every { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) } returns 15
         every { audio.getStreamMinVolume(AudioManager.STREAM_MUSIC) } returns 0
-        // Read-back: 4 (до мутации) → 6 (система подтвердила set 40%) → 4 (подтверждение rollback)
+        // execute читает prev=4; verify read-back видит 6 (система применила 40%);
+        // rollback читает 4 (подтверждённый возврат).
         every { audio.getStreamVolume(AudioManager.STREAM_MUSIC) } returnsMany listOf(4, 6, 4)
         every { audio.setStreamVolume(any(), any(), any()) } just runs
         val tool = SetVolumeTool(context)
+        val arguments = buildJsonObject { put("action", "set"); put("percent", 40) }
 
-        val result = tool.execute(buildJsonObject { put("action", "set"); put("percent", 40) })
-        val rolledBack = tool.rollback(JsonObject(emptyMap()), result.rollbackData)
-
-        assertEquals(ToolExecutionStatus.SUCCESS, result.status)
+        // Фаза Execution: draft — мутация отправлена, но НЕ подтверждена.
+        val draft = tool.execute(arguments)
+        assertEquals(ToolExecutionStatus.SUCCESS, draft.status)
         verify { audio.setStreamVolume(AudioManager.STREAM_MUSIC, 6, AudioManager.FLAG_SHOW_UI) }
+
+        // Фаза Verification: финальный вердикт по read-back.
+        val result = tool.verify(arguments, draft)
+        assertEquals(ToolExecutionStatus.SUCCESS, result.status)
+        assertTrue(result.summary.contains("40%"))
+        assertEquals(6, result.data?.get("volume")?.jsonPrimitive?.int)
+
+        val rolledBack = tool.rollback(JsonObject(emptyMap()), result.rollbackData)
         // Rollback применяет тишину (без FLAG_SHOW_UI) и подтверждается read-back'ом.
         verify { audio.setStreamVolume(AudioManager.STREAM_MUSIC, 4, 0) }
         assertTrue(rolledBack)
@@ -133,7 +142,14 @@ class SystemAndDeviceToolsBehaviorTest {
         every { audio.getStreamVolume(AudioManager.STREAM_MUSIC) } returns 4
         every { audio.adjustStreamVolume(any(), any(), any()) } just runs
 
-        val result = SetVolumeTool(context).execute(buildJsonObject { put("action", "up") })
+        val tool = SetVolumeTool(context)
+        val arguments = buildJsonObject { put("action", "up") }
+
+        // execute — draft SUCCESS; верификация вскрывает, что система не применила.
+        val draft = tool.execute(arguments)
+        assertEquals(ToolExecutionStatus.SUCCESS, draft.status)
+
+        val result = tool.verify(arguments, draft)
 
         // Fake Success запрещён: без подтверждённого изменения громкости — FAILURE.
         assertEquals(ToolExecutionStatus.FAILURE, result.status)
@@ -150,7 +166,10 @@ class SystemAndDeviceToolsBehaviorTest {
         every { audio.getStreamVolume(AudioManager.STREAM_MUSIC) } returns 15
         every { audio.adjustStreamVolume(any(), any(), any()) } just runs
 
-        val result = SetVolumeTool(context).execute(buildJsonObject { put("action", "up") })
+        val tool = SetVolumeTool(context)
+        val arguments = buildJsonObject { put("action", "up") }
+        val draft = tool.execute(arguments)
+        val result = tool.verify(arguments, draft)
 
         assertEquals(ToolExecutionStatus.FAILURE, result.status)
         assertEquals("VOLUME_AT_LIMIT", result.error)

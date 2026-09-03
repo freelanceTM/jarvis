@@ -14,12 +14,15 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Управление громкостью С ВЕРИФИКАЦИЕЙ результата (execute → verify → SUCCESS).
+ * Управление громкостью — единый контракт (execute → verify → SUCCESS).
  *
  * Android применяет изменение громкости асинхронно и может МОЛЧА его отклонить
- * (режим «Не беспокоить», лимиты). Поэтому после мутации читается фактический
- * индекс потока, и SUCCESS возвращается только при подтверждённом изменении.
- * «Громкость увеличена» при уже максимальной громкости — запрещено.
+ * (режим «Не беспокоить», лимиты). Фазы:
+ *  - [execute]: прочитать prev/max/min, применить мутацию, вернуть draft
+ *    (SUCCESS-черновик с исходным состоянием в data);
+ *  - [verify]: read-back фактического индекса; SUCCESS только при
+ *    подтверждённом изменении. «Громкость увеличена» при уже максимальной
+ *    громкости — запрещено (VOLUME_AT_LIMIT).
  */
 @Singleton
 class SetVolumeTool @Inject constructor(
@@ -48,26 +51,17 @@ class SetVolumeTool @Inject constructor(
         put("required", buildJsonArray { add("action") })
     }
 
+    // ------------------------------------------------------------ execute
+
     override suspend fun execute(arguments: JsonObject): ToolExecutionResult {
         val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
             ?: return ToolExecutionResult.failure("Аудио-служба недоступна", "NO_AUDIO_SERVICE")
 
-        val action = arguments["action"]?.jsonPrimitive?.contentOrNull?.lowercase()?.trim() ?: "up"
-        val volumeAction = when (action) {
-            "up", "громче" -> VolumeAction.UP
-            "down", "тише" -> VolumeAction.DOWN
-            "mute", "без звука" -> VolumeAction.MUTE
-            "max", "максимум" -> VolumeAction.MAX
-            "set", "установить" -> VolumeAction.SET
-            else -> return ToolExecutionResult.failure("Неизвестное действие: $action", "UNKNOWN_ACTION")
-        }
+        val volumeAction = parseAction(arguments)
+            ?: return ToolExecutionResult.failure("Неизвестное действие: ${arguments["action"]}", "UNKNOWN_ACTION")
 
         val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        val minVol = try {
-            am.getStreamMinVolume(AudioManager.STREAM_MUSIC)
-        } catch (_: IllegalArgumentException) {
-            0
-        }
+        val minVol = streamMinVolume(am)
         val prevVol = am.getStreamVolume(AudioManager.STREAM_MUSIC)
 
         val rollbackData = buildJsonObject {
@@ -84,50 +78,79 @@ class SetVolumeTool @Inject constructor(
                     am.setStreamVolume(AudioManager.STREAM_MUSIC, minVol, AudioManager.FLAG_SHOW_UI)
                 VolumeAction.MAX ->
                     am.setStreamVolume(AudioManager.STREAM_MUSIC, maxVol, AudioManager.FLAG_SHOW_UI)
-                VolumeAction.SET -> {
-                    val p = arguments["percent"]?.jsonPrimitive?.intOrNull?.coerceIn(0, 100) ?: 50
-                    am.setStreamVolume(AudioManager.STREAM_MUSIC, ExecutionVerification.volumeTargetIndex(p, maxVol), AudioManager.FLAG_SHOW_UI)
-                }
-            }
-
-            // ------------------------------------------------------ VERIFY
-            // Читаем фактический индекс (изменение применяется асинхронно)
-            // и возвращаем SUCCESS только при подтверждённой мутации.
-            val expected = when (volumeAction) {
-                VolumeAction.MUTE -> minVol
-                VolumeAction.MAX -> maxVol
                 VolumeAction.SET ->
-                    ExecutionVerification.volumeTargetIndex(
-                        arguments["percent"]?.jsonPrimitive?.intOrNull?.coerceIn(0, 100) ?: 50,
-                        maxVol
+                    am.setStreamVolume(
+                        AudioManager.STREAM_MUSIC,
+                        ExecutionVerification.volumeTargetIndex(requestedPercent(arguments), maxVol),
+                        AudioManager.FLAG_SHOW_UI
                     )
-                else -> null // направление проверит verifyVolumeChange по prev/actual
             }
-            val actual = ExecutionVerification.pollFor(
-                read = { am.getStreamVolume(AudioManager.STREAM_MUSIC) },
-                satisfied = { value -> expected?.let { value == it } ?: (value != prevVol) }
-            )
 
-            val outcome = ExecutionVerification.verifyVolumeChange(
-                action = volumeAction,
-                previousIndex = prevVol,
-                actualIndex = actual,
-                maxIndex = maxVol,
-                minIndex = minVol,
-                requestedPercent = arguments["percent"]?.jsonPrimitive?.intOrNull?.coerceIn(0, 100) ?: 50
+            // Draft: мутация отправлена, но НЕ подтверждена. Финальный вердикт —
+            // только в verify() по фактическому состоянию (read-back).
+            ToolExecutionResult.success(
+                summary = "Применяется изменение громкости",
+                rollbackData = rollbackData,
+                data = buildJsonObject {
+                    put("previous_volume", prevVol)
+                    put("min", minVol)
+                    put("max", maxVol)
+                }
             )
-            val data = buildJsonObject {
-                put("volume", actual)
-                put("max", maxVol)
-                put("previous_volume", prevVol)
-            }
-            if (outcome.verified) {
-                ToolExecutionResult.success(outcome.summary, rollbackData = rollbackData, data = data)
-            } else {
-                ToolExecutionResult.failure(outcome.summary, outcome.reason ?: "VOLUME_VERIFY_FAILED", data = data)
-            }
         } catch (e: Exception) {
             ToolExecutionResult.failure("Ошибка изменения громкости: ${e.localizedMessage}", "AUDIO_ERROR")
+        }
+    }
+
+    // ------------------------------------------------------------ verify
+
+    override suspend fun verify(arguments: JsonObject, draft: ToolExecutionResult): ToolExecutionResult {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            ?: return ToolExecutionResult.failure("Аудио-служба недоступна", "NO_AUDIO_SERVICE")
+        val volumeAction = parseAction(arguments)
+            ?: return ToolExecutionResult.failure("Неизвестное действие при верификации", "UNKNOWN_ACTION")
+        // Исходное состояние — из draft.data (verify не хранит состояния в инструменте).
+        val prevVol = draft.data?.get("previous_volume")?.jsonPrimitive?.intOrNull
+            ?: return ToolExecutionResult.failure(
+                "Не удалось подтвердить изменение громкости: нет исходного значения",
+                "VOLUME_VERIFY_FAILED"
+            )
+
+        val maxVol = draft.data?.get("max")?.jsonPrimitive?.intOrNull
+            ?: am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val minVol = draft.data?.get("min")?.jsonPrimitive?.intOrNull ?: streamMinVolume(am)
+        val requestedPercent = requestedPercent(arguments)
+
+        // ---------------------------------------------------------- VERIFY
+        // Read-back: изменение применяется асинхронно — поллинг.
+        val expected = when (volumeAction) {
+            VolumeAction.MUTE -> minVol
+            VolumeAction.MAX -> maxVol
+            VolumeAction.SET -> ExecutionVerification.volumeTargetIndex(requestedPercent, maxVol)
+            else -> null // направление проверит verifyVolumeChange по prev/actual
+        }
+        val actual = ExecutionVerification.pollFor(
+            read = { am.getStreamVolume(AudioManager.STREAM_MUSIC) },
+            satisfied = { value -> expected?.let { value == it } ?: (value != prevVol) }
+        )
+
+        val outcome = ExecutionVerification.verifyVolumeChange(
+            action = volumeAction,
+            previousIndex = prevVol,
+            actualIndex = actual,
+            maxIndex = maxVol,
+            minIndex = minVol,
+            requestedPercent = requestedPercent
+        )
+        val data = buildJsonObject {
+            put("volume", actual)
+            put("max", maxVol)
+            put("previous_volume", prevVol)
+        }
+        return if (outcome.verified) {
+            ToolExecutionResult.success(outcome.summary, rollbackData = draft.rollbackData, data = data)
+        } else {
+            ToolExecutionResult.failure(outcome.summary, outcome.reason ?: "VOLUME_VERIFY_FAILED", data = data)
         }
     }
 
@@ -145,5 +168,27 @@ class SetVolumeTool @Inject constructor(
         } catch (_: Exception) {
             false
         }
+    }
+
+    // ------------------------------------------------------------ helpers
+
+    private fun parseAction(arguments: JsonObject): VolumeAction? = when (
+        arguments["action"]?.jsonPrimitive?.contentOrNull?.lowercase()?.trim()
+    ) {
+        "up", "громче" -> VolumeAction.UP
+        "down", "тише" -> VolumeAction.DOWN
+        "mute", "без звука" -> VolumeAction.MUTE
+        "max", "максимум" -> VolumeAction.MAX
+        "set", "установить" -> VolumeAction.SET
+        else -> null
+    }
+
+    private fun requestedPercent(arguments: JsonObject): Int =
+        arguments["percent"]?.jsonPrimitive?.intOrNull?.coerceIn(0, 100) ?: 50
+
+    private fun streamMinVolume(am: AudioManager): Int = try {
+        am.getStreamMinVolume(AudioManager.STREAM_MUSIC)
+    } catch (_: IllegalArgumentException) {
+        0
     }
 }

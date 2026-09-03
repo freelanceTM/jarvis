@@ -25,10 +25,28 @@ Android фактически не подтвердил изменение сос
 `Tool → exception → «Готово»`; только `Tool → execute → verify → SUCCESS`
 или `Tool → execute → failure → ERROR`.
 
-Механика: мутирующие инструменты после записи **читают состояние обратно**
-(read-back) и сверяют его с целевым. Чистые правила решения — в
-`agent/tools/verification/ExecutionVerification.kt` (покрыты JVM-тестами),
-чтение реального состояния — в самих инструментах.
+Механика — единый контракт Tool Registry 2.0 (`agent/core/JarvisTool.kt`):
+
+```
+Tool: id · description · permissions · execute() · verify() · timeout · error mapping
+```
+
+Пайплайн каждого вызова обеспечивается ToolExecutor'ом:
+`Discovery → Selection → Execution → Verification → Result`.
+`verify()` — контрактный член: ToolExecutor вызывает его после КАЖДОГО
+успешного `execute()` (общий withTimeout покрывает обе фазы); инструменты без
+собственной верификации наследуют pass-through и обязаны формулировать
+результат как сделанное действие. `mapError()` — единый error mapping:
+SecurityException → PERMISSION_REQUIRED (с объявленными `requiredPermissions`),
+ActivityNotFoundException → USER_ACTION_REQUIRED, остальное → FAILURE.
+Чистые правила решения — в `agent/tools/verification/ExecutionVerification.kt`
+(покрыты JVM-тестами), чтение реального состояния — в самих инструментах.
+
+Миграция по уровням: Tier 1 (open_app, volume, brightness, alarm/timer,
+bluetooth, wi-fi) — фазы execute/verify разделены; dnd/flashlight/clipboard/
+media пока верифицируют внутри execute() (та же честность, миграция в
+контрактную форму — следующий шаг); коммуникации и accessibility — далее по
+плану.
 
 | Инструмент | Мутация | Чем подтверждается | Что при отказе системы |
 |---|---|---|---|

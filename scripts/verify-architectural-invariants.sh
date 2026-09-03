@@ -213,6 +213,24 @@ check "VERIFY: AlarmTimerTool confirms alarm via nextAlarmClockInfo" \
       "nextAlarmMatchesHour" \
       "$APP/java/com/jarvis/assistant/agent/tools/productivity/AlarmTimerTool.kt"
 
+# Единый контракт Tool Registry 2.0: verify() и mapError() — члены JarvisTool,
+# ToolExecutor обеспечивает фазу Verification для обоих путей выполнения.
+check "VERIFY: JarvisTool declares verification contract member" \
+      "suspend fun verify(arguments: JsonObject, draft: ToolExecutionResult)" \
+      "$APP/java/com/jarvis/assistant/agent/core/JarvisTool.kt"
+check "VERIFY: JarvisTool declares error mapping contract member" \
+      "fun mapError(arguments: JsonObject, error: Throwable)" \
+      "$APP/java/com/jarvis/assistant/agent/core/JarvisTool.kt"
+check "VERIFY: JarvisTool declares permissions contract member" \
+      "val requiredPermissions: List<String>" \
+      "$APP/java/com/jarvis/assistant/agent/core/JarvisTool.kt"
+check "VERIFY: ToolExecutor enforces verification step" \
+      "tool.verify(call.arguments, draft)" \
+      "$APP/java/com/jarvis/assistant/agent/executor/ToolExecutor.kt"
+check "VERIFY: ToolExecutor maps exceptions through contract" \
+      "tool.mapError(call.arguments, e)" \
+      "$APP/java/com/jarvis/assistant/agent/executor/ToolExecutor.kt"
+
 if [ "$fail" = 1 ]; then
   echo ""
   echo "INVARIANT CHECKS FAILED"

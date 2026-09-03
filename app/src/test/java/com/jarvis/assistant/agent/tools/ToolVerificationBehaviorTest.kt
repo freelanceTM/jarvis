@@ -154,13 +154,19 @@ class ToolVerificationBehaviorTest {
         // Первое чтение — ещё старое состояние, второе — будильник появился.
         every { am.nextAlarmClockInfo } returnsMany listOf(null, info)
 
-        val result = AlarmTimerTool(context).execute(
-            buildJsonObject { put("type", "alarm"); put("value", 7) }
-        )
+        val tool = AlarmTimerTool(context)
+        val arguments = buildJsonObject { put("type", "alarm"); put("value", 7) }
 
+        // Фаза Execution: интент доставлен, draft (будильник ещё НЕ подтверждён).
+        val draft = tool.execute(arguments)
+        assertEquals(ToolExecutionStatus.SUCCESS, draft.status)
+        verify { context.startActivity(any()) }
+
+        // Фаза Verification: система подтвердила будильник на запрошенный час.
+        val result = tool.verify(arguments, draft)
         assertEquals(ToolExecutionStatus.SUCCESS, result.status)
         assertTrue(result.data?.get("verified")?.jsonPrimitive?.boolean == true)
-        verify { context.startActivity(any()) }
+        assertTrue(result.summary.contains("7:00"))
     }
 
     @Test
@@ -175,9 +181,12 @@ class ToolVerificationBehaviorTest {
         // Часы не применили будильник: следующего будильника нет и не появилось.
         every { am.nextAlarmClockInfo } returns null
 
-        val result = AlarmTimerTool(context).execute(
-            buildJsonObject { put("type", "alarm"); put("value", 7) }
-        )
+        val tool = AlarmTimerTool(context)
+        val arguments = buildJsonObject { put("type", "alarm"); put("value", 7) }
+        val draft = tool.execute(arguments)
+        assertEquals(ToolExecutionStatus.SUCCESS, draft.status)
+
+        val result = tool.verify(arguments, draft)
 
         // Будильник, на который рассчитывают проснуться, не может быть «готово» без подтверждения.
         assertEquals(ToolExecutionStatus.USER_ACTION_REQUIRED, result.status)
@@ -194,13 +203,23 @@ class ToolVerificationBehaviorTest {
         every { pm.resolveActivity(any(), any<Int>()) } returns mockk<ResolveInfo>()
         every { context.startActivity(any()) } just runs
 
-        val result = AlarmTimerTool(context).execute(
+        val tool = AlarmTimerTool(context)
+        val result = tool.execute(
             buildJsonObject { put("type", "timer"); put("value", 10) }
         )
 
         assertEquals(ToolExecutionStatus.SUCCESS, result.status)
         assertTrue(result.summary.contains("отправлен"))
         assertFalse(result.data?.get("verified")?.jsonPrimitive?.boolean ?: true)
+
+        // verify() для таймера — pass-through: верифицирующего API нет,
+        // формулировка execute() уже честная.
+        val verified = tool.verify(
+            buildJsonObject { put("type", "timer") },
+            result
+        )
+        assertEquals(result.summary, verified.summary)
+        assertEquals(ToolExecutionStatus.SUCCESS, verified.status)
     }
 
     @Test

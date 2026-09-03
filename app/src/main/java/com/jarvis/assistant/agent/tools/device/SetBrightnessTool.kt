@@ -148,36 +148,13 @@ class SetBrightnessTool @Inject constructor(
                 )
             }
 
-            // ---------------------------------------------------------- VERIFY
-            // Read-back: SUCCESS только если система подтвердила записанное
-            // значение. Молчаливый откат яркости системой/производителем —
-            // честный FAILURE, а не «готово».
-            val verifiedRaw = ExecutionVerification.pollFor(
-                read = {
-                    try {
-                        Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS)
-                    } catch (_: Settings.SettingNotFoundException) {
-                        null
-                    }
-                },
-                satisfied = { it == expectedRaw }
-            )
-            if (!ExecutionVerification.brightnessVerified(verifiedRaw, expectedRaw)) {
-                return ToolExecutionResult.failure(
-                    summary = "Не удалось подтвердить установку яркости" +
-                        (verifiedRaw?.let { raw -> " — фактический уровень ${rawToPercent(raw)}%" } ?: ""),
-                    error = "BRIGHTNESS_VERIFY_FAILED",
-                    data = buildJsonObject {
-                        put("requested_percent", targetPercent)
-                        put("actual_raw", verifiedRaw)
-                    }
-                )
-            }
-
+            // Draft: запись принята системой, но НЕ подтверждена read-back'ом.
+            // Финальный вердикт — в verify() (молчаливый откат системой/вендором
+            // там станет честным FAILURE).
             ToolExecutionResult.success(
-                summary = "Яркость экрана установлена на $targetPercent%",
+                summary = "Применяю яркость $targetPercent%",
                 data = buildJsonObject {
-                    put("percent", targetPercent)
+                    put("target_percent", targetPercent)
                     put("previous_percent", previousPercent)
                     put("previous_mode", previousMode)
                 },
@@ -198,6 +175,49 @@ class SetBrightnessTool @Inject constructor(
                 error = "BRIGHTNESS_WRITE_FAILED"
             )
         }
+    }
+
+    // ------------------------------------------------------------ verify
+
+    override suspend fun verify(arguments: JsonObject, draft: ToolExecutionResult): ToolExecutionResult {
+        val targetPercent = draft.data?.get("target_percent")?.jsonPrimitive?.intOrNull
+            ?: return ToolExecutionResult.failure(
+                "Не удалось подтвердить установку яркости: нет целевого значения",
+                "BRIGHTNESS_VERIFY_FAILED"
+            )
+        val expectedRaw = percentToRaw(targetPercent)
+
+        // ---------------------------------------------------------- VERIFY
+        // Read-back: SUCCESS только если система подтвердила записанное
+        // значение. Молчаливый откат яркости системой/производителем —
+        // честный FAILURE, а не «готово».
+        val verifiedRaw = ExecutionVerification.pollFor(
+            read = {
+                try {
+                    Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS)
+                } catch (_: Settings.SettingNotFoundException) {
+                    null
+                }
+            },
+            satisfied = { it == expectedRaw }
+        )
+        if (!ExecutionVerification.brightnessVerified(verifiedRaw, expectedRaw)) {
+            return ToolExecutionResult.failure(
+                summary = "Не удалось подтвердить установку яркости" +
+                    (verifiedRaw?.let { raw -> " — фактический уровень ${rawToPercent(raw)}%" } ?: ""),
+                error = "BRIGHTNESS_VERIFY_FAILED",
+                data = buildJsonObject {
+                    put("requested_percent", targetPercent)
+                    put("actual_raw", verifiedRaw)
+                }
+            )
+        }
+
+        return ToolExecutionResult.success(
+            summary = "Яркость экрана установлена на $targetPercent%",
+            data = draft.data,
+            rollbackData = draft.rollbackData
+        )
     }
 
     override suspend fun rollback(arguments: JsonObject, rollbackData: JsonObject?): Boolean {

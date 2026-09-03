@@ -12,6 +12,17 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Единый контракт Tool Registry 2.0 (`JarvisTool`): `requiredPermissions`
+  (контрактный член; CapabilityAwareTool выводит его из capability-контракта,
+  preflight блокирует plain-инструменты с невыданными разрешениями),
+  `verify(arguments, draft)` (фаза Verification: ToolExecutor вызывает её после
+  каждого успешного `execute()` внутри общего tool-таймаута; дефолт —
+  pass-through) и `mapError(arguments, error)` (единый error mapping:
+  SecurityException → PERMISSION_REQUIRED с объявленными разрешениями,
+  ActivityNotFoundException → USER_ACTION_REQUIRED, остальное → FAILURE).
+  Tier 1 (open_app, volume, brightness, alarm/timer, bluetooth, wi-fi) переведён
+  на разделение фаз execute/verify; для bluetooth/wi-fi/open_app pass-through
+  задокументирован (чтения самодостаточны / публичного API верификации нет).
 - Execute → verify → SUCCESS: read-back верификация результатов инструментов.
   Новый чистый модуль `agent/tools/verification/ExecutionVerification.kt`
   (правила решения + поллинг) и покрытие в инструментах: громкость
