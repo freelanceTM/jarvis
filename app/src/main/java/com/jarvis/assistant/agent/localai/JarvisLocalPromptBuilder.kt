@@ -47,12 +47,18 @@ class JarvisLocalPromptBuilder @Inject constructor() : LocalPromptBuilder {
             RequestSource.CHAT -> "Ответ отобразится текстом в чате."
         }
 
-        // Минимальный контекст (пункт 14 ТЗ): system prompt + текст запроса.
-        // Никакой истории, RAG и векторных баз на этом этапе.
+        // Контекст (пункт 14 ТЗ): system prompt + retrieval-память + запрос.
+        // История диалога локальной модели НЕ отправляется (контекст 2048
+        // токенов); из памяти — только retrieved-блок ≤800 символов, поэтому
+        // офлайн-модель тоже знает long-term факты («как зовут дочь?»).
         return buildString {
             append(TURN_START).append("user\n")
             append(SYSTEM_PROMPT).append("\n")
-            append(styleHint).append("\n\n")
+            append(styleHint).append("\n")
+            val memory = request.memoryContext.trim()
+            if (memory.isNotBlank()) {
+                append(memory).append("\n\n")
+            }
             append(request.text.trim()).append(TURN_END).append("\n")
             append(TURN_START).append("model\n")
         }

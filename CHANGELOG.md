@@ -12,6 +12,16 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Memory: три уровня (Conversation / Session / Long-term) + retrieval-стадия
+  перед LLM — «Query → Memory retrieval → Relevant memories only → AI»
+  (docs/MEMORY.md). Главный фикс: `buildPromptMemoryContext()` существовал,
+  но не вызывался ни разу — long-term память доходила до модели только через
+  явный RecallMemoryTool (лишний round-trip). Теперь `SendPromptUseCase`
+  кладёт top-3 релевантных воспоминаний (≤800 символов) в новый
+  `ExecutionRequest.memoryContext`; cloud executor добавляет блок к
+  systemPrompt, локальный промпт-билдер — офлайн-модели (recall без сети).
+  Память включена в privacy-классификацию: приватный факт из памяти не уходит
+  в облако под безобидным запросом. 7 тестов, 7 MEMORY-инвариантов (123 всего).
 - Ear Mode: аудит и фиксы прерываний непрерывного переводчика
   (Clip → Bluetooth → SCO → STT → перевод → TTS → Clip), docs/EAR_MODE.md.
   Audio focus: `TextToSpeechManager` держит `AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK`

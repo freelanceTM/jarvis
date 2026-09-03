@@ -63,6 +63,14 @@ class RepositoryCloudAiExecutor @Inject constructor(
                 append("\n\n")
                 append(targetedToolsPrompt)
             }
+            // MEMORY: только retrieval-релевантные воспоминания (≤800 симв.,
+            // уже прошедшие privacy-классификацию вместе с запросом). Никакой
+            // выгрузки всей памяти в промпт.
+            val memoryBlock = request.memoryContext.trim()
+            if (memoryBlock.isNotBlank()) {
+                append("\n\n")
+                append(memoryBlock)
+            }
         }
 
         Log.d(TAG, "cloud request → JARVIS API | source=${request.source} | privacy=${request.effectivePrivacyLevel}")

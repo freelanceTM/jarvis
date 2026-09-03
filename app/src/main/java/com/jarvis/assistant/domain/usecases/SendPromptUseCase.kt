@@ -84,8 +84,16 @@ class SendPromptUseCase @Inject constructor(
         val history = messageRepository.getRecentMessages(limit = 10)
         val systemPrompt = settingsRepository.systemPromptFlow.first()
 
+        // MEMORY: Query → Memory retrieval → Relevant memories only → AI.
+        // В LLM уходит НЕ вся память и не «ничего»: JarvisMemoryManager
+        // выбирает top-K воспоминаний под ЭТОТ запрос (hybrid retrieval,
+        // бюджет ~800 символов). Retrieval локальный (Room + featurize) —
+        // дешевле и быстрее, чем отправка всего контекста в облако, и
+        // убирает round-trip «LLM просит RecallMemoryTool → второй вызов».
+        val memoryContext = memoryManager.buildPromptMemoryContext(resolvedPrompt)
+
         // Строим ExecutionRequest с единой контекстной классификацией:
-        // текст + systemPrompt + тексты истории → один вызов classifySafely.
+        // текст + systemPrompt + тексты истории + память → один вызов classifySafely.
         val effectiveRequest = ExecutionRequest.withContextualClassification(
             text = resolvedPrompt,
             source = source,
@@ -94,7 +102,8 @@ class SendPromptUseCase @Inject constructor(
             relatedContent = history.map(Message::text),
             history = history,
             cloudExplicitlyAllowed = cloudExplicitlyAllowed,
-            originTimestampMs = originTimestampMs
+            originTimestampMs = originTimestampMs,
+            memoryContext = memoryContext
         )
 
         val effective = effectiveRequest.effectivePrivacyLevel

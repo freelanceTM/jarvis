@@ -61,6 +61,19 @@ data class ExecutionRequest(
     val cloudExplicitlyAllowed: Boolean = false,
     val history: List<Message> = emptyList(),
     /**
+     * MEMORY: релевантные воспоминания для ЭТОГО запроса («relevant memories
+     * only»). Заполняет [com.jarvis.assistant.domain.usecases.SendPromptUseCase]
+     * через `JarvisMemoryManager.buildPromptMemoryContext(query)`: top-K по
+     * гибридному скору (cosine + TF-IDF + importance + recency), бюджет ~800
+     * символов. В LLM уходит НЕ вся память, а только retrieved-подмножество под
+     * текущего запроса; пусто = retrieval ничего не нашёл (не отправляем заглушку).
+     *
+     * ВАЖНО: включается в privacy-классификацию ([withContextualClassification]) —
+     * память выведена из реплик пользователя, и приватный факт в памяти не
+     * должен уйти в облако под «безобидным» запросом.
+     */
+    val memoryContext: String = "",
+    /**
      * Voice Latency: timestamp финального STT-результата
      * ([android.os.SystemClock.elapsedRealtime]) — точка «STT → Router».
      * null = запрос не голосовой (чат) — сегмент не измеряется.
@@ -132,12 +145,18 @@ data class ExecutionRequest(
             requiresWeb: Boolean = false,
             requiresDeviceControl: Boolean = false,
             cloudExplicitlyAllowed: Boolean = false,
-            originTimestampMs: Long? = null
+            originTimestampMs: Long? = null,
+            memoryContext: String = ""
         ): ExecutionRequest {
             val classification = PrivacyClassifier.classifySafely(
                 PrivacyContent(
                     text = text,
-                    relatedContent = listOf(systemPrompt) + relatedContent
+                    // MEMORY: память участвует в классификации наравне с
+                    // systemPrompt и историей (defense-in-depth: сервер всё
+                    // равно переклассифицирует).
+                    relatedContent =
+                        (listOf(systemPrompt, memoryContext).filter(String::isNotBlank)) +
+                        relatedContent
                 )
             )
             return ExecutionRequest(
@@ -149,7 +168,8 @@ data class ExecutionRequest(
                 cloudExplicitlyAllowed = cloudExplicitlyAllowed,
                 history = history,
                 privacyClassification = classification,
-                originTimestampMs = originTimestampMs
+                originTimestampMs = originTimestampMs,
+                memoryContext = memoryContext
             )
         }
 

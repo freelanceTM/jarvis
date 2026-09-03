@@ -475,6 +475,29 @@ check "EAR-MODE: audit documentation exists" \
       "LIVE_EAR_INTERPRETER" \
       "$ROOT/docs/EAR_MODE.md"
 
+# ---- MEMORY: три уровня + retrieval перед LLM («relevant memories only») ----
+check "MEMORY: retrieval stage wired in SendPromptUseCase (query -> relevant only)" \
+      "buildPromptMemoryContext(resolvedPrompt)" \
+      "$APP/java/com/jarvis/assistant/domain/usecases/SendPromptUseCase.kt"
+check "MEMORY: ExecutionRequest carries bounded memoryContext" \
+      "val memoryContext: String = \"\"" \
+      "$APP/java/com/jarvis/assistant/agent/decision/ExecutionModels.kt"
+check "MEMORY: memory participates in privacy classification" \
+      "listOf(systemPrompt, memoryContext)" \
+      "$APP/java/com/jarvis/assistant/agent/decision/ExecutionModels.kt"
+check "MEMORY: cloud prompt gets retrieval block only (never full memory)" \
+      "request.memoryContext" \
+      "$APP/java/com/jarvis/assistant/agent/decision/ExecutionAdapters.kt"
+check "MEMORY: local prompt gets retrieval block (offline recall)" \
+      "request.memoryContext" \
+      "$APP/java/com/jarvis/assistant/agent/localai/JarvisLocalPromptBuilder.kt"
+check "MEMORY: memory injection pinned by tests" \
+      "private fact stored in memory blocks cloud without consent" \
+      "$APP_TEST/java/com/jarvis/assistant/memory/MemoryRetrievalInjectionTest.kt"
+check "MEMORY: three-level architecture documented" \
+      "Conversation Memory" \
+      "$ROOT/docs/MEMORY.md"
+
 if [ "$fail" = 1 ]; then
   echo ""
   echo "INVARIANT CHECKS FAILED"
