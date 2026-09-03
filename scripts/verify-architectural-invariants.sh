@@ -436,6 +436,45 @@ check "BATTERY: battery phase documentation exists" \
       "return idle" \
       "$ROOT/docs/BATTERY.md"
 
+# ---- EAR-MODE: непрерывный переводчик через Bluetooth (Clip → BT → SCO →
+# STT → перевод → TTS → Clip) и его прерывания ----
+check "EAR-MODE: no-headset guard in routeAudioToEarbud (no comm-mode without earbud)" \
+      "остаёмся в MODE_NORMAL" \
+      "$APP/java/com/jarvis/assistant/voice/audio/BluetoothAudioRouter.kt"
+check "EAR-MODE: BT-first device preference over wired" \
+      "TYPE_BLE_HEADSET" \
+      "$APP/java/com/jarvis/assistant/voice/audio/BluetoothAudioRouter.kt"
+check "EAR-MODE: default routing restore exists" \
+      "fun restoreDefaultRouting()" \
+      "$APP/java/com/jarvis/assistant/voice/audio/BluetoothAudioRouter.kt"
+check "EAR-MODE: ACL connect gated by real headset outputs (competing device)" \
+      "if (checkHeadsetConnection()) {" \
+      "$APP/java/com/jarvis/assistant/voice/audio/BluetoothAudioRouter.kt"
+check "EAR-MODE: interpreter restored after phone call" \
+      "interpreterActiveBeforeCall" \
+      "$APP/java/com/jarvis/assistant/voice/orchestrator/VoiceInteractionOrchestrator.kt"
+check "EAR-MODE: standby restores audio mode (return idle)" \
+      "bluetoothAudioRouter.restoreDefaultRouting()" \
+      "$APP/java/com/jarvis/assistant/voice/orchestrator/VoiceInteractionOrchestrator.kt"
+check "EAR-MODE: pause/sleep releases communication audio" \
+      "bluetoothAudioRouter.routeAudioToSpeaker()" \
+      "$APP/java/com/jarvis/assistant/voice/orchestrator/VoiceInteractionOrchestrator.kt"
+check "EAR-MODE: interpreter screen takes mic from wake-word" \
+      "wakeWordDetector.stopListening()" \
+      "$APP/java/com/jarvis/assistant/presentation/translator/LiveInterpreterViewModel.kt"
+check "EAR-MODE: interpreter screen pauses on phone call" \
+      "PAUSED_CALL_OR_SLEEP" \
+      "$APP/java/com/jarvis/assistant/presentation/translator/LiveInterpreterViewModel.kt"
+check "EAR-MODE: TTS requests transient may-duck audio focus" \
+      "AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK" \
+      "$APP/java/com/jarvis/assistant/voice/tts/TextToSpeechManager.kt"
+check "EAR-MODE: TTS focus policy pinned by test" \
+      "permanent loss stops speech" \
+      "$APP_TEST/java/com/jarvis/assistant/voice/tts/TextToSpeechFocusPolicyTest.kt"
+check "EAR-MODE: audit documentation exists" \
+      "LIVE_EAR_INTERPRETER" \
+      "$ROOT/docs/EAR_MODE.md"
+
 if [ "$fail" = 1 ]; then
   echo ""
   echo "INVARIANT CHECKS FAILED"

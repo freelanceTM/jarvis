@@ -12,6 +12,22 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Ear Mode: аудит и фиксы прерываний непрерывного переводчика
+  (Clip → Bluetooth → SCO → STT → перевод → TTS → Clip), docs/EAR_MODE.md.
+  Audio focus: `TextToSpeechManager` держит `AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK`
+  (USAGE_ASSISTANT) на время речи, LOSS → stop — музыка/нотификации больше не
+  играют поверх перевода (раньше `requestAudioFocus` не вызывался нигде).
+  Disconnect/reconnect: `routeAudioToEarbud` без гарнитуры больше не ставит
+  `MODE_IN_COMMUNICATION`+SCO (было — на каждую фразу), выбор устройства
+  BT-first (SCO/BLE важнее проводных), ACL-коннект считается наушником только
+  при реальном аудиовыходе (часы/машина больше не перехватывают роутинг).
+  Phone call: `resumeAfterPhoneCall` восстанавливает `LIVE_EAR_INTERPRETER`,
+  экран переводчика ставит/снимает паузу через `orchestrator.currentMode`.
+  Microphone: экран переводчика останавливает wake-word AudioRecord на время
+  слушания и возвращает его сервису (конфликт захватчиков с Android 10).
+  Speaker: выход из Ear Mode/пауза/закрытие экрана возвращают аудиорежим к
+  дефолту (`restoreDefaultRouting`). 12 EAR-MODE-инвариантов (116 всего),
+  тест политики focus.
 - Battery: idle-выгрузка тяжёлой модели («return idle»). `MediaPipeModelManager`
   больше не держит модель (~529 МБ) резидентной навсегда после первого
   инференса (раньше unload был только по memory pressure): новый

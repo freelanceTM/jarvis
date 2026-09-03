@@ -8,11 +8,15 @@ import com.jarvis.assistant.agent.translator.LiveTranslatorEngine
 import com.jarvis.assistant.agent.translator.SupportedLanguage
 import com.jarvis.assistant.agent.translator.TranslationLanguageDetector
 import com.jarvis.assistant.voice.audio.BluetoothAudioRouter
+import com.jarvis.assistant.voice.orchestrator.OrchestratorMode
+import com.jarvis.assistant.voice.orchestrator.VoiceInteractionOrchestrator
 import com.jarvis.assistant.voice.stt.SpeechRecognitionEvent
 import com.jarvis.assistant.voice.stt.SpeechRecognizerManager
 import com.jarvis.assistant.voice.tts.TextToSpeechManager
+import com.jarvis.assistant.voice.wakeword.WakeWordDetector
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -53,14 +57,74 @@ class LiveInterpreterViewModel @Inject constructor(
     private val translatorEngine: LiveTranslatorEngine,
     private val speechRecognizerManager: SpeechRecognizerManager,
     private val textToSpeechManager: TextToSpeechManager,
-    private val bluetoothAudioRouter: BluetoothAudioRouter
+    private val bluetoothAudioRouter: BluetoothAudioRouter,
+    private val wakeWordDetector: WakeWordDetector,
+    private val orchestrator: VoiceInteractionOrchestrator
 ) : ViewModel() {
+
+    /**
+     * EAR-MODE (microphone): true, пока переводчик держит микрофон, отобрав его
+     * у wake-word AudioRecord. По этому флагу микрофон возвращается движку
+     * wake-word при выходе с экрана (только если сервис действительно стоит
+     * в STANDBY — при паузе/сне микрофоном распоряжается сервис).
+     */
+    private var micTakenFromWakeWord = false
+
+    /** EAR-MODE (phone call): звонок приостановил слушание — возобновить после. */
+    @Volatile
+    private var pausedByPhoneCall = false
 
     private val _uiState = MutableStateFlow(LiveInterpreterUiState())
     val uiState: StateFlow<LiveInterpreterUiState> = _uiState.asStateFlow()
 
     init {
         observeSpeechRecognizer()
+        observeOrchestratorMode()
+    }
+
+    /**
+     * EAR-MODE (phone call): звонок идёт через ОБЩИЕ синглтоны STT/TTS —
+     * JarvisVoiceService на RINGING/OFFHOOK зовёт orchestrator.pauseForPhoneCall(),
+     * чей stopAll() останавливает speechRecognizerManager и textToSpeechManager
+     * под нами. Экран обязан узнать об этом (иначе висит stale isListening=true)
+     * и продолжить перевод после звонка (PAUSED → активный режим).
+     */
+    private fun observeOrchestratorMode() {
+        viewModelScope.launch {
+            orchestrator.currentMode.collectLatest { mode ->
+                if (mode == OrchestratorMode.PAUSED_CALL_OR_SLEEP) {
+                    if (_uiState.value.isListening) {
+                        pausedByPhoneCall = true
+                        _uiState.update {
+                            it.copy(isListening = false, partialRecognizedText = "", isTranslating = false)
+                        }
+                        textToSpeechManager.stop()
+                    }
+                } else if (pausedByPhoneCall) {
+                    pausedByPhoneCall = false
+                    // Сервис после паузы синхронно перезапускает wake-word
+                    // (resume-путь → startStandbyMode) — даём этому завершиться,
+                    // снова забираем микрофон у wake-движка и продолжаем
+                    // слушать собеседника.
+                    viewModelScope.launch {
+                        delay(200)
+                        // Перезапуск идемпотентен (startListening отменяет текущую
+                        // сессию): он же чинит случай, когда пользователь успел
+                        // включить слушание прямо во время звонка и сервис
+                        // погасил её resume-путём.
+                        if (orchestrator.currentMode.value == OrchestratorMode.PAUSED_CALL_OR_SLEEP) {
+                            return@launch
+                        }
+                        wakeWordDetector.stopListening()
+                        _uiState.update { it.copy(isListening = true) }
+                        speechRecognizerManager.startListening(
+                            languageTag = listeningLanguageTag(),
+                            continuous = true
+                        )
+                    }
+                }
+            }
+        }
     }
 
     private fun observeSpeechRecognizer() {
@@ -167,14 +231,34 @@ class LiveInterpreterViewModel @Inject constructor(
     fun toggleListening() {
         if (_uiState.value.isListening) {
             speechRecognizerManager.stopListening()
+            restoreWakeWordIfNeeded()
             _uiState.update { it.copy(isListening = false, partialRecognizedText = "", isTranslating = false) }
         } else {
+            // EAR-MODE (microphone): забираем микрофон у wake-word AudioRecord —
+            // с Android 10 фактический приоритет получает один захватчик, и пока
+            // wake-движок держит AudioRecord, распознавание переводчика деградирует
+            // (а wake-word ловит тишину поверх SCO).
+            wakeWordDetector.stopListening()
+            micTakenFromWakeWord = true
             _uiState.update { it.copy(isListening = true) }
             // Непрерывный режим прослушивания собеседника (continuous = true)
             speechRecognizerManager.startListening(
                 languageTag = listeningLanguageTag(),
                 continuous = true
             )
+        }
+    }
+
+    /**
+     * EAR-MODE (microphone): вернуть микрофон wake-word, если мы его занимали
+     * и сервис жив и стоит в STANDBY. При PAUSED/sleep не стартуем — микрофоном
+     * распорядится сервис при resume.
+     */
+    private fun restoreWakeWordIfNeeded() {
+        if (!micTakenFromWakeWord) return
+        micTakenFromWakeWord = false
+        if (orchestrator.currentMode.value == OrchestratorMode.STANDBY_WAKE_WORD) {
+            wakeWordDetector.startListening()
         }
     }
 
@@ -226,5 +310,10 @@ class LiveInterpreterViewModel @Inject constructor(
         if (_uiState.value.isListening) {
             speechRecognizerManager.stopListening()
         }
+        // EAR-MODE (speaker): не оставляем после экрана болтающий TTS
+        // (перевод мог быть в очереди) и коммуникационный аудиорежим.
+        textToSpeechManager.stop()
+        bluetoothAudioRouter.restoreDefaultRouting()
+        restoreWakeWordIfNeeded()
     }
 }

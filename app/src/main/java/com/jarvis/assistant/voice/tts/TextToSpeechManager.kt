@@ -1,6 +1,9 @@
 package com.jarvis.assistant.voice.tts
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
@@ -41,7 +44,36 @@ class TextToSpeechManager @Inject constructor(
         private const val TAG = "TtsManager"
         private const val UTTERANCE_ID_PREFIX = "jarvis_tts_"
         private const val INIT_TIMEOUT_MS = 4000L
+
+        /**
+         * EAR-MODE (audio focus): реакция на чужой audio focus. LOSS (фокус
+         * забрали насовсем — навигация, другой плеер) — останавливаем речь;
+         * LOSS_TRANSIENT / LOSS_TRANSIENT_CAN_DUCK (звонок ожидания, короткая
+         * чужая подсказка) — продолжаем: прерывать шёпот перевода из-за
+         * секундного чужого звука хуже, чем он его перекроет. JVM-тестируется
+         * напрямую (TextToSpeechFocusPolicyTest).
+         */
+        internal enum class FocusReaction { STOP_SPEECH, CONTINUE }
+
+        internal fun mapFocusChange(change: Int): FocusReaction =
+            if (change == AudioManager.AUDIOFOCUS_LOSS) FocusReaction.STOP_SPEECH
+            else FocusReaction.CONTINUE
     }
+
+    private val audioManager by lazy {
+        context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    }
+
+    private var focusRequest: AudioFocusRequest? = null
+
+    @Volatile
+    private var holdingFocus = false
+
+    /**
+     * EAR-MODE: число не доигравших utterance. Фокус держим, пока > 0 —
+     * QUEUE_ADD переводчика не должен терять duck между фразами диалога.
+     */
+    private val activeUtterances = java.util.concurrent.atomic.AtomicInteger(0)
 
     private val disposed = java.util.concurrent.atomic.AtomicBoolean(false)
 
@@ -170,22 +202,26 @@ class TextToSpeechManager @Inject constructor(
 
                 override fun onDone(utteranceId: String?) {
                     _ttsState.value = TtsState.Done
+                    onUtteranceFinished()
                     Log.d(TAG, "TTS done: $utteranceId")
                 }
 
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String?) {
                     _ttsState.value = TtsState.Error
+                    onUtteranceFinished()
                     Log.e(TAG, "TTS error: $utteranceId")
                 }
 
                 override fun onError(utteranceId: String?, errorCode: Int) {
                     _ttsState.value = TtsState.Error
+                    onUtteranceFinished()
                     Log.e(TAG, "TTS error: $utteranceId, code: $errorCode")
                 }
 
                 override fun onStop(utteranceId: String?, interrupted: Boolean) {
                     _ttsState.value = TtsState.Ready
+                    onUtteranceFinished()
                     Log.d(TAG, "TTS stopped: $utteranceId, interrupted: $interrupted")
                 }
             })
@@ -256,11 +292,72 @@ class TextToSpeechManager @Inject constructor(
         engine.setSpeechRate(speechRate.coerceIn(0.5f, 2.0f))
         engine.setPitch(pitch.coerceIn(0.5f, 2.0f))
 
+        // EAR-MODE (audio focus): фокус запрашивается ДО старта звука — музыка
+        // приглушается на время речи, а не играет поверх перевода/ответа.
+        acquireFocusIfNeeded()
         val utteranceId = "${UTTERANCE_ID_PREFIX}${++utteranceCounter}"
         val result = engine.speak(text, queueMode, null, utteranceId)
         if (result == TextToSpeech.ERROR) {
             Log.e(TAG, "TTS speak() returned error")
             _ttsState.value = TtsState.Error
+        } else {
+            activeUtterances.incrementAndGet()
+        }
+    }
+
+    /**
+     * EAR-MODE: GAIN_TRANSIENT_MAY_DUCK + USAGE_ASSISTANT — музыка duck-ится
+     * на время речи и продолжается после. Не owns-фокус, если уже держим.
+     */
+    private fun acquireFocusIfNeeded() {
+        if (holdingFocus) return
+        val am = audioManager ?: return
+        val request = focusRequest ?: AudioFocusRequest.Builder(
+            AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+        ).setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+        ).setOnAudioFocusChangeListener(::onFocusChange).build()
+            .also { focusRequest = it }
+        holdingFocus = try {
+            am.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        } catch (e: Exception) {
+            Log.w(TAG, "requestAudioFocus failed — играем без фокуса", e)
+            false
+        }
+    }
+
+    private fun releaseFocusIfIdle() {
+        if (!holdingFocus) return
+        if (activeUtterances.get() > 0) return
+        abandonFocus()
+    }
+
+    private fun abandonFocus() {
+        holdingFocus = false
+        val am = audioManager
+        val request = focusRequest
+        if (am != null && request != null) {
+            runCatching { am.abandonAudioFocusRequest(request) }
+                .onFailure { Log.w(TAG, "abandonAudioFocusRequest failed", it) }
+        }
+    }
+
+    private fun onFocusChange(change: Int) {
+        when (mapFocusChange(change)) {
+            // Чужой фокус забрал эфир насовсем — молчим, не переговариваемся.
+            FocusReaction.STOP_SPEECH -> stop()
+            FocusReaction.CONTINUE -> Unit
+        }
+    }
+
+    /** Терминальный callback одного utterance: done / error / stop. */
+    private fun onUtteranceFinished() {
+        if (activeUtterances.decrementAndGet() <= 0) {
+            activeUtterances.set(0)
+            releaseFocusIfIdle()
         }
     }
 
@@ -281,6 +378,11 @@ class TextToSpeechManager @Inject constructor(
             speakMutex.withLock {
                 pendingUtterance = null
                 tts?.stop()
+                // EAR-MODE: tts.stop() шлёт onStop только для ГОВОРЯЩЕЙ фразы —
+                // стоявшие в очереди (QUEUE_ADD) не принесут callback, поэтому
+                // счётчик активных фраз сбрасываем принудительно.
+                activeUtterances.set(0)
+                releaseFocusIfIdle()
                 if (_isInitialized.value) {
                     _ttsState.value = TtsState.Ready
                 }
@@ -305,6 +407,8 @@ class TextToSpeechManager @Inject constructor(
         Log.d(TAG, "Shutting down TTS")
         initializationGeneration++
         pendingUtterance = null
+        abandonFocus() // EAR-MODE: не держим audio focus после уничтожения движка
+        activeUtterances.set(0)
         ttsJob.cancel()
         try {
             tts?.stop()

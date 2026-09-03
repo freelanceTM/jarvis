@@ -156,10 +156,17 @@ class BluetoothAudioRouter @Inject constructor(
                             if (hasBluetoothConnectPermission()) device?.name else null
                         } catch (_: SecurityException) { null }
                             ?: this@BluetoothAudioRouter.context.getString(R.string.bluetooth_naushnik)
-                        _audioState.value = BluetoothAudioState.Connected(name, isSingleEarbud = true)
-                        _isHeadsetPlugged.value = true
-                        routeAudioToEarbud()
-                        triggerHeadphoneAutomation()
+                        // EAR-MODE (competing device): ACL_CONNECTED прилетает для
+                        // ЛЮБОГО BR/EDR-устройства (часы, машина, браслет). Считаем
+                        // наушником и перестраиваем роутинг только если реально
+                        // появился аудиовыход-гарнитура (checkHeadsetConnection
+                        // слушает getDevices(GET_DEVICES_OUTPUTS), а не ACL).
+                        if (checkHeadsetConnection()) {
+                            _audioState.value = BluetoothAudioState.Connected(name, isSingleEarbud = true)
+                            _isHeadsetPlugged.value = true
+                            routeAudioToEarbud()
+                            triggerHeadphoneAutomation()
+                        }
                     }
                     BluetoothDevice.ACTION_ACL_DISCONNECTED,
                     AudioManager.ACTION_AUDIO_BECOMING_NOISY -> {
@@ -272,10 +279,14 @@ class BluetoothAudioRouter @Inject constructor(
             audioManager?.let { am ->
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     val devices = am.availableCommunicationDevices
+                    // EAR-MODE (competing device): BT-first — SCO/BLE-наушник важнее
+                    // проводной гарнитуры (Ear Mode — это именно Bluetooth-ухо);
+                    // порядок, в котором AudioManager отдаёт devices, произволен.
                     val headset = devices.firstOrNull {
                         it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
-                            it.type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
-                            it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET
+                            it.type == AudioDeviceInfo.TYPE_BLE_HEADSET
+                    } ?: devices.firstOrNull {
+                        it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET
                     }
                     if (headset != null) {
                         am.setCommunicationDevice(headset)
@@ -283,8 +294,23 @@ class BluetoothAudioRouter @Inject constructor(
                         Log.d(TAG, "Communication device routed to headset: ${headset.productName}")
                         return
                     }
+                    // EAR-MODE (disconnect): наушников нет — НЕ переключаем аудио в
+                    // коммуникационный режим. Раньше здесь безусловно ставился
+                    // MODE_IN_COMMUNICATION + startBluetoothSco: при каждом вызове
+                    // без гарнитуры (в т.ч. на каждую переведённую фразу) медиа и
+                    // TTS уходили в телефонное ухо, а SCO долбился в пустоту.
+                    Log.w(TAG, "routeAudioToEarbud: гарнитура не найдена — остаёмся в MODE_NORMAL")
+                    return
                 }
 
+                // API < S: SCO имеет смысл стартовать только при наличии BT-входа.
+                val scoInput = am.getDevices(AudioManager.GET_DEVICES_INPUTS).any {
+                    it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                }
+                if (!scoInput) {
+                    Log.w(TAG, "routeAudioToEarbud: нет SCO-входа — остаёмся в MODE_NORMAL")
+                    return
+                }
                 am.mode = AudioManager.MODE_IN_COMMUNICATION
                 am.startBluetoothSco()
                 am.isBluetoothScoOn = true
@@ -293,6 +319,17 @@ class BluetoothAudioRouter @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "Failed to route to earbud: ${e.localizedMessage}")
         }
+    }
+
+    /**
+     * EAR-MODE: вернуть роутинг к состоянию по умолчанию — наушники, если
+     * подключены (та же логика, что startServicePipeline оркестратора), иначе
+     * динамик. Вызывается при выходе из Ear Mode и возврате в STANDBY: режим
+     * связи (MODE_IN_COMMUNICATION/SCO) не должен жить дольше самой сессии.
+     */
+    fun restoreDefaultRouting() {
+        if (disposed.get()) return
+        if (checkHeadsetConnection()) routeAudioToEarbud() else routeAudioToSpeaker()
     }
 
     fun routeAudioToSpeaker() {

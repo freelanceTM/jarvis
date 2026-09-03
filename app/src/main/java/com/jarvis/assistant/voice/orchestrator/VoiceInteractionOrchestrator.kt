@@ -239,6 +239,10 @@ class VoiceInteractionOrchestrator @Inject constructor(
     fun stopServicePipeline() {
         isServiceActive = false
         stopAll()
+        // EAR-MODE (speaker): на паузе/сне не держим коммуникационный
+        // аудиорежим — медиа возвращаются к обычному маршруту (на наушники
+        // A2DP придет сам, без SCO).
+        bluetoothAudioRouter.routeAudioToSpeaker()
         _currentMode.value = OrchestratorMode.PAUSED_CALL_OR_SLEEP
         _assistantState.value = VoiceAssistantState.Idle
     }
@@ -322,6 +326,10 @@ class VoiceInteractionOrchestrator @Inject constructor(
         pendingCloudConsentCaptureEpoch = 0
         toolExecutor.clearPendingConfirmation()
         isProcessingQuery.set(false)
+
+        // EAR-MODE (speaker): возврат в STANDBY — это и есть «return idle» для
+        // аудио: коммуникационный режим/SCO не живут дольше сессии переводчика.
+        bluetoothAudioRouter.restoreDefaultRouting()
 
         _currentMode.value = OrchestratorMode.STANDBY_WAKE_WORD
         _assistantState.value = VoiceAssistantState.Idle
@@ -1075,14 +1083,29 @@ class VoiceInteractionOrchestrator @Inject constructor(
         }
     }
 
+    /**
+     * EAR-MODE (phone call): был ли активен синхронный переводчик на момент
+     * звонка — чтобы resumeAfterPhoneCall вернул именно его, а не молча
+     * сбросил пользователя в wake-word STANDBY.
+     */
+    @Volatile
+    private var interpreterActiveBeforeCall = false
+
     fun pauseForPhoneCall() {
+        interpreterActiveBeforeCall = _currentMode.value == OrchestratorMode.LIVE_EAR_INTERPRETER
         stopAll()
         _currentMode.value = OrchestratorMode.PAUSED_CALL_OR_SLEEP
     }
 
     fun resumeAfterPhoneCall() {
         if (isServiceActive) {
-            startServicePipeline()
+            if (interpreterActiveBeforeCall) {
+                interpreterActiveBeforeCall = false
+                Log.d(TAG, "resumeAfterPhoneCall: restoring LIVE_EAR_INTERPRETER")
+                startLiveEarInterpreter()
+            } else {
+                startServicePipeline()
+            }
         }
     }
 
