@@ -498,6 +498,33 @@ check "MEMORY: three-level architecture documented" \
       "Conversation Memory" \
       "$ROOT/docs/MEMORY.md"
 
+# ---- AGENT-CORE: цикл Understand→Plan→Act→Observe→Verify→Replan;
+# «не использовать агента там, где достаточно Tool» ----
+check "AGENT-CORE: single tool_call from cloud runs as Tool (no agent loop)" \
+      "llmPlan.steps.size == 1" \
+      "$APP/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt"
+check "AGENT-CORE: single-tool reason exists" \
+      "CLOUD_PLAN_SINGLE_TOOL" \
+      "$APP/java/com/jarvis/assistant/agent/decision/ExecutionModels.kt"
+check "AGENT-CORE: shared direct tool path for FastCommandRouter and single LLM call" \
+      "executeSingleToolCall" \
+      "$APP/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt"
+check "AGENT-CORE: fail-closed external-disclosure gate on cloud-proposed plans" \
+      "planDisclosesExternally" \
+      "$APP/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt"
+check "AGENT-CORE: loop guardrails unchanged (MAX_REPLANS=2)" \
+      "const val MAX_REPLANS = 2" \
+      "$APP/java/com/jarvis/assistant/agent/engine/AgentCognitiveLoop.kt"
+check "AGENT-CORE: loop wall-clock budget 8s (AR-03)" \
+      "const val LOOP_BUDGET_MS = 8_000L" \
+      "$APP/java/com/jarvis/assistant/agent/engine/AgentCognitiveLoop.kt"
+check "AGENT-CORE: reroute pinned by test" \
+      "single tool call from cloud runs as Tool not Agent" \
+      "$APP_TEST/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngineTest.kt"
+check "AGENT-CORE: agent core documented" \
+      "Understand → Plan → Act → Observe → Verify → Re-plan" \
+      "$ROOT/docs/AGENT_CORE.md"
+
 if [ "$fail" = 1 ]; then
   echo ""
   echo "INVARIANT CHECKS FAILED"

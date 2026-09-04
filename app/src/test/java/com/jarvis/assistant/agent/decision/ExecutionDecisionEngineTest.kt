@@ -158,6 +158,15 @@ class ExecutionDecisionEngineTest {
         steps = listOf(PlanStep(toolCall = ToolCall("device.volume", buildJsonObject { })))
     )
 
+    /** Настоящий многошаговый план (для AGENT-полосы). */
+    private fun multiStepPlan() = ExecutionPlan(
+        goal = "multi-step",
+        steps = listOf(
+            PlanStep(toolCall = ToolCall("device.volume", buildJsonObject { })),
+            PlanStep(toolCall = ToolCall("system.battery", buildJsonObject { }))
+        )
+    )
+
     // ------------------------------------------------------------------ tests
 
     @Test
@@ -467,10 +476,10 @@ class ExecutionDecisionEngineTest {
         assertEquals(0, cloud.calls)
     }
 
-    /** Дополнительно: план из tool_calls облачной модели исполняет агент. */
+    /** Дополнительно: МНОГОшаговый план из tool_calls облачной модели исполняет агент. */
     @Test
     fun `cloud tool calls are executed by agent`() = runBlocking {
-        val agent = FakeAgent(plan = null, planForLlmOutput = simplePlan())
+        val agent = FakeAgent(plan = null, planForLlmOutput = multiStepPlan())
         val cloud = FakeCloudAi(Resource.Success("""{"tool":"device.volume"}"""))
         val engine = buildEngine(cloudAi = cloud, agent = agent)
 
@@ -479,6 +488,60 @@ class ExecutionDecisionEngineTest {
         assertTrue(result is ExecutionResult.Success)
         assertEquals(ExecutionType.AGENT, (result as ExecutionResult.Success).executionType)
         assertEquals(1, agent.runCalls)
+    }
+
+    /**
+     * AGENT-CORE принцип: «не использовать агента там, где достаточно Tool».
+     * Ровно ОДИН tool_call из ответа модели исполняется прямым путём
+     * (DEVICE_TOOL), cognitive loop не запускается.
+     */
+    @Test
+    fun `single tool call from cloud runs as Tool not Agent`() = runBlocking {
+        val tool = ScriptedTool("device.volume", result = ToolExecutionResult.success("Громкость 50"))
+        val agent = FakeAgent(plan = null, planForLlmOutput = simplePlan()) // ровно 1 шаг
+        val cloud = FakeCloudAi(Resource.Success("""{"tool":"device.volume"}"""))
+        val engine = buildEngine(tools = setOf(tool), cloudAi = cloud, agent = agent)
+
+        val result = engine.execute(request("сделай как я люблю по вечерам"))
+
+        assertTrue(result is ExecutionResult.Success)
+        val success = result as ExecutionResult.Success
+        assertEquals(ExecutionType.DEVICE_TOOL, success.executionType)
+        assertTrue(success.text.contains("Громкость 50"))
+        assertEquals(0, agent.runCalls) // loop НЕ запускался
+        assertEquals(1, tool.calls)
+    }
+
+    /**
+     * AGENT-CORE: LLM предлагает — policy решает. Многошаговый план из ответа
+     * модели с внешними инструментами при не-NORMAL приватности блокируется
+     * тем же fail-closed гейтом, что и детерминированный план.
+     */
+    @Test
+    fun `external tools in cloud plan are privacy gated`() = runBlocking {
+        val externalTool = ScriptedTool("intelligence.web_search", isOffline = false)
+        val disclosingPlan = ExecutionPlan(
+            goal = "search",
+            steps = listOf(
+                PlanStep(toolCall = ToolCall("intelligence.web_search", buildJsonObject { put("query", "x") })),
+                PlanStep(toolCall = ToolCall("intelligence.web_search", buildJsonObject { put("query", "y") }))
+            )
+        )
+        val agent = FakeAgent(plan = null, planForLlmOutput = disclosingPlan)
+        val cloud = FakeCloudAi(Resource.Success("here is my plan"))
+        val engine = buildEngine(tools = setOf(externalTool), cloudAi = cloud, agent = agent)
+
+        val result = engine.execute(
+            request("сделай как я люблю по вечерам", privacy = PrivacyLevel.PRIVATE, cloudAllowed = true)
+        )
+
+        assertTrue(result is ExecutionResult.Error)
+        assertEquals(
+            DecisionReason.EXTERNAL_TOOL_BLOCKED_BY_PRIVACY,
+            (result as ExecutionResult.Error).reason
+        )
+        assertEquals(0, agent.runCalls)
+        assertEquals(0, externalTool.calls)
     }
 
     @Test

@@ -210,6 +210,9 @@ enum class DecisionReason {
     EXTERNAL_TOOL_BLOCKED_BY_PRIVACY,
     CLOUD_FAILED,
     CLOUD_PLAN_DETECTED,
+
+    /** AGENT-CORE: ровно один tool_call из ответа модели — Tool, не Agent. */
+    CLOUD_PLAN_SINGLE_TOOL,
     DEVICE_TOOL_FAILED,
     INVALID_REQUEST,
     CLARIFICATION_REQUIRED,

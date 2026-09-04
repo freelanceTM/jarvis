@@ -257,7 +257,7 @@ class ExecutionDecisionEngine @Inject constructor(
                     decidedAt
                 )
                 val toolStartedAt = latency.nowMs()
-                val result = executeDeviceTool(request, routing)
+                val result = executeSingleToolCall(request, routing.toolCall, routing.confidence)
                 // «AI → Tool»: у DEVICE_TOOL-полосы AI-фазы нет — Tool-сегмент
                 // показывает чистую стоимость исполнения команды устройства.
                 latency.record(
@@ -284,12 +284,20 @@ class ExecutionDecisionEngine @Inject constructor(
         }
     }
 
-    private suspend fun executeDeviceTool(
+    /**
+     * AGENT-CORE: единый прямой путь ОДНОГО tool-вызова (без cognitive loop).
+     * Используется и командами FastCommandRouter («открой Telegram»), и
+     * одиночным tool_call из ответа облачной модели — принцип «не использовать
+     * агента там, где достаточно Tool». Внутри: privacy-гейт (fail-closed),
+     * policy ToolExecutor'а (подтверждения), честный итог вместо оптимистичной
+     * реплики.
+     */
+    private suspend fun executeSingleToolCall(
         request: ExecutionRequest,
-        routing: CommandRoutingResult.DeviceCommand
+        call: com.jarvis.assistant.agent.model.ToolCall,
+        confidence: Float
     ): ExecutionResult {
-        val call = routing.toolCall
-        // CR-18: то же явное разрешение Boolean? — fail-closed на null.
+        // CR-18: явное разрешение Boolean? — fail-closed на null.
         val disclosesExternally = when (toolExecutor.mayDiscloseExternally(call.toolId)) {
             true -> true
             false -> false
@@ -333,7 +341,7 @@ class ExecutionDecisionEngine @Inject constructor(
                 containsScreenContent = com.jarvis.assistant.agent.tools.accessibility.ScreenContentPrivacy.isScreenReaderCall(call.toolId),
                 metadata = mapOf(
                     "tool_id" to call.toolId,
-                    "confidence" to routing.confidence.toString()
+                    "confidence" to confidence.toString()
                 )
             )
 
@@ -436,7 +444,50 @@ class ExecutionDecisionEngine @Inject constructor(
                 // (существующее поведение AgentPipeline).
                 val llmPlan = agentExecutor.planFor(request, rawOutput)
                 if (llmPlan != null) {
+                    // AGENT-CORE принцип: «не использовать агента там, где
+                    // достаточно Tool». Ровно ОДИН tool_call из ответа модели —
+                    // это команда инструмента, а не многошаговая задача: идёт
+                    // прямым путём (privacy gate + policy + честный итог), без
+                    // запуска cognitive loop.
+                    if (llmPlan.steps.size == 1) {
+                        logRoute(
+                            ExecutionType.DEVICE_TOOL,
+                            DecisionReason.CLOUD_PLAN_SINGLE_TOOL,
+                            routing.confidence
+                        )
+                        metrics.noteToolExecution()
+                        val singleStartedAt = latency.nowMs()
+                        val singleResult = executeSingleToolCall(
+                            request,
+                            llmPlan.steps.first().toolCall,
+                            routing.confidence
+                        )
+                        latency.record(
+                            VoiceLatencyMetrics.VoiceStage.TOOL,
+                            latency.nowMs() - singleStartedAt,
+                            VoiceLatencyMetrics.VoiceLane.LOCAL
+                        )
+                        return singleResult
+                    }
+
+                    // AGENT-CORE: LLM предлагает — policy решает. Раньше гейт
+                    // внешнего раскрытия был только у детерминированного плана;
+                    // tool_calls из ответа модели исполнялись БЕЗ него. Теперь
+                    // тот же fail-closed чек: план с внешними инструментами при
+                    // не-NORMAL приватности блокируется целиком.
+                    val planDisclosesExternally = llmPlan.steps.any { step ->
+                        when (toolExecutor.mayDiscloseExternally(step.toolCall.toolId)) {
+                            true -> true
+                            false -> false
+                            null -> true // unknown tool — fail-closed
+                        }
+                    }
+                    if (request.effectivePrivacyLevel != PrivacyLevel.NORMAL && planDisclosesExternally) {
+                        return privacyBlocked(DecisionReason.EXTERNAL_TOOL_BLOCKED_BY_PRIVACY)
+                    }
+
                     logRoute(ExecutionType.AGENT, DecisionReason.CLOUD_PLAN_DETECTED, routing.confidence)
+                    metrics.noteAgentExecution()
                     return agentExecutor.run(llmPlan)
                 }
 

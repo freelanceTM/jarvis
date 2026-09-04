@@ -12,6 +12,16 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Agent Core: принцип «не использовать агента там, где достаточно Tool»
+  (docs/AGENT_CORE.md). Одиночный tool_call из ответа облачной модели больше
+  не запускает cognitive loop — идёт прямым путём команды устройства
+  (privacy gate → policy → честный итог, `CLOUD_PLAN_SINGLE_TOOL`); агент
+  (Plan→Act→Observe→Verify→Replan, MAX_REPLANS=2, бюджет 8 c) остаётся для
+  многошаговых планов. Закрыта дыра policy: fail-closed гейт внешнего
+  раскрытия (`mayDiscloseExternally`) теперь применяется и к plans из ответа
+  модели — раньше он был только у детерминированных планов (LLM предлагает —
+  policy решает). 3 теста (одно- vs многошаговый cloud-план, privacy-гейт),
+  8 AGENT-CORE-инвариантов (131 всего).
 - Memory: три уровня (Conversation / Session / Long-term) + retrieval-стадия
   перед LLM — «Query → Memory retrieval → Relevant memories only → AI»
   (docs/MEMORY.md). Главный фикс: `buildPromptMemoryContext()` существовал,
