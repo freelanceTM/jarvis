@@ -12,6 +12,15 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- v0.3 Stabilization (docs/V03_STABILIZATION.md): ветка
+  release/v0.3-stabilization от main@122ba09, baseline v0.2.0 зафиксирован,
+  22 фазы протокола сведены к честным статусам (PASS с evidence / BLOCKED —
+  hardware unavailable / NOT MEASURED). Backlog: P0 подтверждённых нет
+  (первый release build — потенциальный источник), P1-1 chase-hint FIXED
+  (брендовый банк без слова «bank» пропускал full-screen capture банковского
+  экрана к LLM; regression test существовал и теперь зелёный), P1-2 release
+  build валидирует CI. Scorecard 7/10: контракты stabilized, device-evidence
+  отсутствует. 4 V03-STAB-инварианта (157 всего).
 - Тестовая матрица финального тестирования (docs/TEST_MATRIX.md): 7 разделов —
   Voice (33 сценария, 51 автотест роутера), Tools (34 тулa по семьям),
   Permissions (11 denied-сценариев), Network (Online/Slow/Offline/Reconnect),

@@ -158,7 +158,11 @@ class AccessibilityPrivacyPolicy(
             "paypal", "coinbase", "binance", "revolut", "venmo", "cashapp",
             "cash.app", "alipay", "paisa", "spay", "steam",
             // Банки с брендовыми пакетами без слова «bank».
-            "tinkoff", "sber", "privat24", "monobank", "yoomoney", "qiwi"
+            // V03-STAB: «chase» добавлен по регресс-тесту
+            // AccessibilityPrivacyPolicyTest (`com.chase.sig.android`) —
+            // Chase — крупнейший банк США, пакет без слова «bank»; без хинта
+            // full-screen capture банковского экрана уходил бы в LLM.
+            "chase", "tinkoff", "sber", "privat24", "monobank", "yoomoney", "qiwi"
         )
     }
 }

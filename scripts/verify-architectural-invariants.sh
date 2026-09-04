@@ -597,6 +597,20 @@ check "TEST-MATRIX: honest GAP documented (modified client)" \
       "Play Integrity" \
       "$ROOT/docs/TEST_MATRIX.md"
 
+# ---- V03-STABILIZATION: протокол 22 фаз (baseline/docs/P1-фикс) ----
+check "V03-STAB: chase bank hint blocks full-screen capture (P1-1 fixed)" \
+      "\"chase\"" \
+      "$APP/java/com/jarvis/assistant/agent/tools/accessibility/AccessibilityPrivacyPolicy.kt"
+check "V03-STAB: regression test for chase still pins the block" \
+      "com.chase.sig.android" \
+      "$APP_TEST/java/com/jarvis/assistant/agent/tools/accessibility/AccessibilityPrivacyPolicyTest.kt"
+check "V03-STAB: stabilization document exists with honest statuses" \
+      "BLOCKED" \
+      "$ROOT/docs/V03_STABILIZATION.md"
+check "V03-STAB: scorecard distinguishes measured vs NOT MEASURED" \
+      "NOT MEASURED" \
+      "$ROOT/docs/V03_STABILIZATION.md"
+
 if [ "$fail" = 1 ]; then
   echo ""
   echo "INVARIANT CHECKS FAILED"
