@@ -102,12 +102,15 @@ class AdminControlPlaneSurfaceTest : PostgresTestSupport() {
     }
 
     private fun page(method: String, path: String, cookie: String? = null, body: String = "") = runBlocking {
+        // Как в проде (Main.kt): query отделяется от path и идёт в rawQuery —
+        // иначе UI-хендлеры, читающие rawQuery (?status=...), увидят null.
         ui.handle(
             HttpRequestContext(
-                method = method, path = path, authorizationHeader = null, body = body,
+                method = method, path = path.substringBefore('?'), authorizationHeader = null, body = body,
                 contentLength = body.length.toLong(),
                 headers = if (cookie != null) mapOf("Cookie" to cookie) else emptyMap(),
-                remoteAddress = "10.9.9.2"
+                remoteAddress = "10.9.9.2",
+                rawQuery = path.substringAfter('?', "").takeIf { it.isNotEmpty() }
             )
         )
     }
@@ -148,6 +151,31 @@ class AdminControlPlaneSurfaceTest : PostgresTestSupport() {
      * ADMIN (MVP-дерево Licenses → active/expired): status-фильтр списка.
      * Неизвестный статус — 400 (не тихий «показать всё»).
      */
+    /**
+     * OBSERVABILITY: сквозной request id доступен оператору — /admin/logs
+     * (CLOUD) возвращает request_id из ai_usage_records, по нему видно
+     * клиент-серверный путь одного запроса.
+     */
+    @Test
+    fun `cloud logs expose request id`() {
+        val knownRequestId = "omx_01TESTFIXTUREREQUESTID000000"
+        dataSource.connection.use { c ->
+            c.prepareStatement(
+                "INSERT INTO ai_usage_records (request_id, client_id, provider, model, latency_ms, input_tokens, output_tokens, total_tokens, " +
+                    "success, prompt_chars, response_chars, occurred_at) VALUES (?, '99999999-9999-9999-9999-999999999999', 'GROQ', 'm', 42, 10, 20, 30, TRUE, 5, 6, now())"
+            ).use { ps ->
+                ps.setString(1, knownRequestId)
+                ps.executeUpdate()
+            }
+        }
+        accounts.create("logseer", AdminPasswords.hash("logs-pass-1234567"), AdminRole.VIEWER, Instant.now())
+        val token = login("logseer", "logs-pass-1234567")
+
+        val logs = api("GET", "/v1/admin/logs?component=CLOUD", token)
+        assertEquals(200, logs.status)
+        assertTrue("request id in logs", logs.body.contains(knownRequestId))
+    }
+
     @Test
     fun `licenses list filters by status and rejects unknown status`() {
         val (accountId, activeId) = seedBoth()

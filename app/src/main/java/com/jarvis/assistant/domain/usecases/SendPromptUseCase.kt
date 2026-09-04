@@ -1,6 +1,7 @@
 package com.jarvis.assistant.domain.usecases
 
 import android.content.Context
+import android.util.Log
 import com.jarvis.assistant.R
 import com.jarvis.assistant.agent.memory.manager.JarvisMemoryManager
 import com.jarvis.assistant.agent.decision.ExecutionRequest
@@ -8,6 +9,7 @@ import com.jarvis.assistant.agent.decision.PrivacyLevel
 import com.jarvis.assistant.agent.decision.RequestSource
 import com.jarvis.assistant.agent.pipeline.AgentPipeline
 import com.jarvis.assistant.agent.tools.accessibility.ScreenContentPrivacy
+import com.jarvis.assistant.core.request.RequestIds
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.domain.models.Message
 import com.jarvis.assistant.domain.models.MessageRole
@@ -49,12 +51,17 @@ class SendPromptUseCase @Inject constructor(
         source: RequestSource = RequestSource.CHAT,
         privacyLevel: PrivacyLevel = PrivacyLevel.UNKNOWN,
         cloudExplicitlyAllowed: Boolean = false,
-        originTimestampMs: Long? = null
+        originTimestampMs: Long? = null,
+        requestId: String = RequestIds.newId()
     ): Resource<PromptExecutionResult> {
         val trimmedPrompt = userPrompt.trim()
         if (trimmedPrompt.isEmpty()) {
             return Resource.Error(IllegalArgumentException(context.getString(R.string.pustoy_zapros)), context.getString(R.string.zapros_ne_mozhet_byt_pustym))
         }
+
+        // OBSERVABILITY: корреляция всего пути одного запроса. Текст НЕ
+        // логируется (пункт 20 ТЗ) — только id и форма маршрута.
+        Log.i("SendPrompt", "request started | requestId=$requestId | source=$source")
 
         // 1. Фиксируем последнюю реплику (для анафоры) и разрешаем контекст.
         memoryManager.workingMemory.setLastMessage(trimmedPrompt)
@@ -103,7 +110,8 @@ class SendPromptUseCase @Inject constructor(
             history = history,
             cloudExplicitlyAllowed = cloudExplicitlyAllowed,
             originTimestampMs = originTimestampMs,
-            memoryContext = memoryContext
+            memoryContext = memoryContext,
+            requestId = requestId
         )
 
         val effective = effectiveRequest.effectivePrivacyLevel

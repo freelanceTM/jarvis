@@ -624,6 +624,7 @@ class AdminHttpHandler(
                                 put("actor", row.actor)
                                 put("result", row.result)
                                 put("latencyMs", row.latencyMs)
+                                put("requestId", row.requestId)
                             }
                         )
                     }

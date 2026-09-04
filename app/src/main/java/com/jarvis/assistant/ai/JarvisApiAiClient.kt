@@ -41,7 +41,9 @@ interface ContextualCloudAIClient {
         effectivePrivacyLevel: PrivacyLevel,
         requiresWeb: Boolean,
         cloudExplicitlyAllowed: Boolean = false,
-        history: List<Message> = emptyList()
+        history: List<Message> = emptyList(),
+        /** OBSERVABILITY: сквозной request id; пусто = JarvisApiClient сгенерирует omx-id. */
+        requestId: String = ""
     ): Resource<String>
 }
 
@@ -81,7 +83,8 @@ class JarvisApiAiClient @Inject constructor(
         effectivePrivacyLevel: PrivacyLevel,
         requiresWeb: Boolean,
         cloudExplicitlyAllowed: Boolean,
-        history: List<Message>
+        history: List<Message>,
+        requestId: String
     ): Resource<String> {
         // Defense-in-depth invariant: к нам не должен прийти запрос на облако,
         // где effective в {PRIVATE,SENSITIVE} без явного consent. Отправка
@@ -104,6 +107,7 @@ class JarvisApiAiClient @Inject constructor(
             // это не «пустая строка» в контракте запроса.
             systemContext = systemPrompt.ifBlank { null },
             cloudExplicitlyAllowed = cloudExplicitlyAllowed,
+            requestId = requestId,
             // CR-03: преобразуем доменные Message → DTO, исключаем SYSTEM
             // (systemPrompt отправляется отдельно и серверный базовый промпт
             // не должен дублироваться через историю).

@@ -12,6 +12,19 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Observability: единый request ID (`omx_01J…`, ULID: время+случайность,
+  лексикографическая сортировка) сквозь весь путь запроса —
+  Voice → Router → Tool → AI → Server → Provider (docs/OBSERVABILITY.md).
+  Раньше JarvisApiClient рождал отдельный UUID на каждый HTTP-вызов —
+  клиентский и серверный следы одного запроса не коррелировали. Теперь id
+  генерируется один раз (оркестратор на финальном STT / SendPromptUseCase),
+  несётся в `ExecutionRequest.requestId` (copy-стабилен), пишется в каждый
+  route-лог и metadata результата, уходит на сервер (который уже принимал
+  клиентский requestId: ai_usage_records UNIQUE(client_id, request_id) —
+  идемпотентность ретраев — и эхо в ответах). Админка: /admin/logs (CLOUD)
+  отдаёт колонку requestId. Тексты по-прежнему не логируются — id коррелирует
+  только метаданные. 8 тестов (формат ULID, сортировка, уникальность,
+  сквозная корреляция движка, серверный surface), 9 OBSERVABILITY-инвариантов.
 - Admin Panel: аудит control plane против MVP-дерева (docs/CONTROL_PLANE.md
   §12) — панель уже покрывает Dashboard/Users(+devices,subscription)/Devices/
   Licenses/AI(providers,health,usage)/Requests(cloud)/System в одном JVM без

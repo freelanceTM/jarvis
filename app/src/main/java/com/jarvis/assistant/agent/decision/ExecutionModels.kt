@@ -1,6 +1,7 @@
 package com.jarvis.assistant.agent.decision
 
 import com.jarvis.assistant.agent.model.ToolCall
+import com.jarvis.assistant.core.request.RequestIds
 import com.jarvis.assistant.domain.models.Message
 
 /**
@@ -74,6 +75,16 @@ data class ExecutionRequest(
      */
     val memoryContext: String = "",
     /**
+     * OBSERVABILITY: единый request id (`omx_01J…`, [RequestIds]) на весь путь
+     * Voice → Router → Tool → AI → Server → Provider. Генерируется ОДИН РАЗ на
+     * пользовательский запрос (SendPromptUseCase / оркестратор); copy() и
+     * downstream-контракты сохраняют его; сервер пишет его в
+     * `ai_usage_records.request_id` и возвращает эхом. Пустая строка
+     * недопустима в проде: конструктор генерирует сам — пустым бывает только
+     * legacy-вызов, и `JarvisApiClient` подставит свой.
+     */
+    val requestId: String = RequestIds.newId(),
+    /**
      * Voice Latency: timestamp финального STT-результата
      * ([android.os.SystemClock.elapsedRealtime]) — точка «STT → Router».
      * null = запрос не голосовой (чат) — сегмент не измеряется.
@@ -146,7 +157,8 @@ data class ExecutionRequest(
             requiresDeviceControl: Boolean = false,
             cloudExplicitlyAllowed: Boolean = false,
             originTimestampMs: Long? = null,
-            memoryContext: String = ""
+            memoryContext: String = "",
+            requestId: String = RequestIds.newId()
         ): ExecutionRequest {
             val classification = PrivacyClassifier.classifySafely(
                 PrivacyContent(
@@ -169,7 +181,8 @@ data class ExecutionRequest(
                 history = history,
                 privacyClassification = classification,
                 originTimestampMs = originTimestampMs,
-                memoryContext = memoryContext
+                memoryContext = memoryContext,
+                requestId = requestId
             )
         }
 

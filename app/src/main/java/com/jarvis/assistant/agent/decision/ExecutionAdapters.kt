@@ -79,6 +79,9 @@ class RepositoryCloudAiExecutor @Inject constructor(
         // вторую линию защиты, даже если клиент ошибётся.
         // CR-03: прокидываем request.history (последние N сообщений) до
         // сервера, который уже положит их в messages[] провайдера.
+        // OBSERVABILITY: request id протаскивается до сервера — он ляжет в
+        // ai_usage_records.request_id и вернётся эхом, связывая клиентский
+        // путь (Router/Tool логи) с серверным (usage/провайдер).
         return aiRepository.generateResponse(
             prompt = request.text,
             systemPrompt = fullSystemPrompt,
@@ -86,7 +89,8 @@ class RepositoryCloudAiExecutor @Inject constructor(
             privacyLevel = request.effectivePrivacyLevel.name,
             requiresWeb = request.requiresWeb,
             cloudExplicitlyAllowed = request.cloudExplicitlyAllowed,
-            history = request.history
+            history = request.history,
+            requestId = request.requestId
         )
     }
 }

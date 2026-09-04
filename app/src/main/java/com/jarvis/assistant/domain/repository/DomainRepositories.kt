@@ -37,7 +37,9 @@ interface AIRepository {
         privacyLevel: String,
         requiresWeb: Boolean,
         cloudExplicitlyAllowed: Boolean = false,
-        history: List<Message> = emptyList()
+        history: List<Message> = emptyList(),
+        /** OBSERVABILITY: сквозной id (`omx_…`); пусто = реализация сгенерирует свой. */
+        requestId: String = ""
     ): Resource<String>
 }
 

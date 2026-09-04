@@ -61,7 +61,7 @@ class RepositoryCloudAiExecutorHistoryTest {
         val slot = mutableListOf<List<Message>>()
         coVerify(exactly = 1) {
             aiRepo.generateResponse(any(), any(), any(), any(), any(),
-                cloudExplicitlyAllowed = any(), history = capture(slot))
+                cloudExplicitlyAllowed = any(), history = capture(slot), requestId = any())
         }
         assertNotNull(slot.single())
         assertEquals(0, slot.single().size)
@@ -72,7 +72,7 @@ class RepositoryCloudAiExecutorHistoryTest {
         val hist = listOf(m(MessageRole.USER, "единственное сообщение"))
         executor.complete(ExecutionRequest(text = "q2", source = RequestSource.CHAT, history = hist))
         val slot = mutableListOf<List<Message>>()
-        coVerify { aiRepo.generateResponse(any(), any(), any(), any(), any(), cloudExplicitlyAllowed = any(), history = capture(slot)) }
+        coVerify { aiRepo.generateResponse(any(), any(), any(), any(), any(), cloudExplicitlyAllowed = any(), history = capture(slot), requestId = any()) }
         assertEquals(1, slot.single().size)
         assertEquals("единственное сообщение", slot.single()[0].text)
         assertEquals(MessageRole.USER, slot.single()[0].role)
@@ -89,7 +89,7 @@ class RepositoryCloudAiExecutorHistoryTest {
         )
         executor.complete(ExecutionRequest(text = "current", source = RequestSource.VOICE, history = hist))
         val slot = mutableListOf<List<Message>>()
-        coVerify { aiRepo.generateResponse(any(), any(), any(), any(), any(), cloudExplicitlyAllowed = any(), history = capture(slot)) }
+        coVerify { aiRepo.generateResponse(any(), any(), any(), any(), any(), cloudExplicitlyAllowed = any(), history = capture(slot), requestId = any()) }
         val forwarded = slot.single()
         assertEquals(5, forwarded.size)
         assertEquals(listOf("u1", "a1", "u2", "a2", "u3"), forwarded.map(Message::text))
@@ -100,7 +100,7 @@ class RepositoryCloudAiExecutorHistoryTest {
         val hist = listOf(m(MessageRole.USER, "OLD-PROMPT"), m(MessageRole.ASSISTANT, "OLD-ANS"))
         executor.complete(ExecutionRequest(text = "CURRENT-PROMPT", source = RequestSource.VOICE, history = hist))
         val promptSlot = mutableListOf<String>()
-        coVerify { aiRepo.generateResponse(capture(promptSlot), any(), any(), any(), any(), cloudExplicitlyAllowed = any(), history = any()) }
+        coVerify { aiRepo.generateResponse(capture(promptSlot), any(), any(), any(), any(), cloudExplicitlyAllowed = any(), history = any(), requestId = any()) }
         assertEquals("CURRENT-PROMPT", promptSlot.single())
     }
 

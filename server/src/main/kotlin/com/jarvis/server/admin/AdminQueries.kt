@@ -437,7 +437,9 @@ class AdminQueries(private val dataSource: DataSource) {
         val type: String,
         val actor: String,
         val result: String,
-        val latencyMs: Long?
+        val latencyMs: Long?,
+        /** OBSERVABILITY: сквозной request id (клиентский `omx_…` или серверный). */
+        val requestId: String? = null
     )
 
     /**
@@ -463,7 +465,7 @@ class AdminQueries(private val dataSource: DataSource) {
             collect(
                 "SELECT occurred_at, 'CLOUD' AS component, coalesce(provider, 'UNKNOWN') AS type, " +
                     "client_id AS actor, CASE WHEN success THEN 'SUCCESS' ELSE 'FAILURE: ' || coalesce(error_code, 'ERROR') END AS result, " +
-                    "latency_ms FROM ai_usage_records ORDER BY occurred_at DESC LIMIT ? OFFSET ?"
+                    "latency_ms, request_id FROM ai_usage_records ORDER BY occurred_at DESC LIMIT ? OFFSET ?"
             ) { ps ->
                 ps.setInt(1, limit.coerceIn(1, 200))
                 ps.setLong(2, offset.coerceAtLeast(0))
@@ -472,7 +474,7 @@ class AdminQueries(private val dataSource: DataSource) {
         if (wantAll || componentFilter == "ADMIN") {
             collect(
                 "SELECT occurred_at, 'ADMIN' AS component, action AS type, actor, entity_type AS result, " +
-                    "NULL::bigint AS latency_ms FROM admin_audit_log ORDER BY occurred_at DESC LIMIT ? OFFSET ?"
+                    "NULL::bigint AS latency_ms, request_id FROM admin_audit_log ORDER BY occurred_at DESC LIMIT ? OFFSET ?"
             ) { ps ->
                 ps.setInt(1, limit.coerceIn(1, 200))
                 ps.setLong(2, offset.coerceAtLeast(0))
@@ -481,7 +483,7 @@ class AdminQueries(private val dataSource: DataSource) {
         if (wantAll || componentFilter == "LICENSE") {
             collect(
                 "SELECT occurred_at, 'LICENSE' AS component, action AS type, actor_type || ':' || coalesce(actor_id, '-') AS actor, " +
-                    "entity_type AS result, NULL::bigint AS latency_ms FROM license_audit_log " +
+                    "entity_type AS result, NULL::bigint AS latency_ms, request_id FROM license_audit_log " +
                     "ORDER BY occurred_at DESC LIMIT ? OFFSET ?"
             ) { ps ->
                 ps.setInt(1, limit.coerceIn(1, 200))
@@ -522,6 +524,7 @@ class AdminQueries(private val dataSource: DataSource) {
         type = getString("type"),
         actor = getString("actor")?.take(64) ?: "-",
         result = getString("result") ?: "-",
-        latencyMs = getLong("latency_ms").let { if (wasNull()) null else it }
+        latencyMs = getLong("latency_ms").let { if (wasNull()) null else it },
+        requestId = getString("request_id")
     )
 }

@@ -5,6 +5,7 @@ import android.content.Context
 import android.media.ToneGenerator
 import android.media.AudioManager
 import android.util.Log
+import com.jarvis.assistant.core.request.RequestIds
 import com.jarvis.assistant.agent.decision.PrivacyClassification
 import com.jarvis.assistant.agent.decision.PrivacyClassifier
 import com.jarvis.assistant.agent.decision.PrivacyContent
@@ -354,6 +355,10 @@ class VoiceInteractionOrchestrator @Inject constructor(
         textToSpeechManager.speak(msg, speechRate, speechPitch)
     }
 
+    /** OBSERVABILITY: request id текущей голосовой реплики. */
+    @Volatile
+    private var voiceRequestId: String = RequestIds.newId()
+
     /** Voice Latency: момент детекта wake-word (monotonic clock). */
     private var wakeDetectedAtMs: Long = 0L
 
@@ -549,6 +554,12 @@ class VoiceInteractionOrchestrator @Inject constructor(
         // (originTimestampMs протаскивается в ExecutionRequest) и конец
         // сегмента «Wake → STT».
         sttFinalAtMs = latencyMetrics.nowMs()
+
+        // OBSERVABILITY: id запроса рождается здесь (начало «Voice» этапа) и
+        // идёт через SendPromptUseCase → Router/Tool/AI → сервер — по нему
+        // собирается весь путь одной реплики.
+        voiceRequestId = RequestIds.newId()
+        Log.d(TAG, "voice query accepted | requestId=$voiceRequestId | chars=${query.length}")
         if (wakeDetectedAtMs > 0L) {
             latencyMetrics.record(
                 VoiceLatencyMetrics.VoiceStage.WAKE_TO_STT,
@@ -609,7 +620,8 @@ class VoiceInteractionOrchestrator @Inject constructor(
                     clean,
                     source = RequestSource.VOICE,
                     privacyLevel = quickClassification.level,
-                    originTimestampMs = sttFinalAtMs
+                    originTimestampMs = sttFinalAtMs,
+                    requestId = voiceRequestId
                 )
                 val resultReceivedAt = latencyMetrics.nowMs()
 

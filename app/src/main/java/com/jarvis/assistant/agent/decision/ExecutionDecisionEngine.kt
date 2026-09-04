@@ -173,7 +173,7 @@ class ExecutionDecisionEngine @Inject constructor(
             if (request.effectivePrivacyLevel != PrivacyLevel.NORMAL && disclosesExternally) {
                 return privacyBlocked(DecisionReason.EXTERNAL_TOOL_BLOCKED_BY_PRIVACY)
             }
-            logRoute(ExecutionType.AGENT, DecisionReason.COMPLEX_MULTI_STEP, routing.confidence)
+            logRoute(ExecutionType.AGENT, DecisionReason.COMPLEX_MULTI_STEP, routing.confidence, request.requestId)
             metrics.noteAgentExecution()
             recordLaneStage(
                 VoiceLatencyMetrics.VoiceLane.LOCAL,
@@ -204,12 +204,15 @@ class ExecutionDecisionEngine @Inject constructor(
         )
         when (localOutcome) {
             is LocalAiOutcome.Handled -> {
-                logRoute(ExecutionType.LOCAL_AI, DecisionReason.LOCAL_AI_HANDLED, routing.confidence)
+                logRoute(ExecutionType.LOCAL_AI, DecisionReason.LOCAL_AI_HANDLED, routing.confidence, request.requestId)
                 metrics.noteLocalHandled()
                 return ExecutionResult.Success(
                     text = localOutcome.text,
                     executionType = ExecutionType.LOCAL_AI,
-                    metadata = mapOf("reason" to DecisionReason.LOCAL_AI_HANDLED.name)
+                    metadata = mapOf(
+                        "reason" to DecisionReason.LOCAL_AI_HANDLED.name,
+                        "request_id" to request.requestId
+                    )
                 )
             }
 
@@ -249,7 +252,7 @@ class ExecutionDecisionEngine @Inject constructor(
 
         return when (routing) {
             is CommandRoutingResult.DeviceCommand -> {
-                logRoute(ExecutionType.DEVICE_TOOL, DecisionReason.FAST_ROUTER_CONFIDENT, routing.confidence)
+                logRoute(ExecutionType.DEVICE_TOOL, DecisionReason.FAST_ROUTER_CONFIDENT, routing.confidence, request.requestId)
                 metrics.noteToolExecution()
                 recordLaneStage(
                     VoiceLatencyMetrics.VoiceLane.LOCAL,
@@ -271,12 +274,15 @@ class ExecutionDecisionEngine @Inject constructor(
             // Готовая локальная реплика («привет») — тоже устройство-локальный
             // путь, просто без вызова инструмента.
             is CommandRoutingResult.DirectResponse -> {
-                logRoute(ExecutionType.DEVICE_TOOL, DecisionReason.FAST_ROUTER_CONFIDENT, routing.confidence)
+                logRoute(ExecutionType.DEVICE_TOOL, DecisionReason.FAST_ROUTER_CONFIDENT, routing.confidence, request.requestId)
                 metrics.noteDirectResponse()
                 ExecutionResult.Success(
                     text = routing.text,
                     executionType = ExecutionType.DEVICE_TOOL,
-                    metadata = mapOf("reason" to DecisionReason.FAST_ROUTER_CONFIDENT.name)
+                    metadata = mapOf(
+                        "reason" to DecisionReason.FAST_ROUTER_CONFIDENT.name,
+                        "request_id" to request.requestId
+                    )
                 )
             }
 
@@ -341,7 +347,8 @@ class ExecutionDecisionEngine @Inject constructor(
                 containsScreenContent = com.jarvis.assistant.agent.tools.accessibility.ScreenContentPrivacy.isScreenReaderCall(call.toolId),
                 metadata = mapOf(
                     "tool_id" to call.toolId,
-                    "confidence" to confidence.toString()
+                    "confidence" to confidence.toString(),
+                    "request_id" to request.requestId
                 )
             )
 
@@ -386,7 +393,7 @@ class ExecutionDecisionEngine @Inject constructor(
             return LocalAiOutcome.Uncertain
         }
 
-        logRoute(ExecutionType.LOCAL_AI, DecisionReason.FAST_ROUTER_UNCERTAIN, routing.confidence)
+        logRoute(ExecutionType.LOCAL_AI, DecisionReason.FAST_ROUTER_UNCERTAIN, routing.confidence, request.requestId)
         trace.localTried = true
         return localAi.tryHandle(request)
     }
@@ -423,7 +430,7 @@ class ExecutionDecisionEngine @Inject constructor(
         } else {
             DecisionReason.LOCAL_AI_UNCERTAIN
         }
-        logRoute(ExecutionType.CLOUD_AI, reason, routing.confidence)
+        logRoute(ExecutionType.CLOUD_AI, reason, routing.confidence, request.requestId)
 
         // Метрики: cloud_requests — реально отправленные запросы (attempt);
         // эскалация — только когда локальная полоса БЫЛА опрошена и не взяла
@@ -453,7 +460,8 @@ class ExecutionDecisionEngine @Inject constructor(
                         logRoute(
                             ExecutionType.DEVICE_TOOL,
                             DecisionReason.CLOUD_PLAN_SINGLE_TOOL,
-                            routing.confidence
+                            routing.confidence,
+                            request.requestId
                         )
                         metrics.noteToolExecution()
                         val singleStartedAt = latency.nowMs()
@@ -486,7 +494,7 @@ class ExecutionDecisionEngine @Inject constructor(
                         return privacyBlocked(DecisionReason.EXTERNAL_TOOL_BLOCKED_BY_PRIVACY)
                     }
 
-                    logRoute(ExecutionType.AGENT, DecisionReason.CLOUD_PLAN_DETECTED, routing.confidence)
+                    logRoute(ExecutionType.AGENT, DecisionReason.CLOUD_PLAN_DETECTED, routing.confidence, request.requestId)
                     metrics.noteAgentExecution()
                     return agentExecutor.run(llmPlan)
                 }
@@ -494,7 +502,10 @@ class ExecutionDecisionEngine @Inject constructor(
                 ExecutionResult.Success(
                     text = rawOutput,
                     executionType = ExecutionType.CLOUD_AI,
-                    metadata = mapOf("reason" to reason.name)
+                    metadata = mapOf(
+                        "reason" to reason.name,
+                        "request_id" to request.requestId
+                    )
                 )
             }
 
@@ -529,13 +540,19 @@ class ExecutionDecisionEngine @Inject constructor(
     private fun logRequest(request: ExecutionRequest) {
         Log.d(
             TAG,
-            "request received | source=${request.source} | privacy=${request.effectivePrivacyLevel} | " +
+            "request received | requestId=${request.requestId.ifBlank { "-" }} | source=${request.source} | " +
+                "privacy=${request.effectivePrivacyLevel} | " +
                 "requiresWeb=${request.requiresWeb} | requiresDeviceControl=${request.requiresDeviceControl} | " +
                 "text=${request.loggableText}"
         )
     }
 
-    private fun logRoute(type: ExecutionType, reason: DecisionReason, confidence: Float) {
-        Log.d(TAG, "route=$type | reason=$reason | confidence=$confidence")
+    private fun logRoute(
+        type: ExecutionType,
+        reason: DecisionReason,
+        confidence: Float,
+        requestId: String = ""
+    ) {
+        Log.d(TAG, "route=$type | reason=$reason | confidence=$confidence | requestId=${requestId.ifBlank { "-" }}")
     }
 }

@@ -50,7 +50,7 @@ class MemoryRetrievalInjectionTest {
         every { network.isCurrentlyOnline() } returns true
         coEvery {
             aiRepo.generateResponse(any(), any(), any(), any(), any(),
-                cloudExplicitlyAllowed = any(), history = any())
+                cloudExplicitlyAllowed = any(), history = any(), requestId = any())
         } returns Resource.Success("ok")
         executor = RepositoryCloudAiExecutor(aiRepo, settings, tools, network)
     }
@@ -104,7 +104,7 @@ class MemoryRetrievalInjectionTest {
         val sysSlot = slot<String>()
         coVerify(exactly = 1) {
             aiRepo.generateResponse(capture(sysSlot), any(), any(), any(), any(),
-                cloudExplicitlyAllowed = any(), history = any())
+                cloudExplicitlyAllowed = any(), history = any(), requestId = any())
         }
         assertTrue(sysSlot.captured.contains("BASE-SYS"))
         assertTrue(sysSlot.captured.contains("был в Японии в 2024"))
@@ -122,7 +122,7 @@ class MemoryRetrievalInjectionTest {
         val sysSlot = slot<String>()
         coVerify(exactly = 1) {
             aiRepo.generateResponse(capture(sysSlot), any(), any(), any(), any(),
-                cloudExplicitlyAllowed = any(), history = any())
+                cloudExplicitlyAllowed = any(), history = any(), requestId = any())
         }
         assertEquals("BASE-SYS", sysSlot.captured)
     }

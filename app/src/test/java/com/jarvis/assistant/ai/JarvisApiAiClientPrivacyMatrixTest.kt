@@ -40,7 +40,8 @@ class JarvisApiAiClientPrivacyMatrixTest {
                 any(), any(), any(), any(),
                 systemContext = any(),
                 cloudExplicitlyAllowed = any(),
-                history = any()
+                history = any(),
+                requestId = any()
             )
         } returns Resource.Success("ok")
     }
@@ -60,7 +61,7 @@ class JarvisApiAiClientPrivacyMatrixTest {
                 text = "какая погода", source = "VOICE",
                 privacyLevel = "NORMAL", requiresWeb = false,
                 systemContext = "sys", cloudExplicitlyAllowed = false,
-                history = any()
+                history = any(), requestId = any()
             )
         }
     }
@@ -78,7 +79,7 @@ class JarvisApiAiClientPrivacyMatrixTest {
         assertTrue((result as Resource.Error).exception is PrivacyCloudBlockedException)
         coVerify(exactly = 0) {
             network.execute(any(), any(), any(), any(),
-                systemContext = any(), cloudExplicitlyAllowed = any(), history = any())
+                systemContext = any(), cloudExplicitlyAllowed = any(), history = any(), requestId = any())
         }
     }
 
@@ -97,7 +98,7 @@ class JarvisApiAiClientPrivacyMatrixTest {
                 text = "мой пароль XYZ", source = "VOICE",
                 privacyLevel = "SENSITIVE", requiresWeb = true,
                 systemContext = "sys", cloudExplicitlyAllowed = true,
-                history = any()
+                history = any(), requestId = any()
             )
         }
     }
@@ -120,7 +121,7 @@ class JarvisApiAiClientPrivacyMatrixTest {
         coVerify(exactly = 1) {
             network.execute(any(), any(), any(), any(),
                 systemContext = any(), cloudExplicitlyAllowed = any(),
-                history = capture(slot))
+                history = capture(slot), requestId = any())
         }
         assertEquals(2, slot.single().size)
         assertEquals("user", slot.single()[0].role)
@@ -143,7 +144,7 @@ class JarvisApiAiClientPrivacyMatrixTest {
             network.execute(any(), any(), any(), any(),
                 systemContext = null,
                 cloudExplicitlyAllowed = false,
-                history = capture(slot))
+                history = capture(slot), requestId = any())
         }
         assertNotNull(slot.single())
         assertEquals(0, slot.single().size)
@@ -154,7 +155,7 @@ class JarvisApiAiClientPrivacyMatrixTest {
         val net = mockk<JarvisApiClient>(relaxed = false)
         coEvery {
             net.execute(any(), any(), any(), any(),
-                systemContext = any(), cloudExplicitlyAllowed = any(), history = any())
+                systemContext = any(), cloudExplicitlyAllowed = any(), history = any(), requestId = any())
         } returns Resource.Success("ok")
         val ai = JarvisApiAiClient(net)
         val result = ai.complete(
@@ -174,7 +175,8 @@ class JarvisApiAiClientPrivacyMatrixTest {
                 requiresWeb = false,
                 systemContext = "translate",
                 cloudExplicitlyAllowed = capture(consentSlot),
-                history = any()
+                history = any(),
+                requestId = any()
             )
         }
         assertEquals("CHAT", sourceSlot.single())

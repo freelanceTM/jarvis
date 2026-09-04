@@ -545,6 +545,35 @@ check "ADMIN: control plane documented" \
       "Control Plane" \
       "$ROOT/docs/CONTROL_PLANE.md"
 
+# ---- OBSERVABILITY: единый request id (omx_…) Voice→Router→Tool→AI→Server ----
+check "OBSERVABILITY: omx ULID generator exists (Crockford base32)" \
+      "0123456789ABCDEFGHJKMNPQRSTVWXYZ" \
+      "$APP/java/com/jarvis/assistant/core/request/RequestIds.kt"
+check "OBSERVABILITY: ExecutionRequest carries requestId (generated once, copy-stable)" \
+      "val requestId: String = RequestIds.newId()" \
+      "$APP/java/com/jarvis/assistant/agent/decision/ExecutionModels.kt"
+check "OBSERVABILITY: voice leg generates id at STT-final" \
+      "voiceRequestId = RequestIds.newId()" \
+      "$APP/java/com/jarvis/assistant/voice/orchestrator/VoiceInteractionOrchestrator.kt"
+check "OBSERVABILITY: router logs carry requestId" \
+      "requestId=\${request.requestId" \
+      "$APP/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngine.kt"
+check "OBSERVABILITY: client no longer generates a disconnected UUID per call" \
+      "requestId.ifBlank { RequestIds.newId() }" \
+      "$APP/java/com/jarvis/assistant/data/remote/JarvisApiClient.kt"
+check "OBSERVABILITY: cloud executor propagates agent requestId to repository" \
+      "requestId = request.requestId" \
+      "$APP/java/com/jarvis/assistant/agent/decision/ExecutionAdapters.kt"
+check "OBSERVABILITY: server admin logs expose request_id" \
+      "put(\"requestId\", row.requestId)" \
+      "$SERVER/kotlin/com/jarvis/server/admin/AdminHttpHandler.kt"
+check "OBSERVABILITY: request id pinned by tests" \
+      "request id flows into execution metadata unchanged" \
+      "$APP_TEST/java/com/jarvis/assistant/agent/decision/ExecutionDecisionEngineTest.kt"
+check "OBSERVABILITY: documented" \
+      "Voice → Router → Tool → AI → Server → Provider" \
+      "$ROOT/docs/OBSERVABILITY.md"
+
 if [ "$fail" = 1 ]; then
   echo ""
   echo "INVARIANT CHECKS FAILED"

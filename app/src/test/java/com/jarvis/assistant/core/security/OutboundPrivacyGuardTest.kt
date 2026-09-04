@@ -59,7 +59,8 @@ class OutboundPrivacyGuardTest {
             effectivePrivacyLevel: PrivacyLevel,
             requiresWeb: Boolean,
             cloudExplicitlyAllowed: Boolean,
-            history: List<Message>
+            history: List<Message>,
+            requestId: String
         ): Resource<String> {
             check(preservesContext)
             calls.incrementAndGet()

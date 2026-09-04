@@ -68,7 +68,8 @@ class AIRepositoryImpl @Inject constructor(
         privacyLevel: String,
         requiresWeb: Boolean,
         cloudExplicitlyAllowed: Boolean,
-        history: List<Message>
+        history: List<Message>,
+        requestId: String
     ): Resource<String> = withContext(dispatchers.io) {
         val effective = PrivacyLevel.entries.firstOrNull { it.name == privacyLevel.uppercase() }
             ?: return@withContext privacyBlocked(PrivacyLevel.UNKNOWN)
@@ -86,7 +87,8 @@ class AIRepositoryImpl @Inject constructor(
                 effectivePrivacyLevel = effective,
                 requiresWeb = requiresWeb,
                 cloudExplicitlyAllowed = cloudExplicitlyAllowed,
-                history = history
+                history = history,
+                requestId = requestId
             )
             else -> aiClient.complete(
                 prompt = prompt,

@@ -4,6 +4,7 @@ import android.util.Log
 import com.jarvis.assistant.core.constants.AppConstants
 import com.jarvis.assistant.core.network.ResponseBodyTooLargeException
 import com.jarvis.assistant.core.network.readUtf8Bounded
+import com.jarvis.assistant.core.request.RequestIds
 import com.jarvis.assistant.core.result.Resource
 import com.jarvis.assistant.core.security.AccessTokenPolicy
 import com.jarvis.assistant.core.security.SecurityManager
@@ -22,7 +23,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
 import java.net.SocketTimeoutException
-import java.util.UUID
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -140,7 +140,14 @@ class JarvisApiClient @Inject constructor(
         requiresWeb: Boolean,
         systemContext: String? = null,
         cloudExplicitlyAllowed: Boolean = false,
-        history: List<MessageDto> = emptyList()
+        history: List<MessageDto> = emptyList(),
+        /**
+         * OBSERVABILITY: сквозной request id агента (`omx_…`). Генерируется на
+         * клиенте ОДИН РАЗ на пользовательский запрос; сервер пишет его в
+         * ai_usage_records и возвращает эхом. Legacy-вызовы без id получают
+         * свежий omx-id здесь.
+         */
+        requestId: String = RequestIds.newId()
     ): Resource<String> = withContext(Dispatchers.IO) {
         val token = securityManager.getAccessToken()
         if (!AccessTokenPolicy.isValid(token)) {
@@ -150,7 +157,12 @@ class JarvisApiClient @Inject constructor(
             )
         }
 
-        val requestId = UUID.randomUUID().toString()
+        // OBSERVABILITY: раньше здесь рождался случайный UUID, не связанный
+        // с агентным запросом (разрыв корреляции Voice→Server). Теперь id
+        // приходит снаружи; свой генерируем только для legacy-вызовов.
+        val effectiveRequestId = requestId.ifBlank { RequestIds.newId() }
+
+        Log.i(TAG, "api request | requestId=$effectiveRequestId | source=$source")
 
         val payload = json.encodeToString(
             JarvisAiRequestDto.serializer(),
@@ -160,7 +172,7 @@ class JarvisApiClient @Inject constructor(
                 privacyLevel = privacyLevel,
                 requiresWeb = requiresWeb,
                 cloudExplicitlyAllowed = cloudExplicitlyAllowed,
-                requestId = requestId,
+                requestId = effectiveRequestId,
                 systemContext = systemContext?.takeIf { it.isNotBlank() },
                 // CR-03: отсылаем только непустые сообщения. Роли подгоняем под
                 // OpenAI-каноничный вид (user/assistant/system).
@@ -195,7 +207,8 @@ class JarvisApiClient @Inject constructor(
                 call.enqueue(object : Callback {
                     override fun onFailure(call: Call, e: IOException) {
                         if (!cont.isActive) return
-                        cont.resume(exceptionToResource(e, requestId))
+                        Log.w(TAG, "api failure | requestId=$effectiveRequestId | type=${e.javaClass.simpleName}")
+                        cont.resume(exceptionToResource(e, effectiveRequestId))
                     }
 
                     override fun onResponse(call: Call, response: Response) {
@@ -206,7 +219,8 @@ class JarvisApiClient @Inject constructor(
                         try {
                             response.use { resp ->
                                 val body = resp.body?.readUtf8Bounded(MAX_RESPONSE_BYTES).orEmpty()
-                                cont.resume(parseHttpResponse(resp, body, requestId))
+                                Log.i(TAG, "api response | requestId=$effectiveRequestId | http=${resp.code}")
+                                cont.resume(parseHttpResponse(resp, body, effectiveRequestId))
                             }
                         } catch (t: Throwable) {
                             if (cont.isActive) cont.resumeWithException(t) else throw t
@@ -215,10 +229,10 @@ class JarvisApiClient @Inject constructor(
                 })
             }
         } catch (e: ResponseBodyTooLargeException) {
-            Log.w(TAG, "oversized response | requestId=$requestId")
+            Log.w(TAG, "oversized response | requestId=$effectiveRequestId")
             Resource.Error(e, "Сервер JARVIS вернул слишком большой ответ.")
         } catch (e: Exception) {
-            Log.e(TAG, "unexpected failure | requestId=$requestId | type=${e.javaClass.simpleName}")
+            Log.e(TAG, "unexpected failure | requestId=$effectiveRequestId | type=${e.javaClass.simpleName}")
             Resource.Error(e, "Не удалось выполнить запрос.")
         }
     }
