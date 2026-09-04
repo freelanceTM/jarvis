@@ -574,6 +574,29 @@ check "OBSERVABILITY: documented" \
       "Voice → Router → Tool → AI → Server → Provider" \
       "$ROOT/docs/OBSERVABILITY.md"
 
+# ---- TEST-MATRIX: финальная тестовая матрица существует и не ссохлась ----
+check "TEST-MATRIX: matrix document exists" \
+      "Тестовая матрица финального тестирования" \
+      "$ROOT/docs/TEST_MATRIX.md"
+check "TEST-MATRIX: voice section pinned (51 router tests referenced)" \
+      "FastCommandRouterTest" \
+      "$ROOT/docs/TEST_MATRIX.md"
+check "TEST-MATRIX: all 34 tools families covered" \
+      "memory.remember / recall / forget" \
+      "$ROOT/docs/TEST_MATRIX.md"
+check "TEST-MATRIX: permission-denied section (fail-closed preflight)" \
+      "RECORD_AUDIO" \
+      "$ROOT/docs/TEST_MATRIX.md"
+check "TEST-MATRIX: provider 429/500 fallback budget pinned" \
+      "max 2 платные попытки" \
+      "$ROOT/docs/TEST_MATRIX.md"
+check "TEST-MATRIX: security section incl. replay + fake device" \
+      "replayed challenge is rejected" \
+      "$ROOT/docs/TEST_MATRIX.md"
+check "TEST-MATRIX: honest GAP documented (modified client)" \
+      "Play Integrity" \
+      "$ROOT/docs/TEST_MATRIX.md"
+
 if [ "$fail" = 1 ]; then
   echo ""
   echo "INVARIANT CHECKS FAILED"

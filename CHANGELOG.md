@@ -12,6 +12,14 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Тестовая матрица финального тестирования (docs/TEST_MATRIX.md): 7 разделов —
+  Voice (33 сценария, 51 автотест роутера), Tools (34 тулa по семьям),
+  Permissions (11 denied-сценариев), Network (Online/Slow/Offline/Reconnect),
+  AI (local/cloud/429/500/fallback), Bluetooth (6 сценариев Ear Mode),
+  Security (invalid token/expired/wrong device/fake device/replay/modified
+  client). Каждая строка помечена: AUTO (JVM-тест, файл), PG (integration),
+  DEVICE (device-validation) или честный GAP (единственный: целостность APK
+  на AI-пути без Play Integrity). 7 TEST-MATRIX-инвариантов (153 всего).
 - Observability: единый request ID (`omx_01J…`, ULID: время+случайность,
   лексикографическая сортировка) сквозь весь путь запроса —
   Voice → Router → Tool → AI → Server → Provider (docs/OBSERVABILITY.md).
