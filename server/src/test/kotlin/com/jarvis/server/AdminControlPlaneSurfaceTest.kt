@@ -25,6 +25,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -92,6 +93,14 @@ class AdminControlPlaneSurfaceTest : PostgresTestSupport() {
             ?.let { (it as kotlinx.serialization.json.JsonPrimitive).content }!!
     }
 
+    /** UI-login: возвращает Cookie-заголовок сессии (HttpOnly). */
+    private fun loginUi(username: String, password: String): String {
+        val r = page("POST", "/v1/admin/ui/login", null, "username=" + username + "&password=" + password)
+        val setCookie = r.headers.entries.firstOrNull { it.key.equals("Set-Cookie", ignoreCase = true) }
+            ?: error("no Set-Cookie on ui login")
+        return setCookie.value.substringBefore(';')
+    }
+
     private fun page(method: String, path: String, cookie: String? = null, body: String = "") = runBlocking {
         ui.handle(
             HttpRequestContext(
@@ -133,6 +142,52 @@ class AdminControlPlaneSurfaceTest : PostgresTestSupport() {
         assertEquals(200, api("POST", "/v1/admin/auth/login", null, "{\"username\":\"" + "supporter" + "\",\"password\":\"" + "fresh-pass-12345" + "\"}").status)
         // Дубликат username → 409.
         assertEquals(409, api("POST", "/v1/admin/admins", token, "{\"username\":\"" + "supporter" + "\",\"password\":\"" + "another-pass-123" + "\",\"role\":\"VIEWER\"}").status)
+    }
+
+    /**
+     * ADMIN (MVP-дерево Licenses → active/expired): status-фильтр списка.
+     * Неизвестный статус — 400 (не тихий «показать всё»).
+     */
+    @Test
+    fun `licenses list filters by status and rejects unknown status`() {
+        val (accountId, activeId) = seedBoth()
+        val expiredId = seedExpiredLicense(accountId)
+        accounts.create("filterer", AdminPasswords.hash("filter-pass-12345"), AdminRole.ADMIN, Instant.now())
+        val token = login("filterer", "filter-pass-12345")
+
+        // accountId общий для обеих лицензий и присутствует в каждой строке
+        // JSON — поэтому сверяем именно поле "id", а не голый UUID.
+        val expired = api("GET", "/v1/admin/licenses?status=EXPIRED", token)
+        assertEquals(200, expired.status)
+        assertTrue("expired id in EXPIRED filter", expired.body.contains("\"id\":\"$expiredId\""))
+        assertFalse("active id not in EXPIRED filter", expired.body.contains("\"id\":\"$activeId\""))
+        assertTrue(expired.body.contains("\"statusFilter\":\"EXPIRED\""))
+
+        val active = api("GET", "/v1/admin/licenses?status=ACTIVE", token)
+        assertEquals(200, active.status)
+        assertTrue(active.body.contains("\"id\":\"$activeId\""))
+        assertFalse(active.body.contains("\"id\":\"$expiredId\""))
+
+        assertEquals(200, api("GET", "/v1/admin/licenses", token).status)
+        assertEquals(400, api("GET", "/v1/admin/licenses?status=BOGUS", token).status)
+    }
+
+    @Test
+    fun `licenses UI renders status filter tabs`() {
+        val (accountId, activeId) = seedBoth()
+        val expiredId = seedExpiredLicense(accountId)
+        accounts.create("uiseer", AdminPasswords.hash("uiseer-pass-1234"), AdminRole.SUPPORT, Instant.now())
+        val cookie = loginUi("uiseer", "uiseer-pass-1234")
+
+        val page = page("GET", "/v1/admin/ui/licenses?status=EXPIRED", cookie)
+        assertEquals(200, page.status)
+        assertTrue("expired row shown", page.body.contains(expiredId.toString().take(8)))
+        assertFalse("active row hidden", page.body.contains(activeId.toString().take(8)))
+        assertTrue("current tab bold", page.body.contains("<b>EXPIRED</b>"))
+
+        val all = page("GET", "/v1/admin/ui/licenses", cookie)
+        assertEquals(200, all.status)
+        assertTrue(all.body.contains(activeId.toString().take(8)))
     }
 
     @Test
@@ -225,6 +280,28 @@ class AdminControlPlaneSurfaceTest : PostgresTestSupport() {
             ).use { ps -> ps.setObject(1, UUID.randomUUID()); ps.setObject(2, accountId); ps.setTimestamp(3, now); ps.setTimestamp(4, now); ps.executeUpdate() }
         }
         return accountId to licenseId
+    }
+
+    /**
+     * ADMIN (Licenses active/expired): вторая лицензия со статусом EXPIRED —
+     * для проверки status-фильтра списка.
+     */
+    private fun seedExpiredLicense(accountId: UUID): UUID {
+        val licenseId = UUID.randomUUID()
+        val now = Timestamp.from(Instant.now())
+        dataSource.connection.use { c ->
+            c.prepareStatement(
+                "INSERT INTO licenses (id, code_hash, code_hint, status, billing_status, issued_at, starts_at, expires_at, product_id, plan_id, account_id, " +
+                    "one_time, redeemed_at, metadata, created_at, updated_at) " +
+                    "VALUES (?, decode('dead', 'hex'), 'DE', 'EXPIRED', 'PAID', ?, now() - interval '60 days', now() - interval '30 days', 'jarvis', 'pro_monthly', ?, " +
+                    "TRUE, now() - interval '60 days', '{}'::jsonb, ?, ?)"
+            ).use { ps ->
+                ps.setObject(1, licenseId); ps.setTimestamp(2, now); ps.setObject(3, accountId)
+                ps.setTimestamp(4, now); ps.setTimestamp(5, now)
+                ps.executeUpdate()
+            }
+        }
+        return licenseId
     }
 
     private fun seedOrder(accountId: UUID) {

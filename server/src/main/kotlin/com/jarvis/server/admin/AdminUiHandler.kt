@@ -72,7 +72,7 @@ class AdminUiHandler(
             path == "users" -> html(200, users(principal))
             path.startsWith("users/") -> html(200, userDetail(principal, path.removePrefix("users/")))
             path == "devices" -> html(200, devices(principal))
-            path == "licenses" -> html(200, licenses(principal))
+            path == "licenses" -> html(200, licenses(principal, licenseStatusParam(request)))
             path.startsWith("licenses/") -> html(200, licenseDetail(principal, path.removePrefix("licenses/"), csrfToken(request)))
             path == "providers" -> html(200, providers(principal))
             path == "usage" -> html(200, usage(principal))
@@ -216,15 +216,38 @@ class AdminUiHandler(
         return page(principal, "Devices", """<table><tr><th>Token</th><th>Owner</th><th>Status</th><th>Last used</th><th>Binding</th></tr>$body</table>""")
     }
 
-    private fun licenses(principal: AdminPrincipal): String {
-        val rows = queries.licenses(50, 0)
+    /**
+     * ADMIN: мягкий разбор статуса для UI (в отличие от API тут нет 400 —
+     * страница должна рендериться всегда; мусорное значение = ALL).
+     */
+    private fun licenseStatusParam(request: HttpRequestContext): com.jarvis.server.license.LicenseStatus? {
+        val raw = request.rawQuery?.split('&')
+            ?.firstOrNull { it.substringBefore('=') == "status" }
+            ?.substringAfter('=', "")?.takeIf { it.isNotEmpty() } ?: return null
+        return runCatching {
+            com.jarvis.server.license.LicenseStatus.valueOf(raw.uppercase().trim())
+        }.getOrNull()
+    }
+
+    private fun licenses(principal: AdminPrincipal, status: com.jarvis.server.license.LicenseStatus?): String {
+        val rows = queries.licenses(50, 0, status)
+        // MVP-дерево Licenses: ALL | ACTIVE | EXPIRED | ... — быстрые вкладки.
+        val filterLinks = listOf<String?>(null) + com.jarvis.server.license.LicenseStatus.entries
+        val filters = filterLinks.joinToString(" | ") { st ->
+            val label = st?.name ?: "ALL"
+            val isCurrent = (st == null && status == null) || (st != null && st == status)
+            if (isCurrent) "<b>$label</b>" else """<a href="/v1/admin/ui/licenses?status=$label">$label</a>"""
+        }
         val body = rows.joinToString("") { l ->
             row(
                 raw("""<a href="/v1/admin/ui/licenses/${l.id}">${l.id.toString().take(8)}…</a>"""),
                 l.planId, l.status, l.billingStatus, l.expiresAt?.toString()?.take(10) ?: "-"
             )
         }
-        return page(principal, "Licenses", """<table><tr><th>ID</th><th>Plan</th><th>Status</th><th>Billing</th><th>Expires</th></tr>$body</table>""")
+        return page(
+            principal, "Licenses",
+            """<p class="sub">$filters</p><table><tr><th>ID</th><th>Plan</th><th>Status</th><th>Billing</th><th>Expires</th></tr>$body</table>"""
+        )
     }
 
     private fun licenseDetail(principal: AdminPrincipal, id: String, csrf: String?): String {

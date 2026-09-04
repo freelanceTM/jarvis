@@ -72,7 +72,7 @@ POST /v1/admin/auth/login | logout          GET /v1/admin/me
 GET  /v1/admin/dashboard | health
 GET  /v1/admin/users?page&q | users/{id}
 GET  /v1/admin/devices?page | devices/{id}  POST devices/{id}/revoke
-GET  /v1/admin/licenses?page | licenses/{id}
+GET  /v1/admin/licenses?page&status | licenses/{id}
 POST /v1/admin/licenses/{id}/disable|enable|extend|change-plan
 GET  /v1/admin/subscriptions
 GET  /v1/admin/providers                    POST /v1/admin/providers/{id}/configure
@@ -154,7 +154,23 @@ Usage/Cost, Logs, Audit, Settings, Flags. Desktop-first, мобильная се
 - UI integration: login-page, 303-редирект без сессии, HttpOnly+SameSite
   cookie, dashboard по реальным данным, неверный пароль.
 
-## 12. Осталось (осознанно отложено)
+## 12. Соответствие MVP-дереву админки
+
+```text
+Dashboard  ✓ /admin/dashboard (+UI)          AI         ✓ providers+configure / health / usage+cost
+Users      ✓ users?q, users/{id}             Requests   ✓ cloud = logs?component=CLOUD (latency/success)
+           (внутри: licenses, devices,       Local      = NOT COLLECTED честно: сервер их не видит
+           usage)                                       (приватность by design; телеметрия — v0.3)
+Devices    ✓ devices (tokens + BOUND),       System     ✓ health; errors = dashboard.errorsToday +
+           devices/{id}, revoke                         logs FAILURE-строки
+Licenses   ✓ status-фильтр ACTIVE/EXPIRED/…
+           + disable/enable/extend/change-plan
+```
+
+«Не надо» соблюдено: один JVM-процесс и одна БД, server-rendered UI без Node,
+без BI/CRM/графиков и без второй инфраструктуры — control plane, не витрина.
+
+## 13. Осталось (осознанно отложено)
 
 - 2FA-фактор (схема готова, фактор не введён), admin account CRUD через UI/API
   (сейчас — bootstrap + БД), percent-rollout per-plan targeting (сейчас

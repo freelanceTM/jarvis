@@ -12,6 +12,13 @@ must be added only when the repository owner creates an actual release.
 
 ### Added
 
+- Admin Panel: аудит control plane против MVP-дерева (docs/CONTROL_PLANE.md
+  §12) — панель уже покрывает Dashboard/Users(+devices,subscription)/Devices/
+  Licenses/AI(providers,health,usage)/Requests(cloud)/System в одном JVM без
+  BI/CRM/K8s. Закрыт единственный пробел дерева: список лицензий без фильтра
+  active/expired — `GET /v1/admin/licenses?status=` (bind-param SQL, неизвестный
+  статус = 400, не тихий «показать всё»), UI-вкладки ALL/ISSUED/ACTIVE/EXPIRED/
+  REVOKED/DISABLED. 2 теста (surface), 6 ADMIN-инвариантов (137 всего).
 - Agent Core: принцип «не использовать агента там, где достаточно Tool»
   (docs/AGENT_CORE.md). Одиночный tool_call из ответа облачной модели больше
   не запускает cognitive loop — идёт прямым путём команды устройства

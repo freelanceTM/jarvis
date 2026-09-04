@@ -244,11 +244,27 @@ class AdminQueries(private val dataSource: DataSource) {
         val redeemedAt: Instant?
     )
 
-    fun licenses(limit: Int, offset: Long): List<LicenseRow> =
-        queryLicenses("ORDER BY issued_at DESC LIMIT ? OFFSET ?") { ps ->
-            ps.setInt(1, limit.coerceIn(1, 200))
-            ps.setLong(2, offset.coerceAtLeast(0))
+    fun licenses(limit: Int, offset: Long): List<LicenseRow> = licenses(limit, offset, null)
+
+    /**
+     * ADMIN (MVP-дерево Licenses: active/expired): список с опциональным
+     * фильтром по статусу. null = все (прежнее поведение). Валидация значения —
+     * на handler'е (400 на неизвестный статус), здесь статус попадает в SQL
+     * только как bind-параметр.
+     */
+    fun licenses(limit: Int, offset: Long, status: com.jarvis.server.license.LicenseStatus?): List<LicenseRow> {
+        if (status == null) {
+            return queryLicenses("ORDER BY issued_at DESC LIMIT ? OFFSET ?") { ps ->
+                ps.setInt(1, limit.coerceIn(1, 200))
+                ps.setLong(2, offset.coerceAtLeast(0))
+            }
         }
+        return queryLicenses("WHERE status = ? ORDER BY issued_at DESC LIMIT ? OFFSET ?") { ps ->
+            ps.setString(1, status.name)
+            ps.setInt(2, limit.coerceIn(1, 200))
+            ps.setLong(3, offset.coerceAtLeast(0))
+        }
+    }
 
     fun licensesByAccount(accountId: UUID): List<LicenseRow> =
         queryLicenses("WHERE account_id = ? ORDER BY issued_at DESC") { ps ->

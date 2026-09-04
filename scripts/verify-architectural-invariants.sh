@@ -525,6 +525,26 @@ check "AGENT-CORE: agent core documented" \
       "Understand → Plan → Act → Observe → Verify → Re-plan" \
       "$ROOT/docs/AGENT_CORE.md"
 
+# ---- ADMIN: control plane (MVP-дерево: Licenses active/expired views) ----
+check "ADMIN: licenses status filter in queries (bind-param, no string concat)" \
+      "WHERE status = ? ORDER BY issued_at DESC" \
+      "$SERVER/kotlin/com/jarvis/server/admin/AdminQueries.kt"
+check "ADMIN: unknown status is 400 (no silent show-all fallback)" \
+      "unknown license status" \
+      "$SERVER/kotlin/com/jarvis/server/admin/AdminHttpHandler.kt"
+check "ADMIN: UI renders active/expired filter tabs" \
+      "licenseStatusParam" \
+      "$SERVER/kotlin/com/jarvis/server/admin/AdminUiHandler.kt"
+check "ADMIN: status filter pinned by test" \
+      "licenses list filters by status and rejects unknown status" \
+      "$SERVER_TEST/kotlin/com/jarvis/server/AdminControlPlaneSurfaceTest.kt"
+check "ADMIN: local requests honestly not collected (privacy by design)" \
+      "NOT COLLECTED" \
+      "$SERVER/kotlin/com/jarvis/server/admin/AdminHttpHandler.kt"
+check "ADMIN: control plane documented" \
+      "Control Plane" \
+      "$ROOT/docs/CONTROL_PLANE.md"
+
 if [ "$fail" = 1 ]; then
   echo ""
   echo "INVARIANT CHECKS FAILED"

@@ -368,9 +368,18 @@ class AdminHttpHandler(
 
     private fun handleLicenses(request: HttpRequestContext): HttpResponseContext {
         val (size, offset) = pagination(request)
-        val rows = queries.licenses(size, offset)
+        // ADMIN (MVP-дерево: Licenses → active/expired): фильтр по статусу.
+        // Неизвестное значение — 400, а не тихое «показать всё»: тихий фолбэк
+        // маскировал бы опечатку как полный список.
+        val statusFilter = queryParam(request, "status")?.let { raw ->
+            runCatching {
+                com.jarvis.server.license.LicenseStatus.valueOf(raw.uppercase().trim())
+            }.getOrElse { throw SettingsValidationError("unknown license status '$raw'") }
+        }
+        val rows = queries.licenses(size, offset, statusFilter)
         return plain(
             200, buildJsonObject {
+                put("statusFilter", statusFilter?.name ?: "ALL")
                 putJsonArray("licenses") { rows.forEach { add(licenseJson(it)) } }
             }
         )
